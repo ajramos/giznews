@@ -1,0 +1,21 @@
+# Build
+/bin/
+/dist/
+/out/
+*.exe
+*.dmg
+*.AppImage
+
+# Wails desktop
+/desktop/build/bin/
+/desktop/frontend/node_modules/
+/desktop/frontend/dist/
+
+# Test / coverage
+/coverage.out
+*.test
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

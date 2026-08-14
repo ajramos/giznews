@@ -1,0 +1,251 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+)
+
+// ArticleRepo provides persistence for articles.
+type ArticleRepo struct {
+	db *DB
+}
+
+// NewArticleRepo creates an article repository.
+func NewArticleRepo(db *DB) *ArticleRepo {
+	return &ArticleRepo{db: db}
+}
+
+const articleColumns = `
+	a.id, a.source_id, s.name, a.guid, a.url, a.title, a.author,
+	a.content_html, a.content_md, a.summary, a.category, a.tags, a.entities,
+	a.importance, a.simhash, a.status, a.published, a.fetched_at, a.updated_at`
+
+const articleFrom = `
+	FROM articles a
+	LEFT JOIN sources s ON s.id = a.source_id`
+
+// NewArticle is the input to insert an article.
+type NewArticle struct {
+	SourceID    int64
+	GUID        string
+	URL         string
+	Title       string
+	Author      string
+	ContentHTML string
+	ContentMD   string
+	Summary     string
+	Category    string
+	Tags        []string
+	Entities    []Entity
+	Importance  int
+	SimHash     uint64
+	Status      ArticleStatus
+	Published   string
+}
+
+// Upsert inserts an article or, on (source_id, guid) conflict, updates the
+// mutable fields. It returns the article row id and whether it was newly
+// inserted.
+func (r *ArticleRepo) Upsert(ctx context.Context, na NewArticle) (id int64, created bool, err error) {
+	now := Now()
+	if na.Status == "" {
+		na.Status = StatusUnread
+	}
+
+	// INSERT OR IGNORE gives a deterministic signal on first insert; an
+	// existing row reports 0 rows affected, so we fall back to an update.
+	res, err := r.db.sql.ExecContext(ctx, `
+		INSERT OR IGNORE INTO articles (
+			source_id, guid, url, title, author, content_html, content_md,
+			summary, category, tags, entities, importance, simhash, status,
+			published, fetched_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		na.SourceID, na.GUID, na.URL, na.Title, na.Author, na.ContentHTML, na.ContentMD,
+		na.Summary, na.Category, marshalTags(na.Tags), marshalEntities(na.Entities),
+		na.Importance, int64(na.SimHash), string(na.Status), na.Published, now, now)
+	if err != nil {
+		return 0, false, fmt.Errorf("insert article: %w", err)
+	}
+	if affected, _ := res.RowsAffected(); affected == 1 {
+		id, err = res.LastInsertId()
+		if err != nil {
+			return 0, false, fmt.Errorf("article last insert id: %w", err)
+		}
+		return id, true, nil
+	}
+
+	// Existing row: refresh mutable fields and re-read the id.
+	_, err = r.db.sql.ExecContext(ctx, `
+		UPDATE articles SET
+			url = ?, title = ?, author = ?, content_html = ?, content_md = ?,
+			summary = ?, category = ?, tags = ?, entities = ?, importance = ?,
+			simhash = ?, published = ?, updated_at = ?
+		WHERE source_id = ? AND guid = ?`,
+		na.URL, na.Title, na.Author, na.ContentHTML, na.ContentMD,
+		na.Summary, na.Category, marshalTags(na.Tags), marshalEntities(na.Entities),
+		na.Importance, int64(na.SimHash), na.Published, now, na.SourceID, na.GUID)
+	if err != nil {
+		return 0, false, fmt.Errorf("update article: %w", err)
+	}
+	err = r.db.sql.QueryRowContext(ctx,
+		"SELECT id FROM articles WHERE source_id = ? AND guid = ?", na.SourceID, na.GUID).Scan(&id)
+	if err != nil {
+		return 0, false, fmt.Errorf("re-read article id: %w", err)
+	}
+	return id, false, nil
+}
+
+// Get returns an article by id.
+func (r *ArticleRepo) Get(ctx context.Context, id int64) (*Article, error) {
+	row := r.db.sql.QueryRowContext(ctx,
+		"SELECT "+articleColumns+articleFrom+" WHERE a.id = ?", id)
+	return scanArticle(row)
+}
+
+// ListOptions filters the article list.
+type ListOptions struct {
+	Status        ArticleStatus // empty = all
+	Category      string        // empty = all
+	SourceID      int64         // 0 = all
+	Group         string        // source group; empty = all
+	ImportanceMin int           // only articles with importance >= this
+	Query         string        // LIKE filter on title/author; empty = all
+	Limit         int           // 0 = default 200
+	Offset        int
+}
+
+// List returns articles matching the options, newest first.
+func (r *ArticleRepo) List(ctx context.Context, opts ListOptions) ([]*Article, error) {
+	var conds []string
+	var args []any
+
+	if opts.Status != "" {
+		conds = append(conds, "a.status = ?")
+		args = append(args, string(opts.Status))
+	}
+	if opts.Category != "" {
+		conds = append(conds, "a.category = ?")
+		args = append(args, opts.Category)
+	}
+	if opts.SourceID != 0 {
+		conds = append(conds, "a.source_id = ?")
+		args = append(args, opts.SourceID)
+	}
+	if opts.Group != "" {
+		conds = append(conds, "s.group_name = ?")
+		args = append(args, opts.Group)
+	}
+	if opts.ImportanceMin > 0 {
+		conds = append(conds, "a.importance >= ?")
+		args = append(args, opts.ImportanceMin)
+	}
+	if opts.Query != "" {
+		conds = append(conds, "(a.title LIKE ? OR a.author LIKE ?)")
+		q := "%" + opts.Query + "%"
+		args = append(args, q, q)
+	}
+
+	where := ""
+	if len(conds) > 0 {
+		where = " WHERE " + strings.Join(conds, " AND ")
+	}
+	if opts.Limit <= 0 {
+		opts.Limit = 200
+	}
+	query := "SELECT " + articleColumns + articleFrom + where +
+		" ORDER BY a.published IS NULL, a.published DESC, a.fetched_at DESC LIMIT ? OFFSET ?"
+	args = append(args, opts.Limit, opts.Offset)
+
+	rows, err := r.db.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list articles: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// SetStatus updates the triage status of an article.
+func (r *ArticleRepo) SetStatus(ctx context.Context, id int64, status ArticleStatus) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET status = ?, updated_at = ? WHERE id = ?", string(status), Now(), id)
+	if err != nil {
+		return fmt.Errorf("set article status: %w", err)
+	}
+	return checkAffected(res, "set article status")
+}
+
+// SetImportance updates the importance score of an article.
+func (r *ArticleRepo) SetImportance(ctx context.Context, id int64, importance int) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET importance = ?, updated_at = ? WHERE id = ?", importance, Now(), id)
+	if err != nil {
+		return fmt.Errorf("set article importance: %w", err)
+	}
+	return checkAffected(res, "set article importance")
+}
+
+// ExistsSimhash reports whether any article already carries the given simhash.
+func (r *ArticleRepo) ExistsSimhash(ctx context.Context, h uint64) (bool, error) {
+	var n int
+	err := r.db.sql.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM articles WHERE simhash = ?", int64(h)).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("count simhash: %w", err)
+	}
+	return n > 0, nil
+}
+
+// Count returns the number of articles matching an optional status.
+func (r *ArticleRepo) Count(ctx context.Context, status ArticleStatus) (int, error) {
+	var n int
+	if status == "" {
+		err := r.db.sql.QueryRowContext(ctx, "SELECT COUNT(*) FROM articles").Scan(&n)
+		return n, err
+	}
+	err := r.db.sql.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM articles WHERE status = ?", string(status)).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count articles: %w", err)
+	}
+	return n, nil
+}
+
+func scanArticle(row scanner) (*Article, error) {
+	var (
+		a       Article
+		tagsRaw string
+		entRaw  string
+	)
+	if err := row.Scan(
+		&a.ID, &a.SourceID, &a.SourceName, &a.GUID, &a.URL, &a.Title, &a.Author,
+		&a.ContentHTML, &a.ContentMD, &a.Summary, &a.Category, &tagsRaw, &entRaw,
+		&a.Importance, &a.SimHash, &a.Status, &a.Published, &a.FetchedAt, &a.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("scan article: %w", err)
+	}
+	_ = json.Unmarshal([]byte(tagsRaw), &a.Tags)
+	_ = json.Unmarshal([]byte(entRaw), &a.Entities)
+	if a.Tags == nil {
+		a.Tags = []string{}
+	}
+	if a.Entities == nil {
+		a.Entities = []Entity{}
+	}
+	return &a, nil
+}
