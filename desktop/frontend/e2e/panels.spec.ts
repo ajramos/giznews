@@ -77,30 +77,54 @@ test.describe("sources", () => {
     await expect(page.locator(".source-picker")).toHaveCount(0);
   });
 
-  test("add source via modal", async ({ page }) => {
+  test("add source via picker modal", async ({ page }) => {
     await gotoApp(page);
-    await page.locator(".sources-col").getByRole("button", { name: "Añadir" }).first().click();
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("sources");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toBeVisible();
+    await page.keyboard.press("a"); // add
     await expect(page.locator(".modal")).toBeVisible();
     await page.locator(".modal input").nth(0).fill("MIT Tech Review");
     await page.locator(".modal input").nth(1).fill("https://www.technologyreview.com/feed/");
     await page.locator(".modal").getByRole("button", { name: "Añadir" }).click();
-    await expect(page.locator(".source-item", { hasText: "MIT Tech Review" })).toHaveCount(1);
+    await expect(page.locator(".modal")).toHaveCount(0); // wait for save
+    // back to the picker to confirm the new source
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("sources");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker-item")).toHaveCount(5);
+    await expect(page.locator(".source-picker-item", { hasText: "MIT Tech Review" })).toHaveCount(1);
     await shot(page, "10-source-added");
   });
 
-  test("delete source removes it from the list", async ({ page }) => {
+  test("delete source via picker", async ({ page }) => {
     await gotoApp(page);
-    await expect(page.locator(".source-item")).toHaveCount(4);
-    await page.locator(".source-item").first().hover();
-    await page.locator(".source-item").first().getByTitle("Eliminar de la lista (los artículos se conservan)").click();
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("sources");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker-item")).toHaveCount(4);
+    await page.keyboard.press("d"); // delete focused (first)
     await expect(page.locator(".modal")).toContainText("¿Eliminar");
     await page.locator(".modal").getByRole("button", { name: "Eliminar" }).click();
-    await expect(page.locator(".source-item")).toHaveCount(3);
+    await expect(page.locator(".modal")).toHaveCount(0); // wait for confirm
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("sources");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker-item")).toHaveCount(3);
   });
 
-  test("clicking a source filters the article list", async ({ page }) => {
+  test("source picker filter (f) filters the article list", async ({ page }) => {
     await gotoApp(page);
-    await page.locator(".source-item", { hasText: "DeepMind Blog" }).locator(".source-name").click();
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("sources");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toBeVisible();
+    // mock order: HN RSS(0), HN Algolia(1), DeepMind Blog(2), arXiv(3)
+    await page.keyboard.press("j");
+    await page.keyboard.press("j");
+    await page.keyboard.press("f"); // filter by DeepMind Blog
+    await expect(page.locator(".source-picker")).toHaveCount(0);
     await expect(page.locator(".article-row")).toHaveCount(1);
     await expect(page.locator(".topbar .pill.filter")).toBeVisible();
     await page.locator(".topbar .pill.filter").click();

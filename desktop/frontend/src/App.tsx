@@ -10,7 +10,6 @@ import type {
   SourceDTO,
   StatusDTO,
 } from "./types";
-import { SourceList } from "./components/SourceList";
 import { SourceForm } from "./components/SourceForm";
 import { ArticleList, type ViewFilter } from "./components/ArticleList";
 import { Reader } from "./components/Reader";
@@ -602,22 +601,6 @@ export default function App() {
       </header>
 
       <main className="layout">
-        <aside className="col sources-col">
-          <SourceList
-            sources={sources}
-            activeId={filterSource}
-            onSelect={(id) => void selectSource(id)}
-            onToggle={async (id, enabled) => {
-              await api.setSourceEnabled(id, enabled);
-              await loadSources();
-              if (filterSource === id && !enabled) await selectSource(null);
-            }}
-            onAdd={() => setSourceForm({ initial: null })}
-            onEdit={(s) => setSourceForm({ initial: s })}
-            onDelete={(s) => setDeleteSource(s)}
-          />
-        </aside>
-
         <section className="col list-col">
           {digestOpen ? (
             <DigestView
@@ -640,6 +623,7 @@ export default function App() {
               selectedIndex={selectedIndex}
               loading={loadingList}
               view={view}
+              hasSources={sources.length > 0}
               bulkRange={bulkRange}
               onView={(v) => void switchView(v)}
               onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
@@ -726,6 +710,7 @@ export default function App() {
           onAdd={() => { setSourcePickerOpen(false); setSourceForm({ initial: null }); }}
           onEdit={(s) => { setSourcePickerOpen(false); setSourceForm({ initial: s }); }}
           onDelete={(s) => { setSourcePickerOpen(false); setDeleteSource(s); }}
+          onFilter={(s) => { setSourcePickerOpen(false); void selectSource(s.id); }}
           onClose={() => setSourcePickerOpen(false)}
         />
       )}

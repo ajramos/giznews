@@ -18,7 +18,7 @@ test.describe("scroll & layout", () => {
 
   test("mouse wheel scrolls the article list", async ({ page }) => {
     await gotoDense(page);
-    await page.mouse.move(400, 400);
+    await page.mouse.move(200, 400); // list column is the left 380px now
     await page.mouse.wheel(0, 600);
     await expect.poll(() => page.locator(".article-list").evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   });

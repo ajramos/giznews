@@ -15,13 +15,14 @@ interface Props {
   onAdd: () => void;
   onEdit: (s: SourceDTO) => void;
   onDelete: (s: SourceDTO) => void;
+  onFilter: (s: SourceDTO) => void;
   onClose: () => void;
 }
 
 // SourcePicker: a giztui-style keyboard picker for managing sources.
-//   j/k or ↑/↓  navigate   · Enter  toggle enabled
-//   a  add · e  edit · d  delete · Esc  close
-export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onClose }: Props) {
+//   j/k or ↑/↓  navigate      · Enter  toggle enabled
+//   a  add · e  edit · d  delete · f  filter by source · Esc  close
+export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onFilter, onClose }: Props) {
   const [focus, setFocus] = useState(0);
 
   useEffect(() => {
@@ -37,11 +38,12 @@ export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onClo
       else if (e.key === "a") { e.preventDefault(); e.stopPropagation(); onAdd(); }
       else if (e.key === "e") { e.preventDefault(); e.stopPropagation(); const s = sources[focus]; if (s) onEdit(s); }
       else if (e.key === "d") { e.preventDefault(); e.stopPropagation(); const s = sources[focus]; if (s) onDelete(s); }
+      else if (e.key === "f") { e.preventDefault(); e.stopPropagation(); const s = sources[focus]; if (s) onFilter(s); }
       else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [sources, focus, onToggle, onAdd, onEdit, onDelete, onClose]);
+  }, [sources, focus, onToggle, onAdd, onEdit, onDelete, onFilter, onClose]);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -73,6 +75,7 @@ export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onClo
           <span><kbd>a</kbd> añadir</span>
           <span><kbd>e</kbd> editar</span>
           <span><kbd>d</kbd> eliminar</span>
+          <span><kbd>f</kbd> filtrar</span>
           <span><kbd>Esc</kbd> cerrar</span>
         </div>
       </div>

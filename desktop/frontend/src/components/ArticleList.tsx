@@ -17,12 +17,13 @@ interface Props {
   selectedIndex: number;
   loading: boolean;
   view: ViewFilter;
+  hasSources: boolean;
   bulkRange: readonly [number, number] | null;
   onView: (v: ViewFilter) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, bulkRange, onView, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulkRange, onView, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,8 +53,8 @@ export function ArticleList({ articles, selectedIndex, loading, view, bulkRange,
       ) : articles.length === 0 ? (
         <div className="empty with-icon">
           <Inbox size={30} />
-          <span>No hay artículos en esta vista.</span>
-          <span className="muted">Prueba <kbd>u</kbd>/<kbd>r</kbd>/<kbd>x</kbd>/<kbd>*</kbd> o ejecuta <code>:fetch</code></span>
+          <span>{hasSources ? "No hay artículos en esta vista." : "No hay fuentes configuradas."}</span>
+          <span className="muted">{hasSources ? "Prueba u/r/x/* o ejecuta :fetch" : "Añade fuentes con :sources y trae artículos con :fetch"}</span>
         </div>
       ) : (
         <>

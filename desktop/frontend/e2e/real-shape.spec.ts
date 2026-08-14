@@ -39,8 +39,12 @@ test("real Wails snake_case wire shape renders correctly", async ({ page }) => {
   // LLM enabled + reachable → green pill with provider name
   await expect(page.locator(".statusbar .pill.llm.on")).toContainText("ollama");
 
-  // Source filter arg is sent as source_id
-  await page.locator(".source-item", { hasText: "HN RSS" }).locator(".source-name").click();
+  // Source filter arg is sent as source_id (via the :sources picker → f)
+  await page.keyboard.press(":");
+  await page.locator(".palette input").fill("sources");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".source-picker")).toBeVisible();
+  await page.keyboard.press("f"); // filter by the first source (HN RSS, id 1)
   await expect(page.locator(".article-row")).toHaveCount(1);
 
   // Content loads through GetArticleContent
