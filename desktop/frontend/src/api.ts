@@ -110,6 +110,7 @@ export interface APIShape {
   digest: () => Promise<DigestDTO>;
   kbuild: () => Promise<KBResult>;
   ksynthesize: (category: string) => Promise<KBResult>;
+  ensureArticleNote: (articleID: number) => Promise<NoteDTO>;
   listNotes: (type: string) => Promise<NoteDTO[]>;
   getNote: (id: number) => Promise<NoteDTO>;
   graphNeighbors: (id: number) => Promise<NoteDTO[]>;
@@ -149,6 +150,8 @@ const realApi: APIShape = {
 
   kbuild: () => call<KBResult>("KBuild"),
   ksynthesize: (category: string) => call<KBResult>("KSynthesize", category),
+  ensureArticleNote: (articleID: number) =>
+    call("EnsureArticleNote", articleID).then((v) => normalize<NoteDTO>(v)),
   listNotes: (type: string) => call("ListNotes", type).then((v) => arr<NoteDTO>(v)),
   getNote: (id: number) => call("GetNote", id).then((v) => normalize<NoteDTO>(v)),
   graphNeighbors: (id: number) => call("GraphNeighbors", id).then((v) => arr<NoteDTO>(v)),

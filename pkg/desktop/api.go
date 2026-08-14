@@ -34,6 +34,7 @@ type API interface {
 	// Knowledge graph
 	KBuild(ctx context.Context) (*KBResult, error)
 	KSynthesize(ctx context.Context, category string) (*KBResult, error)
+	EnsureArticleNote(ctx context.Context, articleID int64) (*NoteDTO, error)
 	ListNotes(ctx context.Context, noteType string) ([]*NoteDTO, error)
 	GetNote(ctx context.Context, id int64) (*NoteDTO, error)
 	GraphNeighbors(ctx context.Context, id int64) ([]*NoteDTO, error)

@@ -50,6 +50,16 @@ export const HELP: HelpCategory[] = [
     ],
   },
   {
+    title: "Modo bulk (selección múltiple)",
+    rows: [
+      { keys: "v", label: "Entrar en modo bulk" },
+      { keys: "espacio", label: "Marcar / desmarcar el artículo actual" },
+      { keys: "j / k", label: "Navegar (sin cambiar la selección)" },
+      { keys: "a / t / m", label: "Aplicar archivar · leído · destacar a la selección" },
+      { keys: "Esc / v", label: "Salir del modo bulk" },
+    ],
+  },
+  {
     title: "App",
     rows: [
       { keys: "q", label: "Salir de GizNews" },

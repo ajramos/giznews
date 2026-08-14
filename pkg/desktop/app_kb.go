@@ -61,6 +61,20 @@ func (a *App) KSynthesize(ctx context.Context, category string) (*KBResult, erro
 	return &KBResult{MoleculesCreated: res.MoleculesCreated}, nil
 }
 
+// EnsureArticleNote creates (if missing) a knowledge-graph note for a single
+// article, returning it so the graph panel can show it immediately.
+func (a *App) EnsureArticleNote(ctx context.Context, articleID int64) (*NoteDTO, error) {
+	svc, err := a.kbService()
+	if err != nil {
+		return nil, err
+	}
+	note, err := svc.EnsureArticleNote(ctx, articleID)
+	if err != nil {
+		return nil, err
+	}
+	return toNoteDTO(note), nil
+}
+
 func (a *App) ListNotes(ctx context.Context, noteType string) ([]*NoteDTO, error) {
 	svc, err := a.kbService()
 	if err != nil {

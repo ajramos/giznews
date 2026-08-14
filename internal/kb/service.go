@@ -261,6 +261,49 @@ func (s *Service) uniqueSlug(ctx context.Context, repo *db.KBRepo, base string) 
 	}
 }
 
+// EnsureArticleNote creates (if missing) an Atom note for a single article,
+// regardless of its importance threshold. Used by the graph panel so a specific
+// article can always be materialized into the knowledge graph on demand.
+func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.KBNote, error) {
+	artRepo := db.NewArticleRepo(s.db)
+	kbRepo := db.NewKBRepo(s.db)
+	ingestRepo := db.NewIngestRepo(s.db)
+
+	refID := fmt.Sprintf("%d", articleID)
+	if noteID, _ := ingestRepo.NoteID(ctx, "article", refID); noteID != 0 {
+		return kbRepo.Get(ctx, noteID)
+	}
+
+	art, err := artRepo.Get(ctx, articleID)
+	if err != nil {
+		return nil, err
+	}
+
+	slugs := s.conceptSlugs(art)
+	content := BuildAtom(art, slugs)
+	slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(art.Title)))
+	path, err := s.vault.Write("atom", slug, content)
+	if err != nil {
+		return nil, err
+	}
+	fm, _ := json.Marshal(map[string]any{
+		"type": "atom", "category": art.Category, "source": art.SourceName,
+		"url": art.URL, "rating": art.Importance, "tags": art.Tags,
+	})
+	note, err := kbRepo.Create(ctx, db.NewKBNote{
+		Type: db.NoteAtom, Title: art.Title, Slug: slug, Path: path,
+		Frontmatter: string(fm), Content: content,
+		Tags: append([]string{"atom", "ai"}, art.Tags...), Wikilinks: slugs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := ingestRepo.Record(ctx, "article", refID, note.ID, "processed"); err != nil {
+		return nil, err
+	}
+	return note, nil
+}
+
 // Synthesize creates (or updates) a Molecule note summarizing a category by
 // linking its atoms. Uses the LLM when enabled; degrades to a deterministic
 // listing otherwise.

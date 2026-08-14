@@ -48,9 +48,11 @@ export function StatusBar({
       <div className="sb-keys">
         {bulk
           ? [
-              { key: "j/k", label: "extender" },
+              { key: "space", label: "marcar" },
+              { key: "j/k", label: "navegar" },
               { key: "a", label: "archivar" },
               { key: "t", label: "leído" },
+              { key: "m", label: "destacar" },
               { key: "Esc/v", label: "salir" },
             ].map((k) => (
               <span key={k.key + k.label} className="sb-key"><kbd>{k.key}</kbd> {k.label}</span>

@@ -30,6 +30,17 @@ test.describe("panels", () => {
     assertNoErrors();
   });
 
+  test("graph empty state generates a note for the current article", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "j"); // article 2 has no note in the mock
+    await press(page, "g");
+    await expect(page.locator(".graph-panel")).toBeVisible({ timeout: 4000 });
+    await expect(page.locator(".graph-panel .empty")).toContainText("aún no tiene nota");
+    await page.locator(".graph-panel .empty button").click();
+    await expect(page.locator(".graph-current h2")).toBeVisible({ timeout: 6000 });
+    await expect(page.locator(".graph-canvas circle")).not.toHaveCount(0);
+  });
+
   test("palette fetch command runs and shows a toast", async ({ page }) => {
     await gotoApp(page);
     await press(page, ":");

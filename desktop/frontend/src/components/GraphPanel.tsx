@@ -122,9 +122,9 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
         <div className="panel-title"><Network size={13} /> Grafo de conocimiento</div>
         <div className="empty with-icon">
           <Network size={32} />
-          <span>Este artículo aún no tiene nota.</span>
-          <span className="muted">Genera el knowledge graph con <code>:kb build</code></span>
-          <button onClick={onBuild}>Generar grafo</button>
+          <span>Este artículo aún no tiene nota en el knowledge graph.</span>
+          <button onClick={onBuild}>Generar nota de este artículo</button>
+          <span className="muted">El grafo completo se construye con <code>:kb build</code></span>
         </div>
       </div>
     );

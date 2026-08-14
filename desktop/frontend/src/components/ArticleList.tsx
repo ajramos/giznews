@@ -18,12 +18,12 @@ interface Props {
   loading: boolean;
   view: ViewFilter;
   hasSources: boolean;
-  bulkRange: readonly [number, number] | null;
+  bulkSel: Set<number>;
   onView: (v: ViewFilter) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulkRange, onView, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulkSel, onView, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
         <>
           <div className="article-list" ref={containerRef}>
             {articles.map((a, i) => {
-              const inBulk = bulkRange ? i >= bulkRange[0] && i <= bulkRange[1] : false;
+              const inBulk = bulkSel.has(a.id);
               return (
               <div
                 key={a.id}

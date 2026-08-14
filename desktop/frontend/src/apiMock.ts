@@ -185,6 +185,23 @@ export const mockBackend: APIShape = {
 
   kbuild: async (): Promise<KBResult> => { await delay(60); return { atomsCreated: 5, electronsCreated: 2, electronsUpdated: 0, moleculesCreated: 0, articlesSkipped: 12 }; },
   ksynthesize: async (_category: string): Promise<KBResult> => { await delay(60); return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, articlesSkipped: 0 }; },
+  ensureArticleNote: async (articleID: number): Promise<NoteDTO> => {
+    await delay(60);
+    const art = ARTICLES.find((a) => a.id === articleID);
+    const title = art ? art.title : `Article ${articleID}`;
+    const note: NoteDTO = {
+      id: 10000 + articleID,
+      type: "atom",
+      title,
+      slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      content: `# ${title}\n\n## Resumen\n\nNota generada para este artículo.\n`,
+      tags: ["atom", "ai"],
+      wikilinks: [],
+      createdAt: new Date().toISOString(),
+    };
+    if (!NOTES.some((n) => n.title === title)) NOTES.push(note);
+    return note;
+  },
   listNotes: async (type: string): Promise<NoteDTO[]> => { await delay(); return NOTES.filter((n) => (type ? n.type === type : true)); },
   getNote: async (id: number): Promise<NoteDTO> => {
     await delay();

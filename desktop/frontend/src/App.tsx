@@ -24,6 +24,7 @@ import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
+import { NotesPicker } from "./components/NotesPicker";
 import { CircleHelp, Command, RefreshCw } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -53,6 +54,7 @@ export default function App() {
   const [deleteSource, setDeleteSource] = useState<SourceDTO | null>(null);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  const [notesPickerOpen, setNotesPickerOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
   const [welcome, setWelcome] = useState(() => {
@@ -73,20 +75,13 @@ export default function App() {
   const [searchFocus, setSearchFocus] = useState(0);
   const [graphNoteId, setGraphNoteId] = useState<number | null>(null);
 
-  // bulk (vim visual) mode
+  // bulk mode (giztui-style): v to enter, space to toggle individual items,
+  // then an action key applies to the selected set.
   const [bulk, setBulk] = useState(false);
-  const [bulkAnchor, setBulkAnchor] = useState<number | null>(null);
+  const [bulkSel, setBulkSel] = useState<Set<number>>(new Set());
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  const bulkRange = useMemo(() => {
-    if (!bulk || bulkAnchor == null) return null;
-    return [Math.min(bulkAnchor, selectedIndex), Math.max(bulkAnchor, selectedIndex)] as const;
-  }, [bulk, bulkAnchor, selectedIndex]);
-
-  const bulkIds = useMemo(() => {
-    if (!bulkRange) return [];
-    return articles.slice(bulkRange[0], bulkRange[1] + 1).map((a) => a.id);
-  }, [bulkRange, articles]);
+  const bulkIds = useMemo(() => [...bulkSel], [bulkSel]);
 
   const lastGRef = useRef(0);
   const graphTimer = useRef<number | null>(null);
@@ -212,7 +207,7 @@ export default function App() {
     void loadStatus();
   }, [articles, selectedIndex, loadStatus]);
 
-  const exitBulk = useCallback(() => { setBulk(false); setBulkAnchor(null); }, []);
+  const exitBulk = useCallback(() => { setBulk(false); setBulkSel(new Set()); }, []);
 
   const archiveIds = useCallback((ids: number[]) => {
     if (ids.length === 0) return;
@@ -245,13 +240,19 @@ export default function App() {
   }, [applyRange, loadArticles]);
 
   // action entry point that honors bulk mode.
-  const bulkAction = useCallback((verb: "archive" | "read") => {
+  const bulkAction = useCallback((verb: "archive" | "read" | "star") => {
     if (bulk && bulkIds.length > 0) {
-      if (verb === "archive") archiveIds(bulkIds);
-      else {
+      if (verb === "archive") {
+        archiveIds(bulkIds);
+      } else if (verb === "read") {
         void applyToIds(bulkIds, async (a) => {
           if (a.status === "archived") return;
           await api.setArticleStatus(a.id, a.status === "read" ? "unread" : "read");
+        }, () => void loadArticles());
+      } else {
+        void applyToIds(bulkIds, async (a) => {
+          if (a.status === "archived") return;
+          await api.setArticleStatus(a.id, a.status === "starred" ? "unread" : "starred");
         }, () => void loadArticles());
       }
       exitBulk();
@@ -361,12 +362,16 @@ export default function App() {
   }, [selected]);
 
   const buildAndOpenGraph = useCallback(async () => {
+    // Generate the note for the CURRENT article (regardless of importance
+    // threshold), then reload the graph so it appears immediately.
+    const id = selected?.id;
+    if (id == null) return;
     try {
-      await api.kbuild();
-      notify("knowledge graph actualizado");
+      await api.ensureArticleNote(id);
+      notify("Nota generada para este artículo");
       await openGraph();
     } catch (e) { notify(String(e)); }
-  }, [openGraph, notify]);
+  }, [selected, openGraph, notify]);
 
   const runSearch = useCallback(async (q: string) => {
     setSearching(true);
@@ -397,6 +402,7 @@ export default function App() {
     { name: "digest", hint: "Digest diario", run: () => void generateDigest() },
     { name: "auto-refresh", hint: autoRefresh ? "Desactivar refresco automático" : "Activar refresco cada 15 min", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Gestionar fuentes (picker)", run: () => setSourcePickerOpen(true) },
+    { name: "notes", hint: "Ver notas del knowledge graph", run: () => setNotesPickerOpen(true) },
     { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
     { name: "theme", hint: "Elegir tema (picker)", run: () => setThemeModalOpen(true) },
     { name: "open vault", hint: "Abrir vault en Obsidian", run: () => void api.openVault() },
@@ -421,6 +427,7 @@ export default function App() {
         if (helpOpen) { setHelpOpen(false); return; }
         if (themeModalOpen) { setThemeModalOpen(false); return; }
         if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
+        if (notesPickerOpen) { setNotesPickerOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
         if (deleteSource) { setDeleteSource(null); return; }
         if (panel !== "none") { setPanel("none"); return; }
@@ -429,7 +436,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen) return;
+      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -439,20 +446,35 @@ export default function App() {
         if (k === "1") { setDigestOpen(false); return; }
       }
 
-      // bulk (vim visual) mode
+      // bulk mode (giztui-style): v enter, space toggle, action key applies
       if (k === "v") {
         if (bulk) exitBulk();
-        else { setBulk(true); setBulkAnchor(selectedIndex); }
+        else {
+          setBulk(true);
+          const id = selected?.id;
+          setBulkSel(id != null ? new Set([id]) : new Set());
+        }
         return;
       }
       if (bulk) {
         const bn = Math.max(0, articles.length - 1);
         if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + 1, bn)); return; }
         if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - 1, 0)); return; }
+        if (k === " ") {
+          const id = selected?.id;
+          if (id != null) {
+            setBulkSel((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }
+          return;
+        }
         if (k === "a") { bulkAction("archive"); return; }
         if (k === "t") { bulkAction("read"); return; }
-        if (k === "y") { void summarize(); return; }
-        if (k === "m") { void toggleStar(); return; }
+        if (k === "m") { bulkAction("star"); return; }
         return; // consume everything else while in bulk
       }
 
@@ -507,6 +529,7 @@ export default function App() {
       if (k === "m") { void toggleStar(); return; }
       if (k === "O" || k === "o") { openExternal(); return; }
       if (k === "s") { setPanel((p) => (p === "search" ? "none" : "search")); return; }
+      if (k === "n") { setNotesPickerOpen(true); return; }
       if (k === "d") { void generateDigest(); return; }
       if (k === ":") { setPaletteOpen(true); return; }
       if (k === "?") { setHelpOpen(true); return; }
@@ -615,7 +638,7 @@ export default function App() {
               loading={loadingList}
               view={view}
               hasSources={sources.length > 0}
-              bulkRange={bulkRange}
+              bulkSel={bulkSel}
               onView={(v) => void switchView(v)}
               onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
             />
@@ -703,6 +726,13 @@ export default function App() {
           onDelete={(s) => { setSourcePickerOpen(false); setDeleteSource(s); }}
           onFilter={(s) => { setSourcePickerOpen(false); void selectSource(s.id); }}
           onClose={() => setSourcePickerOpen(false)}
+        />
+      )}
+      {notesPickerOpen && (
+        <NotesPicker
+          onOpen={(id) => { setNotesPickerOpen(false); void openNote(id); }}
+          onClose={() => setNotesPickerOpen(false)}
+          notify={notify}
         />
       )}
       {welcome && (

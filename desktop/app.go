@@ -70,6 +70,9 @@ func (a *App) KBuild() (*gizdesktop.KBResult, error) {
 func (a *App) KSynthesize(category string) (*gizdesktop.KBResult, error) {
 	return a.api.KSynthesize(bg(), category)
 }
+func (a *App) EnsureArticleNote(articleID int64) (*gizdesktop.NoteDTO, error) {
+	return a.api.EnsureArticleNote(bg(), articleID)
+}
 func (a *App) ListNotes(noteType string) ([]*gizdesktop.NoteDTO, error) {
 	return a.api.ListNotes(bg(), noteType)
 }

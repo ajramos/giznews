@@ -143,22 +143,28 @@ test.describe("vim keyboard grammar", () => {
     expect(top2).toBeLessThan(top);
   });
 
-  test("v bulk mode: extend with j, exit with Esc", async ({ page }) => {
+  test("v bulk: space toggles selection, Esc exits", async ({ page }) => {
     await gotoApp(page);
     await press(page, "v");
     await expect(page.locator(".statusbar .mode.bulk")).toContainText("BULK");
-    await press(page, "j");
-    await expect(page.locator(".article-row.bulk")).toHaveCount(2);
+    // current item pre-selected
+    await expect(page.locator(".article-row.bulk")).toHaveCount(1);
+    await press(page, " ");
+    await expect(page.locator(".article-row.bulk")).toHaveCount(0);
+    await press(page, " ");
+    await expect(page.locator(".article-row.bulk")).toHaveCount(1);
     await press(page, "Escape");
     await expect(page.locator(".article-row.bulk")).toHaveCount(0);
   });
 
-  test("bulk archive removes all selected", async ({ page }) => {
+  test("bulk: space to select multiple, a archives them", async ({ page }) => {
     await gotoApp(page);
     const before = await page.locator(".article-row").count();
-    await press(page, "v");
-    await press(page, "j");
-    await press(page, "a");
+    await press(page, "v");       // select first
+    await press(page, "j");       // move to second (selection unchanged)
+    await press(page, " ");       // select second
+    await expect(page.locator(".article-row.bulk")).toHaveCount(2);
+    await press(page, "a");       // archive both
     await expect(page.locator(".article-row")).toHaveCount(before - 2);
     await expect(page.locator(".statusbar .mode.bulk")).toHaveCount(0);
   });
