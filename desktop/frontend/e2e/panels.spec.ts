@@ -126,26 +126,31 @@ test.describe("sources", () => {
     await page.keyboard.press("f"); // filter by DeepMind Blog
     await expect(page.locator(".source-picker")).toHaveCount(0);
     await expect(page.locator(".article-row")).toHaveCount(1);
-    await expect(page.locator(".topbar .pill.filter")).toBeVisible();
-    await page.locator(".topbar .pill.filter").click();
+    await expect(page.locator(".statusbar .pill.filter")).toBeVisible();
+    await page.locator(".statusbar .pill.filter").click();
     await expect(page.locator(".article-row")).toHaveCount(7);
   });
 });
 
 test.describe("themes", () => {
-  test("theme picker switches the data-theme attribute", async ({ page }) => {
+  test("theme modal via :theme switches data-theme", async ({ page }) => {
     await gotoApp(page);
-    await page.locator(".theme-picker button").click();
-    await expect(page.locator(".theme-pop")).toBeVisible();
-    await page.locator(".theme-opt", { hasText: "Dracula" }).click();
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("theme");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".theme-modal")).toBeVisible();
+    await page.locator(".theme-modal .theme-opt", { hasText: "Dracula" }).click();
     const attr = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
     expect(attr).toBe("dracula");
     await shot(page, "11-dracula");
   });
 
-  test("theme picker keyboard navigation", async ({ page }) => {
+  test("theme modal keyboard navigation", async ({ page }) => {
     await gotoApp(page);
-    await page.locator(".theme-picker button").click();
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("theme");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".theme-modal")).toBeVisible();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     const attr = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));

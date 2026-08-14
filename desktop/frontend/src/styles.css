@@ -165,6 +165,13 @@ body {
 
 .app { display: flex; flex-direction: column; height: 100vh; }
 
+/* slim window-drag strip replacing the removed title bar */
+.drag-strip {
+  height: 26px; flex-shrink: 0;
+  --wails-draggable: drag;
+  user-select: none;
+}
+
 /* ---- shared controls ---- */
 button {
   font: inherit; cursor: pointer;

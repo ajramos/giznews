@@ -7,8 +7,7 @@ test.describe("UI render", () => {
     await gotoApp(page);
     await shot(page, "01-layout");
 
-    await expect(page.locator(".topbar .brand-name")).toHaveText("GizNews");
-    await expect(page.locator(".topbar .pill").first()).toContainText("no leídos");
+    await expect(page.locator(".statusbar .pill").first()).toContainText("no leídos");
 
     await expect(page.locator(".article-row")).toHaveCount(7); // 7 unread in mock
     // no sources sidebar — sources live in the :sources picker
