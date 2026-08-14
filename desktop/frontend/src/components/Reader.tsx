@@ -54,18 +54,17 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
           )}
         </div>
         <div className="reader-actions">
-          <button onClick={onSummarize} disabled={summarizing || !llmAvailable} title={llmAvailable ? "Resumen IA (y)" : "LLM no disponible (sin resumen)"}>
-            {summarizing ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
-            {summarizing ? "Resumiendo…" : "Resumen (y)"}
+          <button onClick={onSummarize} disabled={summarizing || !llmAvailable} title={llmAvailable ? "Resumen IA (y)" : "LLM no disponible"}>
+            {summarizing ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
           </button>
           <button onClick={onArchive} title="Archivar (a) — reversible">
-            <Archive size={13} /> Archivar
+            <Archive size={16} />
           </button>
           <button onClick={onStar} title="Destacar (m)">
-            <Star size={13} /> Destacar
+            <Star size={16} />
           </button>
           <button onClick={onOpenLink} title="Abrir en el navegador (O)">
-            <ExternalLink size={13} /> Abrir (O)
+            <ExternalLink size={16} />
           </button>
         </div>
       </div>
