@@ -1,22 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"log"
 )
 
-// The remaining commands (search, serve) are wired into the config + database
-// plumbing now; their real logic lands in the phase that owns them.
-
-func runSearch(args []string, logger *log.Logger) {
-	_, d, _ := loadAndOpenDB(args, logger)
-	defer d.Close()
-	logger.Println("search: not implemented yet (phase 5 — semantic search)")
-	fmt.Println("search: nothing to do")
-}
-
+// serve is intentionally left for the final polish phase; fetch + classify +
+// digest + kb can already be chained manually or via cron.
 func runServe(args []string, logger *log.Logger) {
 	_, d, _ := loadAndOpenDB(args, logger)
 	defer d.Close()
-	logger.Fatal("serve: not implemented yet — run `giznews fetch` manually for now")
+	logger.Fatal("serve: not implemented yet — chain `giznews fetch` in a cron/launchd job for now")
 }

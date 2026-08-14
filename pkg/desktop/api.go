@@ -37,6 +37,7 @@ type API interface {
 	GraphNeighbors(ctx context.Context, id int64) ([]*NoteDTO, error)
 
 	// Search
+	SearchIndex(ctx context.Context) (*IndexResultDTO, error)
 	Search(ctx context.Context, query string, limit int) ([]*SearchResultDTO, error)
 
 	// Meta

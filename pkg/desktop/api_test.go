@@ -115,15 +115,3 @@ func TestStatus(t *testing.T) {
 		t.Fatalf("provider = %q", st.LLMProvider)
 	}
 }
-
-func TestNotImplementedMethods(t *testing.T) {
-	app := newTestApp(t)
-	ctx := context.Background()
-	for name, fn := range map[string]func() error{
-		"search": func() error { _, err := app.Search(ctx, "x", 10); return err },
-	} {
-		if err := fn(); err == nil {
-			t.Fatalf("%s: expected not-implemented error", name)
-		}
-	}
-}

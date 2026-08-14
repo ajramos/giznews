@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2}
+	migrations := []string{schemaV1, schemaV2, schemaV3}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -196,4 +196,10 @@ CREATE TABLE IF NOT EXISTS ingests (
 const schemaV2 = `
 ALTER TABLE articles ADD COLUMN classified INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_articles_classified ON articles(classified);
+`
+
+// schemaV3 adds a semantic-search embedding to articles (notes already carry
+// one from the V1 schema).
+const schemaV3 = `
+ALTER TABLE articles ADD COLUMN embedding BLOB;
 `

@@ -359,6 +359,33 @@ func (r *ArticleRepo) CountUnclassified(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// SetArticleEmbedding stores the semantic-search vector for an article.
+func (r *ArticleRepo) SetArticleEmbedding(ctx context.Context, id int64, embedding []float32) error {
+	blob, err := marshalFloats(embedding)
+	if err != nil {
+		return err
+	}
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET embedding = ?, updated_at = ? WHERE id = ?", blob, Now(), id)
+	if err != nil {
+		return fmt.Errorf("set article embedding: %w", err)
+	}
+	return checkAffected(res, "set article embedding")
+}
+
+// GetArticleEmbedding returns the stored embedding for an article, or nil.
+func (r *ArticleRepo) GetArticleEmbedding(ctx context.Context, id int64) ([]float32, error) {
+	var blob []byte
+	err := r.db.sql.QueryRowContext(ctx, "SELECT embedding FROM articles WHERE id = ?", id).Scan(&blob)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get article embedding: %w", err)
+	}
+	return unmarshalFloats(blob)
+}
+
 func scanArticle(row scanner) (*Article, error) {
 	var (
 		a       Article
