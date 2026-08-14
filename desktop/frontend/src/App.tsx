@@ -22,6 +22,7 @@ import { HelpOverlay } from "./components/HelpOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { Markdown } from "./components/Markdown";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
+import { ThemePicker } from "./components/ThemePicker";
 import { CircleHelp, Command, RefreshCw } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -580,14 +581,10 @@ export default function App() {
           </div>
         )}
         <div className="topbar-actions">
-          <select
-            className="theme-select"
+          <ThemePicker
             value={theme}
-            onChange={(e) => { applyTheme(e.target.value as never); setTheme(e.target.value as never); }}
-            title="Tema"
-          >
-            {THEMES.map((t) => <option key={t.name} value={t.name}>{t.label}</option>)}
-          </select>
+            onChange={(t) => { applyTheme(t); setTheme(t); }}
+          />
           <button className="icon-btn" onClick={() => void reloadAll()} title="Recargar">
             <RefreshCw size={15} />
           </button>

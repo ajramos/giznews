@@ -238,6 +238,34 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .topbar-actions { display: flex; gap: 6px; align-items: center; }
 .theme-select { font-size: 12px; padding: 3px 8px; }
 
+/* ---- theme picker (giztui-style) ---- */
+.theme-picker { position: relative; }
+.theme-picker .theme-name { font-size: 12px; }
+.theme-pop {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  min-width: 190px; z-index: 40;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.5);
+}
+.theme-opt {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 6px 9px; border: none; background: transparent; border-radius: var(--radius-sm);
+  font-size: 13px; justify-content: flex-start;
+}
+.theme-opt.selected { background: var(--sel-bg); }
+.theme-opt-label { flex: 1; text-align: left; }
+.theme-check { color: var(--accent); }
+.swatch {
+  width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(0,0,0,.25);
+  flex-shrink: 0;
+}
+.swatch[data-theme-swatch="giznews"] { background: linear-gradient(135deg, #4f8cff, #0d1117); }
+.swatch[data-theme-swatch="dracula"] { background: linear-gradient(135deg, #bd93f9, #282a36); }
+.swatch[data-theme-swatch="slate"] { background: linear-gradient(135deg, #4fc3f7, #1e2540); }
+.swatch[data-theme-swatch="nord"] { background: linear-gradient(135deg, #88c0d0, #2e3440); }
+.swatch[data-theme-swatch="light"] { background: linear-gradient(135deg, #0969da, #f6f8fa); }
+
 /* ---- layout ---- */
 .layout { flex: 1; display: grid; grid-template-columns: 240px 360px 1fr; min-height: 0; }
 .col { min-width: 0; min-height: 0; display: flex; flex-direction: column; }

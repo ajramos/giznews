@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,7 +42,14 @@ func (s *Service) ExtractArticle(ctx context.Context, art *db.Article) error {
 	}
 	md := sources.HTMLToMarkdown(parsed.Content)
 	if len([]rune(md)) < MinLength {
-		return fmt.Errorf("extract %s: no readable content", art.URL)
+		// Fallback: some pages have readable text but broken/empty article HTML.
+		// Use the plain-text extraction instead of giving up.
+		txt := strings.TrimSpace(parsed.TextContent)
+		if len([]rune(txt)) >= MinLength {
+			md = txt
+		} else {
+			return fmt.Errorf("extract %s: no readable content", art.URL)
+		}
 	}
 	repo := db.NewArticleRepo(s.db)
 	if err := repo.SetContent(ctx, art.ID, parsed.Content, md); err != nil {
