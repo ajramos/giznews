@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -209,4 +209,11 @@ ALTER TABLE articles ADD COLUMN embedding BLOB;
 const schemaV4 = `
 ALTER TABLE sources ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_sources_hidden ON sources(hidden);
+`
+
+// schemaV5 tracks which articles have had their full content extracted, so
+// batch extraction during fetch only targets short, un-extracted bodies.
+const schemaV5 = `
+ALTER TABLE articles ADD COLUMN extracted INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_articles_extracted ON articles(extracted);
 `

@@ -3,12 +3,15 @@ package desktop
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ajramos/giznews/internal/db"
-	"github.com/ajramos/giznews/internal/sources"
-	"github.com/go-shiori/go-readability"
+	"github.com/ajramos/giznews/internal/extract"
 )
+
+// contentMinLength is the threshold below which an article is considered to
+// have no real body (HN feeds only carry titles + comment links). Kept as an
+// alias of extract.MinLength for readability at call sites.
+const contentMinLength = extract.MinLength
 
 func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*ArticleDTO, error) {
 	limit, offset := opts.Limit, opts.Offset
@@ -47,10 +50,6 @@ func (a *App) GetArticle(ctx context.Context, id int64) (*ArticleDTO, error) {
 	return toArticleDTO(art), nil
 }
 
-// contentMinLength is the threshold below which an article is considered to
-// have no real body (HN feeds only carry titles + comment links).
-const contentMinLength = 200
-
 // GetArticleContent returns an article ready to read: if its stored body is
 // too short, it fetches the original URL and extracts the readable content
 // (readability → markdown), caching it for next time. Extraction happens on
@@ -62,8 +61,8 @@ func (a *App) GetArticleContent(ctx context.Context, id int64) (*ArticleDTO, err
 		return nil, fmt.Errorf("get article: %w", err)
 	}
 
-	if len([]rune(art.ContentMD)) < contentMinLength && art.URL != "" {
-		if err := a.extractAndStore(ctx, art); err != nil {
+	if len([]rune(art.ContentMD)) < extract.MinLength && art.URL != "" {
+		if err := extract.NewService(a.db).ExtractArticle(ctx, art); err != nil {
 			// Return what we have; extraction failure is non-fatal.
 			updated, _ := repo.Get(ctx, id)
 			if updated != nil {
@@ -76,18 +75,6 @@ func (a *App) GetArticleContent(ctx context.Context, id int64) (*ArticleDTO, err
 		}
 	}
 	return toArticleDTO(art), nil
-}
-
-func (a *App) extractAndStore(ctx context.Context, art *db.Article) error {
-	parsed, err := readability.FromURL(art.URL, 15*time.Second)
-	if err != nil {
-		return fmt.Errorf("extract %s: %w", art.URL, err)
-	}
-	md := sources.HTMLToMarkdown(parsed.Content)
-	if len([]rune(md)) < contentMinLength {
-		return fmt.Errorf("extract %s: no readable content", art.URL)
-	}
-	return db.NewArticleRepo(a.db).SetContent(ctx, art.ID, parsed.Content, md)
 }
 
 func (a *App) SetArticleStatus(ctx context.Context, id int64, status string) error {

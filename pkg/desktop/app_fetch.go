@@ -17,7 +17,14 @@ func (a *App) fetchService() (*fetch.Service, error) {
 		a.cfg.Gmail.Queries,
 		a.cfg.Gmail.MaxAge,
 	)
-	return fetch.NewService(a.db, man, log.New(logWriter{}, "giznews: ", 0))
+	svc, err := fetch.NewService(a.db, man, log.New(logWriter{}, "giznews: ", 0))
+	if err != nil {
+		return nil, err
+	}
+	if a.cfg.Extract.OnFetch {
+		svc.SetExtraction(a.cfg.Extract.Limit, a.cfg.Extract.Concurrency)
+	}
+	return svc, nil
 }
 
 type logWriter struct{}
@@ -39,6 +46,7 @@ func (a *App) Fetch(ctx context.Context) (*FetchResult, error) {
 		Updated:        res.Updated,
 		SourcesFetched: res.SourcesFetched,
 		SourcesFailed:  res.SourcesFailed,
+		Extracted:      res.Extracted,
 		ElapsedMs:      res.ElapsedMs,
 	}, nil
 }

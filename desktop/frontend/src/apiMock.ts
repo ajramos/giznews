@@ -129,7 +129,7 @@ export const mockBackend: APIShape = {
   },
   setArticleImportance: async (_id: number, _importance: number): Promise<void> => { await delay(); },
 
-  fetch: async (): Promise<FetchResult> => { await delay(60); return { newArticles: 3, updated: 0, sourcesFetched: 4, sourcesFailed: 0, elapsedMs: 500 }; },
+  fetch: async (): Promise<FetchResult> => { await delay(60); return { newArticles: 3, updated: 0, sourcesFetched: 4, sourcesFailed: 0, extracted: 2, elapsedMs: 500 }; },
   classify: async (_limit: number): Promise<ClassifyResult> => { await delay(60); return { classified: 8, byRules: 2, byLLM: 6, skippedNoLLM: 0, batches: 1, errors: [] }; },
   summarizeArticle: async (id: number): Promise<ArticleDTO> => {
     await delay(80);

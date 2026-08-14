@@ -384,6 +384,42 @@ func (r *ArticleRepo) SetContent(ctx context.Context, id int64, contentHTML, con
 	return checkAffected(res, "set article content")
 }
 
+// SetExtracted marks whether a full-content extraction attempt succeeded.
+func (r *ArticleRepo) SetExtracted(ctx context.Context, id int64, ok bool) error {
+	_, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET extracted = ?, updated_at = ? WHERE id = ?", boolToInt(ok), Now(), id)
+	if err != nil {
+		return fmt.Errorf("set article extracted: %w", err)
+	}
+	return nil
+}
+
+// ListPendingExtract returns articles that lack a real body and have not been
+// extracted yet, capped at limit, most important first.
+func (r *ArticleRepo) ListPendingExtract(ctx context.Context, limit int) ([]*Article, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT `+articleColumns+articleFrom+`
+		WHERE a.extracted = 0 AND LENGTH(a.content_md) < 200 AND a.url != ''
+		ORDER BY a.importance DESC, a.fetched_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list pending extract: %w", err)
+	}
+	defer rows.Close()
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // GetArticleEmbedding returns the stored embedding for an article, or nil.
 func (r *ArticleRepo) GetArticleEmbedding(ctx context.Context, id int64) ([]float32, error) {
 	var blob []byte

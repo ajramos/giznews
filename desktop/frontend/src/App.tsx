@@ -356,9 +356,9 @@ export default function App() {
   }, [notify]);
 
   const commands = useMemo<PaletteCommand[]>(() => [
-    { name: "fetch", hint: "Traer nuevos artículos", run: () => void runCmd(async () => {
+    { name: "fetch", hint: "Traer nuevos artículos (+ extraer cuerpos)", run: () => void runCmd(async () => {
       const r = await api.fetch(); await reloadAll();
-      notify(`${r.newArticles} nuevos · ${r.sourcesFailed} fuentes con error`);
+      notify(`${r.newArticles} nuevos${r.extracted ? ` · ${r.extracted} extraídos` : ""}`);
     }, "fetch") },
     { name: "classify", hint: "Clasificar (reglas + LLM)", run: () => void runCmd(() => api.classify(200), "clasificación completa") },
     { name: "kb build", hint: "Generar atoms/electrons", run: () => void runCmd(api.kbuild, "knowledge graph actualizado") },

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ajramos/giznews/internal/db"
+	"github.com/ajramos/giznews/internal/extract"
 	"github.com/ajramos/giznews/internal/sources"
 )
 
@@ -23,15 +24,21 @@ type Result struct {
 	Duplicates     int      `json:"duplicates"`
 	SourcesFetched int      `json:"sources_fetched"`
 	SourcesFailed  int      `json:"sources_failed"`
+	Extracted      int      `json:"extracted"`
 	Errors         []string `json:"errors,omitempty"`
 	ElapsedMs      int64    `json:"elapsed_ms"`
 }
 
-// Service runs the fetch pipeline: fetch → normalize → dedupe → persist.
+// Service runs the fetch pipeline: fetch → normalize → dedupe → persist, and
+// optionally extracts full article bodies in batch.
 type Service struct {
-	db     *db.DB
-	man    *sources.Manager
+	db    *db.DB
+	man   *sources.Manager
 	logger *log.Logger
+
+	extractor *extract.Service
+	extractLimit    int
+	extractWorkers  int
 
 	mu         sync.RWMutex
 	recentHash map[uint64]bool
@@ -85,6 +92,14 @@ func (s *Service) warmDedup() error {
 		}
 	}
 	return rows.Err()
+}
+
+// SetExtraction enables batch full-content extraction after each fetch.
+// limit=0 disables it. workers is the pool size (0 = sane default).
+func (s *Service) SetExtraction(limit, workers int) {
+	s.extractor = extract.NewService(s.db)
+	s.extractLimit = limit
+	s.extractWorkers = workers
 }
 
 // FetchAll pulls every enabled source and persists new articles.
@@ -147,6 +162,18 @@ func (s *Service) FetchAll(ctx context.Context) (*Result, error) {
 	}
 
 	res.ElapsedMs = time.Since(start).Milliseconds()
+
+	// Batch extraction: enrich short-bodied articles (HN etc.) with their real
+	// content so they are ready to read. Backfills existing short articles too.
+	if s.extractor != nil && s.extractLimit > 0 && ctx.Err() == nil {
+		done, err := s.extractor.ExtractPending(ctx, s.extractLimit, s.extractWorkers)
+		if err != nil {
+			res.Errors = append(res.Errors, fmt.Sprintf("extract: %v", err))
+		} else if done > 0 && s.logger != nil {
+			s.logger.Printf("extracted %d article bodies", done)
+		}
+		res.Extracted = done
+	}
 	return res, nil
 }
 

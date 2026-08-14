@@ -65,6 +65,7 @@ export interface FetchResult {
   updated: number;
   sourcesFetched: number;
   sourcesFailed: number;
+  extracted: number;
   elapsedMs: number;
 }
 

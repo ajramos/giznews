@@ -24,6 +24,9 @@ func runFetch(args []string, logger *log.Logger) {
 	if err != nil {
 		logger.Fatalf("fetch service: %v", err)
 	}
+	if cfg.Extract.OnFetch {
+		svc.SetExtraction(cfg.Extract.Limit, cfg.Extract.Concurrency)
+	}
 
 	res, err := svc.FetchAll(ctx)
 	if err != nil {
@@ -31,7 +34,7 @@ func runFetch(args []string, logger *log.Logger) {
 	}
 
 	fmt.Printf("fetch complete in %dms\n", res.ElapsedMs)
-	fmt.Printf("  new: %d   updated: %d   duplicates: %d\n", res.NewArticles, res.Updated, res.Duplicates)
+	fmt.Printf("  new: %d   updated: %d   duplicates: %d   extracted: %d\n", res.NewArticles, res.Updated, res.Duplicates, res.Extracted)
 	fmt.Printf("  sources ok: %d   failed: %d\n", res.SourcesFetched, res.SourcesFailed)
 	for _, e := range res.Errors {
 		fmt.Printf("  ! %s\n", e)

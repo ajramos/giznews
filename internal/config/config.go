@@ -82,6 +82,10 @@ type Config struct {
 	// Classify configures article classification.
 	Classify ClassifyConfig `json:"classify"`
 
+	// Extract configures full-article content extraction (readability) during
+	// fetch, so bodies are ready before you open them.
+	Extract ExtractConfig `json:"extract"`
+
 	// Sources are the news sources to track. Managed via CLI/UI; the JSON
 	// field is a convenience for hand-editing.
 	Sources []SourceConfig `json:"sources,omitempty"`
@@ -139,6 +143,17 @@ type ClassifyConfig struct {
 	ImportanceThreshold int `json:"importance_threshold"`
 }
 
+// ExtractConfig configures full-content extraction during fetch.
+type ExtractConfig struct {
+	// OnFetch extracts article bodies (readability → markdown) after fetching,
+	// so articles are ready to read without an on-open network round trip.
+	OnFetch bool `json:"on_fetch"`
+	// Limit caps how many short articles are extracted per fetch run.
+	Limit int `json:"limit"`
+	// Concurrency is the number of parallel extraction workers.
+	Concurrency int `json:"concurrency"`
+}
+
 // SourceConfig describes a news source in the config file. The live source
 // registry lives in the DB; this is only a hand-editing convenience.
 type SourceConfig struct {
@@ -177,6 +192,11 @@ func DefaultConfig() *Config {
 			UseLLM:              true,
 			BatchSize:           20,
 			ImportanceThreshold: 2,
+		},
+		Extract: ExtractConfig{
+			OnFetch:     true,
+			Limit:       20,
+			Concurrency: 4,
 		},
 		Sources: []SourceConfig{},
 	}
