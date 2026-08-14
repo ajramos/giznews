@@ -100,3 +100,24 @@ func TestExtractArticleNoContent(t *testing.T) {
 	}
 }
 
+
+func TestCleanMarkdownUnwrapsHTMLFences(t *testing.T) {
+	in := "Intro text.\n\n```\n<div class=\"flex\">\n  <img src=\"/x.png\" />\n</div>\n```\n\nReal code:\n\n```go\nfmt.Println(\"hi\")\n```\n"
+	got := CleanMarkdown(in)
+	if strings.Contains(got, "```\n<div") {
+		t.Fatalf("HTML fence was not unwrapped:\n%s", got)
+	}
+	if !strings.Contains(got, `<div class="flex">`) {
+		t.Fatalf("raw html missing:\n%s", got)
+	}
+	if !strings.Contains(got, "```go") {
+		t.Fatalf("real code fence lost:\n%s", got)
+	}
+}
+
+func TestCleanMarkdownCollapsesBlanks(t *testing.T) {
+	in := "a\n\n\n\n\nb"
+	if got := CleanMarkdown(in); strings.Contains(got, "\n\n\n\n") {
+		t.Fatalf("blank lines not collapsed: %q", got)
+	}
+}

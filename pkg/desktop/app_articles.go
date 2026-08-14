@@ -74,6 +74,9 @@ func (a *App) GetArticleContent(ctx context.Context, id int64) (*ArticleDTO, err
 			return nil, err
 		}
 	}
+	// Clean stored content on read so previously-extracted articles also get
+	// the HTML-fence unwrapping without a re-extraction.
+	art.ContentMD = extract.CleanMarkdown(art.ContentMD)
 	return toArticleDTO(art), nil
 }
 

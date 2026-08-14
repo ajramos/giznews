@@ -51,6 +51,7 @@ func (s *Service) ExtractArticle(ctx context.Context, art *db.Article) error {
 			return fmt.Errorf("extract %s: no readable content", art.URL)
 		}
 	}
+	md = CleanMarkdown(md)
 	repo := db.NewArticleRepo(s.db)
 	if err := repo.SetContent(ctx, art.ID, parsed.Content, md); err != nil {
 		return err

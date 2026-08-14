@@ -111,6 +111,19 @@ test.describe("themes", () => {
     const attr = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
     expect(attr).toBe("dracula");
   });
+
+  test(":theme command opens the theme modal", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("theme");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".theme-modal")).toBeVisible();
+    await expect(page.locator(".theme-modal .theme-opt")).toHaveCount(5);
+    await page.locator(".theme-modal .theme-opt", { hasText: "Nord" }).click();
+    const attr = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
+    expect(attr).toBe("nord");
+    await expect(page.locator(".theme-modal")).toHaveCount(0);
+  });
 });
 
 test.describe("workflows", () => {

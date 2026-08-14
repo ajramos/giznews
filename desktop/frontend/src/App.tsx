@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
-import { applyTheme, currentTheme, THEMES } from "./theme";
+import { applyTheme, currentTheme } from "./theme";
 import type {
   ArticleDTO,
   DigestDTO,
@@ -23,6 +23,7 @@ import { StatusBar } from "./components/StatusBar";
 import { Markdown } from "./components/Markdown";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { ThemePicker } from "./components/ThemePicker";
+import { ThemeModal } from "./components/ThemeModal";
 import { CircleHelp, Command, RefreshCw } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -50,6 +51,7 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [sourceForm, setSourceForm] = useState<{ initial: SourceDTO | null } | null>(null);
   const [deleteSource, setDeleteSource] = useState<SourceDTO | null>(null);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
   const [welcome, setWelcome] = useState(() => {
@@ -394,10 +396,7 @@ export default function App() {
     { name: "digest", hint: "Digest diario", run: () => void generateDigest() },
     { name: "auto-refresh", hint: autoRefresh ? "Desactivar refresco automático" : "Activar refresco cada 15 min", run: () => setAutoRefresh((v) => !v) },
     { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => setSourceForm({ initial: null }) },
-    { name: "theme", hint: `Cambiar tema (${THEMES.map((t) => t.name).join(" | ")})`, run: () => {
-      const next = THEMES[(THEMES.findIndex((t) => t.name === theme) + 1) % THEMES.length];
-      applyTheme(next.name); setTheme(next.name);
-    } },
+    { name: "theme", hint: "Elegir tema (picker)", run: () => setThemeModalOpen(true) },
     { name: "open vault", hint: "Abrir vault en Obsidian", run: () => void api.openVault() },
     { name: "quit", hint: "Salir", run: () => void api.quit() },
   ], [runCmd, generateDigest, reloadAll, theme, autoRefresh]);
@@ -418,6 +417,7 @@ export default function App() {
         if (bulk) { exitBulk(); return; }
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (helpOpen) { setHelpOpen(false); return; }
+        if (themeModalOpen) { setThemeModalOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
         if (deleteSource) { setDeleteSource(null); return; }
         if (panel !== "none") { setPanel("none"); return; }
@@ -426,7 +426,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (paletteOpen || helpOpen || sourceForm || deleteSource) return;
+      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -514,7 +514,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -708,6 +708,13 @@ export default function App() {
 
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
+      {themeModalOpen && (
+        <ThemeModal
+          value={theme}
+          onChange={(t) => { applyTheme(t); setTheme(t); }}
+          onClose={() => setThemeModalOpen(false)}
+        />
+      )}
       {welcome && (
         <WelcomeOverlay
           onDone={() => {
