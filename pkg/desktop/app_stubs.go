@@ -7,19 +7,7 @@ import (
 	"github.com/ajramos/giznews/internal/db"
 )
 
-// Knowledge-graph and search methods land in their owning phases.
-
-func (a *App) ListNotes(ctx context.Context, noteType string) ([]*NoteDTO, error) {
-	return nil, fmt.Errorf("knowledge graph not implemented yet (phase 4)")
-}
-
-func (a *App) GetNote(ctx context.Context, id int64) (*NoteDTO, error) {
-	return nil, fmt.Errorf("knowledge graph not implemented yet (phase 4)")
-}
-
-func (a *App) GraphNeighbors(ctx context.Context, id int64) ([]*NoteDTO, error) {
-	return nil, fmt.Errorf("knowledge graph not implemented yet (phase 4)")
-}
+// Semantic search lands in its owning phase (phase 5).
 
 func (a *App) Search(ctx context.Context, query string, limit int) ([]*SearchResultDTO, error) {
 	return nil, fmt.Errorf("semantic search not implemented yet (phase 5)")

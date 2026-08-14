@@ -310,6 +310,44 @@ func (r *ArticleRepo) ListRecent(ctx context.Context, sinceDays, limit int) ([]*
 	return out, rows.Err()
 }
 
+// ListForKB returns classified, non-archived articles at or above an
+// importance threshold that have not yet been ingested into the knowledge
+// graph (i.e. have no ingests row).
+func (r *ArticleRepo) ListForKB(ctx context.Context, importanceMin, ageDays, limit int) ([]*Article, error) {
+	if importanceMin <= 0 {
+		importanceMin = 2
+	}
+	if ageDays <= 0 {
+		ageDays = 30
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	cutoff := time.Now().Add(-time.Duration(ageDays) * 24 * time.Hour).UTC().Format(time.RFC3339)
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT `+articleColumns+articleFrom+`
+		WHERE a.status != 'archived' AND a.classified = 1 AND a.importance >= ?
+		  AND a.fetched_at >= ?
+		  AND NOT EXISTS (
+			SELECT 1 FROM ingests i WHERE i.ref_type = 'article' AND i.ref_id = CAST(a.id AS TEXT)
+		  )
+		ORDER BY a.importance DESC, a.published IS NULL, a.published DESC
+		LIMIT ?`, importanceMin, cutoff, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list for kb: %w", err)
+	}
+	defer rows.Close()
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // CountUnclassified reports how many unread articles await classification.
 func (r *ArticleRepo) CountUnclassified(ctx context.Context) (int, error) {
 	var n int

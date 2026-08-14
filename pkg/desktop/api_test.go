@@ -120,10 +120,7 @@ func TestNotImplementedMethods(t *testing.T) {
 	app := newTestApp(t)
 	ctx := context.Background()
 	for name, fn := range map[string]func() error{
-		"listnotes": func() error { _, err := app.ListNotes(ctx, "atom"); return err },
-		"getnote":   func() error { _, err := app.GetNote(ctx, 1); return err },
-		"neighbors": func() error { _, err := app.GraphNeighbors(ctx, 1); return err },
-		"search":    func() error { _, err := app.Search(ctx, "x", 10); return err },
+		"search": func() error { _, err := app.Search(ctx, "x", 10); return err },
 	} {
 		if err := fn(); err == nil {
 			t.Fatalf("%s: expected not-implemented error", name)

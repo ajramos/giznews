@@ -5,15 +5,8 @@ import (
 	"log"
 )
 
-// The remaining commands (kb, search, serve) are wired into the config +
-// database plumbing now; their real logic lands in the phase that owns them.
-
-func runKB(args []string, logger *log.Logger) {
-	_, d, _ := loadAndOpenDB(args, logger)
-	defer d.Close()
-	logger.Println("kb: not implemented yet (phase 4 — knowledge graph)")
-	fmt.Println("kb: nothing to do")
-}
+// The remaining commands (search, serve) are wired into the config + database
+// plumbing now; their real logic lands in the phase that owns them.
 
 func runSearch(args []string, logger *log.Logger) {
 	_, d, _ := loadAndOpenDB(args, logger)

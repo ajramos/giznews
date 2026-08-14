@@ -30,6 +30,8 @@ type API interface {
 	Digest(ctx context.Context) (*DigestDTO, error)
 
 	// Knowledge graph
+	KBuild(ctx context.Context) (*KBResult, error)
+	KSynthesize(ctx context.Context, category string) (*KBResult, error)
 	ListNotes(ctx context.Context, noteType string) ([]*NoteDTO, error)
 	GetNote(ctx context.Context, id int64) (*NoteDTO, error)
 	GraphNeighbors(ctx context.Context, id int64) ([]*NoteDTO, error)
