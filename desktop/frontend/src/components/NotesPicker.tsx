@@ -64,7 +64,7 @@ export function NotesPicker({ onOpen, onClose, notify }: Props) {
           </span>
         </div>
         <div className="source-picker-list">
-          {notes.length === 0 && <div className="palette-empty">Sin notas. Ejecuta <kbd>kb build</kbd> para generarlas.</div>}
+          {notes.length === 0 && <div className="palette-empty">Sin notas. Ejecuta <kbd>:procesar</kbd> (o <kbd>:kb build</kbd>) para generarlas.</div>}
           {notes.map((n, i) => {
             const meta = TYPE_META[n.type] ?? TYPE_META.atom;
             const Icon = meta.icon;

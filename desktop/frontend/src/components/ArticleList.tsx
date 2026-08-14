@@ -54,7 +54,7 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
         <div className="empty with-icon">
           <Inbox size={30} />
           <span>{hasSources ? "No hay artículos en esta vista." : "No hay fuentes configuradas."}</span>
-          <span className="muted">{hasSources ? "Prueba u/r/x/* o ejecuta :fetch" : "Añade fuentes con :sources y trae artículos con :fetch"}</span>
+          <span className="muted">{hasSources ? "Ejecuta :procesar para traer y clasificar noticias" : "Añade fuentes con :sources y procesa con :procesar"}</span>
         </div>
       ) : (
         <>
