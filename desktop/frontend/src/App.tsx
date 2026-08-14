@@ -457,6 +457,7 @@ export default function App() {
 
       if (k === "J") { openAdjacent(count); return; }
       if (k === "K") { openAdjacent(-count); return; }
+      if (k === "q") { void api.quit(); return; }
       if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + count, n)); return; }
       if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - count, 0)); return; }
       if (k === "Home") { setSelectedIndex(0); return; }
@@ -673,6 +674,8 @@ export default function App() {
         bulkCount={bulkIds.length}
         autoRefresh={autoRefresh}
         llmOn={!!status?.llmEnabled}
+        llmReachable={!!status?.llmReachable}
+        llmProvider={status?.llmProvider ?? "llm"}
         onToggleAuto={() => setAutoRefresh((v) => !v)}
       />
 

@@ -83,28 +83,72 @@ const sampleSearch: SearchResultDTO[] = [
 
 const delay = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
+// Dense mode (?dense=1) simulates a full inbox (150 articles, long bodies) so
+// scroll/wheel/layout issues can be reproduced and tested.
+function denseArticles(): ArticleDTO[] {
+  const titles = [
+    "OpenAI ships a new frontier model with agentic tool use",
+    "Anthropic expands Claude into enterprise workflows",
+    "DeepSeek open-sources a reasoning model",
+    "Google DeepMind improves world-model planning",
+    "Meta releases an efficient small-language model",
+    "EU AI Act enters a new enforcement phase",
+    "A new RAG benchmark shows local beats cloud",
+    "Quantization at the edge: 2-bit LLMs arrive",
+    "Vector databases mature for production RAG",
+    "Agentic coding assistants reach a plateau",
+  ];
+  const cats = ["models", "research", "industry", "regulation", "tools", "open-source", "funding", "opinion"];
+  const out: ArticleDTO[] = [];
+  for (let i = 0; i < 150; i++) {
+    const t = titles[i % titles.length];
+    const n = i + 1;
+    out.push({
+      id: n,
+      sourceId: (i % 3) + 1,
+      sourceName: ["HN RSS", "HN Algolia", "DeepMind Blog"][i % 3],
+      url: `https://example.com/ai/${n}`,
+      title: `${t} — report #${n}`,
+      importance: (i % 4),
+      status: "unread",
+      category: cats[i % cats.length],
+      tags: ["ai", "report"],
+      summary: `Summary for report ${n}: a key development in the AI landscape that practitioners should track.`,
+      contentMD: `${lorem(30)}\n\n## Key points\n\n- point one for #${n}\n- point two for #${n}`,
+      fetchedAt: new Date(Date.now() - n * 3600_000).toISOString(),
+    });
+  }
+  return out;
+}
+
+const dense = typeof window !== "undefined" && window.location?.search?.includes("dense");
+const SOURCES = dense ? sampleSources : sampleSources;
+const ARTICLES: ArticleDTO[] = dense ? denseArticles() : sampleArticles;
+const NOTES = dense ? sampleNotes : sampleNotes;
+const DIGEST = dense ? { ...sampleDigest, themes: sampleDigest.themes } : sampleDigest;
+
 export const mockBackend: APIShape = {
-  listSources: async (): Promise<SourceDTO[]> => { await delay(); return sampleSources; },
+  listSources: async (): Promise<SourceDTO[]> => { await delay(); return SOURCES; },
   addSource: async (name: string, type: string, url: string, group: string): Promise<SourceDTO> => {
     await delay();
     const s: SourceDTO = { id: Date.now(), name, type, url, group: group || "general", enabled: true };
-    sampleSources.push(s);
+    SOURCES.push(s);
     return s;
   },
   setSourceEnabled: async (id: number, enabled: boolean): Promise<void> => {
     await delay();
-    const s = sampleSources.find((x) => x.id === id);
+    const s = SOURCES.find((x) => x.id === id);
     if (s) s.enabled = enabled;
   },
   deleteSource: async (id: number): Promise<void> => {
     await delay();
-    const i = sampleSources.findIndex((s) => s.id === id);
-    if (i >= 0) sampleSources.splice(i, 1);
+    const i = SOURCES.findIndex((s) => s.id === id);
+    if (i >= 0) SOURCES.splice(i, 1);
   },
 
   listArticles: async (opts: ListArticlesOptions): Promise<ArticleDTO[]> => {
     await delay();
-    let list = sampleArticles;
+    let list = ARTICLES;
     if (opts.status) list = list.filter((a) => a.status === opts.status);
     if (opts.importanceMin) list = list.filter((a) => a.importance >= (opts.importanceMin ?? 0));
     if (opts.sourceId) list = list.filter((a) => a.sourceId === opts.sourceId);
@@ -112,19 +156,19 @@ export const mockBackend: APIShape = {
   },
   getArticle: async (id: number): Promise<ArticleDTO> => {
     await delay();
-    const a = sampleArticles.find((x) => x.id === id);
+    const a = ARTICLES.find((x) => x.id === id);
     if (!a) throw new Error("article not found");
     return { ...a };
   },
   getArticleContent: async (id: number): Promise<ArticleDTO> => {
     await delay(120); // simulate extraction
-    const a = sampleArticles.find((x) => x.id === id);
+    const a = ARTICLES.find((x) => x.id === id);
     if (!a) throw new Error("article not found");
     return { ...a };
   },
   setArticleStatus: async (id: number, status: string): Promise<void> => {
     await delay();
-    const a = sampleArticles.find((x) => x.id === id);
+    const a = ARTICLES.find((x) => x.id === id);
     if (a) a.status = status as ArticleDTO["status"];
   },
   setArticleImportance: async (_id: number, _importance: number): Promise<void> => { await delay(); },
@@ -137,20 +181,20 @@ export const mockBackend: APIShape = {
     a.summary = "Mock summary: this article covers a key development in the AI landscape and why it matters for practitioners.";
     return a;
   },
-  digest: async (): Promise<DigestDTO> => { await delay(80); return sampleDigest; },
+  digest: async (): Promise<DigestDTO> => { await delay(80); return DIGEST; },
 
   kbuild: async (): Promise<KBResult> => { await delay(60); return { atomsCreated: 5, electronsCreated: 2, electronsUpdated: 0, moleculesCreated: 0, articlesSkipped: 12 }; },
   ksynthesize: async (_category: string): Promise<KBResult> => { await delay(60); return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, articlesSkipped: 0 }; },
-  listNotes: async (type: string): Promise<NoteDTO[]> => { await delay(); return sampleNotes.filter((n) => (type ? n.type === type : true)); },
+  listNotes: async (type: string): Promise<NoteDTO[]> => { await delay(); return NOTES.filter((n) => (type ? n.type === type : true)); },
   getNote: async (id: number): Promise<NoteDTO> => {
     await delay();
-    const n = sampleNotes.find((x) => x.id === id);
+    const n = NOTES.find((x) => x.id === id);
     if (!n) throw new Error("note not found");
     return { ...n };
   },
   graphNeighbors: async (_id: number): Promise<NoteDTO[]> => {
     await delay();
-    return sampleNotes.slice(0, 2);
+    return NOTES.slice(0, 2);
   },
 
   searchIndex: async (): Promise<IndexResult> => { await delay(); return { notesEmbedded: 3, articlesEmbedded: 8, ftsNotes: 3, ftsArticles: 8, embeddingsFailed: 0 }; },
@@ -158,7 +202,7 @@ export const mockBackend: APIShape = {
 
   status: async (): Promise<StatusDTO> => {
     await delay();
-    return { dbPath: "/mock/db", vaultPath: "/mock/vault", llmProvider: "ollama", llmEnabled: true, llmReachable: true, embeddingsModel: "nomic-embed-text", unreadArticles: sampleArticles.filter((a) => a.status === "unread").length, totalArticles: sampleArticles.length, totalNotes: sampleNotes.length };
+    return { dbPath: "/mock/db", vaultPath: "/mock/vault", llmProvider: "ollama", llmEnabled: true, llmReachable: true, embeddingsModel: "nomic-embed-text", unreadArticles: ARTICLES.filter((a) => a.status === "unread").length, totalArticles: ARTICLES.length, totalNotes: NOTES.length };
   },
 
   openURL: async (_url: string): Promise<void> => { await delay(); },

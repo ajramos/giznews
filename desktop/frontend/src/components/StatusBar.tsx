@@ -15,6 +15,8 @@ export function StatusBar({
   bulkCount,
   autoRefresh,
   llmOn,
+  llmReachable,
+  llmProvider,
   onToggleAuto,
 }: {
   context: UIContext;
@@ -25,6 +27,8 @@ export function StatusBar({
   bulkCount: number;
   autoRefresh: boolean;
   llmOn: boolean;
+  llmReachable: boolean;
+  llmProvider: string;
   onToggleAuto: () => void;
 }) {
   const keys = CONTEXT_KEYS[context] ?? CONTEXT_KEYS.list;
@@ -59,7 +63,13 @@ export function StatusBar({
         <button className="pill auto" title="Auto-refresh cada 15 min" onClick={onToggleAuto}>
           {autoRefresh ? "auto 15m ✓" : "auto off"}
         </button>
-        <span className={`pill llm ${llmOn ? "on" : "off"}`}>⦿ {llmOn ? "ollama" : "sin LLM"}</span>
+        {llmOn && llmReachable ? (
+          <span className="pill llm on" title={`LLM conectado (${llmProvider})`}>● {llmProvider}</span>
+        ) : llmOn ? (
+          <span className="pill llm off" title="LLM configurado pero no responde">○ {llmProvider}</span>
+        ) : (
+          <span className="pill" title="LLM desactivado en config.json (llm.enabled)">LLM off</span>
+        )}
       </div>
     </footer>
   );

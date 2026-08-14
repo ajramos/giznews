@@ -48,6 +48,12 @@ export const HELP: HelpCategory[] = [
       { keys: "u / r / x / *", label: "No leídos · Leídos · Archivados · Destacados" },
     ],
   },
+  {
+    title: "App",
+    rows: [
+      { keys: "q", label: "Salir de GizNews" },
+    ],
+  },
 ];
 
 export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
