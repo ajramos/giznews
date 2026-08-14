@@ -57,6 +57,7 @@ export default function App() {
   const [summarizing, setSummarizing] = useState(false);
   const [digest, setDigest] = useState<DigestDTO | null>(null);
   const [digestLoading, setDigestLoading] = useState(false);
+  const [digestFocusId, setDigestFocusId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
   const [searching, setSearching] = useState(false);
@@ -211,10 +212,33 @@ export default function App() {
     busyRef.current = true; setDigestLoading(true);
     try {
       const d = await api.digest();
-      setDigest(d); setDigestOpen(true);
+      setDigest(d);
+      setDigestFocusId(d.themes[0]?.articles[0]?.id ?? null);
+      setDigestOpen(true);
     } catch (e) { notify(String(e)); }
     finally { busyRef.current = false; setDigestLoading(false); }
   }, [notify]);
+
+  const digestIds = useMemo(() => {
+    const ids: number[] = [];
+    if (digest) for (const th of digest.themes) for (const a of th.articles) ids.push(a.id);
+    return ids;
+  }, [digest]);
+
+  const moveDigestFocus = useCallback((delta: number) => {
+    if (digestIds.length === 0) return;
+    const cur = digestFocusId != null ? digestIds.indexOf(digestFocusId) : 0;
+    const next = Math.max(0, Math.min(cur + delta, digestIds.length - 1));
+    setDigestFocusId(digestIds[next]);
+  }, [digestIds, digestFocusId]);
+
+  const openDigestFocus = useCallback(() => {
+    if (digestFocusId == null) return;
+    setDigestOpen(false);
+    const idx = articles.findIndex((a) => a.id === digestFocusId);
+    if (idx >= 0) setSelectedIndex(idx);
+    void openArticle(digestFocusId);
+  }, [digestFocusId, articles, openArticle]);
 
   const openGraph = useCallback(async () => {
     setPanel("graph");
@@ -227,6 +251,14 @@ export default function App() {
       } catch { setGraphNoteId(null); }
     }
   }, [selected]);
+
+  const buildAndOpenGraph = useCallback(async () => {
+    try {
+      await api.kbuild();
+      notify("knowledge graph actualizado");
+      await openGraph();
+    } catch (e) { notify(String(e)); }
+  }, [openGraph, notify]);
 
   const runSearch = useCallback(async (q: string) => {
     setSearching(true);
@@ -289,6 +321,14 @@ export default function App() {
       if (typing) return; // inputs handle their own keys
       if (paletteOpen || helpOpen || sourceForm || deleteSource) return;
 
+      // digest mode: j/k/Enter navigate its articles
+      if (digestOpen) {
+        if (k === "j" || k === "ArrowDown") { moveDigestFocus(1); return; }
+        if (k === "k" || k === "ArrowUp") { moveDigestFocus(-1); return; }
+        if (k === "Enter") { openDigestFocus(); return; }
+        if (k === "1") { setDigestOpen(false); return; }
+      }
+
       // count prefix
       if (k >= "0" && k <= "9") {
         if (countBuf.length < 2) setCountBuf((c) => c + k);
@@ -336,7 +376,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => { window.removeEventListener("keydown", handler); clearGraphTimer(); };
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus]);
 
   // ---- source CRUD ----
   const saveSource = useCallback(async (data: { name: string; type: string; url: string; group: string }) => {
@@ -436,12 +476,19 @@ export default function App() {
 
         <section className="col list-col">
           {digestOpen ? (
-            <DigestView digest={digest} loading={digestLoading} onGenerate={generateDigest} onOpenArticle={(id) => {
-              setDigestOpen(false);
-              const idx = articles.findIndex((a) => a.id === id);
-              if (idx >= 0) setSelectedIndex(idx);
-              void openArticle(id);
-            }} />
+            <DigestView
+              digest={digest}
+              loading={digestLoading}
+              focusId={digestFocusId}
+              onFocus={setDigestFocusId}
+              onGenerate={generateDigest}
+              onOpenArticle={(id) => {
+                setDigestOpen(false);
+                const idx = articles.findIndex((a) => a.id === id);
+                if (idx >= 0) setSelectedIndex(idx);
+                void openArticle(id);
+              }}
+            />
           ) : (
             <ArticleList
               articles={articles}
@@ -475,7 +522,7 @@ export default function App() {
               key={graphNoteId ?? "none"}
               noteId={graphNoteId}
               onOpenNote={openNote}
-              onBuild={() => void runCmd(api.kbuild, "knowledge graph actualizado")}
+              onBuild={() => void buildAndOpenGraph()}
               notify={notify}
             />
           ) : noteReader ? (

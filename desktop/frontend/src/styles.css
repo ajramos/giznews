@@ -344,6 +344,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   display: flex; gap: 8px; padding: 5px 0; cursor: pointer; font-size: 13px; align-items: baseline;
 }
 .digest-articles li:hover .dart-title { color: var(--accent); }
+.digest-articles li.selected { background: var(--sel-bg); border-radius: var(--radius-sm); padding: 5px 8px; margin: 0 -8px; }
 .dart-title { font-weight: 500; }
 
 /* ---- panels ---- */

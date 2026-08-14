@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Newspaper, Loader2, Boxes, Bot, FlaskConical, Building2, Coins, Scale, Wrench, Code2, MessageSquare, FileText } from "lucide-react";
 import type { DigestDTO } from "../types";
 import { stars } from "./Markdown";
@@ -6,7 +6,9 @@ import { stars } from "./Markdown";
 interface Props {
   digest: DigestDTO | null;
   loading: boolean;
+  focusId: number | null;
   onGenerate: () => void;
+  onFocus: (id: number | null) => void;
   onOpenArticle: (id: number) => void;
 }
 
@@ -22,7 +24,12 @@ const CAT_ICONS: Record<string, ReactNode> = {
   general: <FileText size={15} />,
 };
 
-export function DigestView({ digest, loading, onGenerate, onOpenArticle }: Props) {
+export function DigestView({ digest, loading, focusId, onGenerate, onFocus, onOpenArticle }: Props) {
+  const focusRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    focusRef.current?.scrollIntoView({ block: "nearest" });
+  }, [focusId]);
+
   return (
     <div className="digest-view">
       <div className="digest-head">
@@ -56,7 +63,13 @@ export function DigestView({ digest, loading, onGenerate, onOpenArticle }: Props
               {th.summary && <p className="theme-summary">{th.summary}</p>}
               <ul className="digest-articles">
                 {th.articles.map((a) => (
-                  <li key={a.id} onClick={() => onOpenArticle(a.id)}>
+                  <li
+                    key={a.id}
+                    ref={a.id === focusId ? focusRef : undefined}
+                    className={a.id === focusId ? "selected" : ""}
+                    onClick={() => onOpenArticle(a.id)}
+                    onMouseEnter={() => onFocus(a.id)}
+                  >
                     <span className="imp" data-level={a.importance}>{stars(a.importance)}</span>
                     <span className="dart-title">{a.title}</span>
                     <span className="muted">— {a.sourceName}</span>

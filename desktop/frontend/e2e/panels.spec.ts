@@ -20,8 +20,10 @@ test.describe("panels", () => {
     await gotoApp(page);
     await press(page, "g"); // single g → graph after the 300ms window
     await expect(page.locator(".graph-panel")).toBeVisible({ timeout: 4000 });
-    await expect(page.locator(".graph-canvas svg, svg.graph-canvas").first()).toBeVisible({ timeout: 4000 });
-    await expect(page.locator(".graph-current h2")).toContainText("DeepSeek Harness");
+    await expect(page.locator(".graph-current h2")).toContainText("DeepSeek Harness", { timeout: 4000 });
+    // at least the center node + one neighbor are drawn
+    await expect(page.locator(".graph-canvas circle")).not.toHaveCount(0);
+    await expect(page.locator(".graph-canvas line")).not.toHaveCount(0);
     await shot(page, "08-graph");
     await press(page, "Escape");
     await expect(page.locator(".graph-panel")).toHaveCount(0);
@@ -43,6 +45,18 @@ test.describe("panels", () => {
     await page.locator(".digest-articles li").first().click();
     await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
     await shot(page, "09-digest-open");
+  });
+
+  test("digest keyboard: j moves focus, Enter opens", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "d");
+    await expect(page.locator(".digest-view")).toBeVisible({ timeout: 6000 });
+    await expect(page.locator(".digest-articles li.selected")).toHaveCount(1);
+    const firstTitle = await page.locator(".digest-articles li.selected .dart-title").innerText();
+    await press(page, "j");
+    await expect(page.locator(".digest-articles li.selected .dart-title")).not.toHaveText(firstTitle);
+    await press(page, "Enter");
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
   });
 });
 
