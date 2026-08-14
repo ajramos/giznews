@@ -242,16 +242,18 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .theme-picker { position: relative; }
 .theme-picker .theme-name { font-size: 12px; }
 .theme-pop {
-  position: absolute; right: 0; top: calc(100% + 6px);
-  min-width: 190px; z-index: 40;
+  position: fixed; z-index: 1000;
+  min-width: 190px;
   background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 4px;
   box-shadow: 0 12px 36px rgba(0,0,0,.5);
+  --wails-draggable: no-drag; /* keep the popup clickable outside the drag bar */
 }
 .theme-opt {
   display: flex; align-items: center; gap: 9px; width: 100%;
   padding: 6px 9px; border: none; background: transparent; border-radius: var(--radius-sm);
   font-size: 13px; justify-content: flex-start;
+  --wails-draggable: no-drag;
 }
 .theme-opt.selected { background: var(--sel-bg); }
 .theme-opt-label { flex: 1; text-align: left; }
