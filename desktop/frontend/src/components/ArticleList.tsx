@@ -17,11 +17,12 @@ interface Props {
   selectedIndex: number;
   loading: boolean;
   view: ViewFilter;
+  bulkRange: readonly [number, number] | null;
   onView: (v: ViewFilter) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, onView, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, view, bulkRange, onView, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,10 +65,12 @@ export function ArticleList({ articles, selectedIndex, loading, view, onView, on
             <span className="c-time">Fecha</span>
           </div>
           <div className="article-list" ref={containerRef}>
-            {articles.map((a, i) => (
+            {articles.map((a, i) => {
+              const inBulk = bulkRange ? i >= bulkRange[0] && i <= bulkRange[1] : false;
+              return (
               <div
                 key={a.id}
-                className={`article-row ${i === selectedIndex ? "selected" : ""} ${a.status === "read" ? "read" : ""} ${a.status === "archived" ? "archived" : ""}`}
+                className={`article-row ${i === selectedIndex ? "selected" : ""} ${inBulk ? "bulk" : ""} ${a.status === "read" ? "read" : ""} ${a.status === "archived" ? "archived" : ""}`}
                 onClick={() => onSelect(i)}
                 onDoubleClick={() => onSelect(i)}
               >
@@ -86,7 +89,8 @@ export function ArticleList({ articles, selectedIndex, loading, view, onView, on
                   </span>
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

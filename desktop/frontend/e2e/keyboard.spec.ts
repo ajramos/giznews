@@ -139,6 +139,26 @@ test.describe("vim keyboard grammar", () => {
     expect(top2).toBeLessThan(top);
   });
 
+  test("v bulk mode: extend with j, exit with Esc", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "v");
+    await expect(page.locator(".statusbar .mode.bulk")).toContainText("BULK");
+    await press(page, "j");
+    await expect(page.locator(".article-row.bulk")).toHaveCount(2);
+    await press(page, "Escape");
+    await expect(page.locator(".article-row.bulk")).toHaveCount(0);
+  });
+
+  test("bulk archive removes all selected", async ({ page }) => {
+    await gotoApp(page);
+    const before = await page.locator(".article-row").count();
+    await press(page, "v");
+    await press(page, "j");
+    await press(page, "a");
+    await expect(page.locator(".article-row")).toHaveCount(before - 2);
+    await expect(page.locator(".statusbar .mode.bulk")).toHaveCount(0);
+  });
+
   test("? opens help, Esc closes", async ({ page }) => {
     await gotoApp(page);
     await press(page, "?");

@@ -262,6 +262,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 .article-row:hover { background: var(--bg-elev); }
 .article-row.selected { background: var(--sel-bg); border-left-color: var(--sel-border); }
+.article-row.bulk { background: rgba(79, 140, 255, 0.08); box-shadow: inset 3px 0 0 var(--accent-dim); }
 .article-row.read { opacity: .68; }
 .article-row.archived { opacity: .5; }
 .article-row.archived .article-title { text-decoration: line-through; }
@@ -345,9 +346,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .digest-articles li {
   display: flex; gap: 8px; padding: 5px 0; cursor: pointer; font-size: 13px; align-items: baseline;
 }
+.digest-articles li { display: flex; gap: 8px; padding: 5px 0; cursor: pointer; font-size: 13px; align-items: baseline; }
 .digest-articles li:hover .dart-title { color: var(--accent); }
 .digest-articles li.selected { background: var(--sel-bg); border-radius: var(--radius-sm); padding: 5px 8px; margin: 0 -8px; }
+.dart-body { display: flex; flex-direction: column; min-width: 0; }
 .dart-title { font-weight: 500; }
+.dart-why { font-size: 12px; color: var(--fg-dim); margin-top: 1px; line-height: 1.45; }
 
 /* ---- panels ---- */
 .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 20px; }

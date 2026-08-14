@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Network, Loader2, RefreshCw } from "lucide-react";
+import { Network, Loader2, RefreshCw, FolderOpen } from "lucide-react";
 import { api } from "../api";
 import type { NoteDTO } from "../types";
 
@@ -135,6 +135,7 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
       <div className="panel-title">
         <Network size={13} /> Grafo de conocimiento
         <button className="icon-btn" onClick={() => noteId && void load(noteId)} title="Recargar"><RefreshCw size={13} /></button>
+        <button className="icon-btn" onClick={() => void api.openVault()} title="Abrir vault en Obsidian"><FolderOpen size={13} /> Vault</button>
       </div>
 
       <div className="graph-current">
@@ -174,7 +175,7 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
             />
             {(hover === n.id || n.isCenter || nodes.length <= 9) && (
               <text y={n.isCenter ? 30 : 22} textAnchor="middle" className="graph-label">
-                {n.title.length > 24 ? n.title.slice(0, 23) + "…" : n.title}
+                [{n.type}] {n.title.length > 22 ? n.title.slice(0, 21) + "…" : n.title}
               </text>
             )}
           </g>

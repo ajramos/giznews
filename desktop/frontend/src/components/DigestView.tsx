@@ -6,6 +6,7 @@ import { stars } from "./Markdown";
 interface Props {
   digest: DigestDTO | null;
   loading: boolean;
+  unreadCount: number;
   focusId: number | null;
   onGenerate: () => void;
   onFocus: (id: number | null) => void;
@@ -24,7 +25,7 @@ const CAT_ICONS: Record<string, ReactNode> = {
   general: <FileText size={15} />,
 };
 
-export function DigestView({ digest, loading, focusId, onGenerate, onFocus, onOpenArticle }: Props) {
+export function DigestView({ digest, loading, unreadCount, focusId, onGenerate, onFocus, onOpenArticle }: Props) {
   const focusRef = useRef<HTMLLIElement>(null);
   useEffect(() => {
     focusRef.current?.scrollIntoView({ block: "nearest" });
@@ -35,6 +36,7 @@ export function DigestView({ digest, loading, focusId, onGenerate, onFocus, onOp
       <div className="digest-head">
         <h1><Newspaper size={19} /> Digest de IA</h1>
         {digest && <span className="muted">{digest.date}</span>}
+        <span className="pill">{unreadCount} no leídos</span>
         <button onClick={onGenerate} disabled={loading}>
           {loading ? <Loader2 size={13} className="spin" /> : <Newspaper size={13} />}
           {loading ? "Generando…" : "Generar (d)"}
@@ -71,7 +73,10 @@ export function DigestView({ digest, loading, focusId, onGenerate, onFocus, onOp
                     onMouseEnter={() => onFocus(a.id)}
                   >
                     <span className="imp" data-level={a.importance}>{stars(a.importance)}</span>
-                    <span className="dart-title">{a.title}</span>
+                    <span className="dart-body">
+                      <span className="dart-title">{a.title}</span>
+                      {a.summary && <span className="dart-why">{a.summary}</span>}
+                    </span>
                     <span className="muted">— {a.sourceName}</span>
                   </li>
                 ))}

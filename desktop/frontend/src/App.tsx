@@ -64,6 +64,21 @@ export default function App() {
   const [searchFocus, setSearchFocus] = useState(0);
   const [graphNoteId, setGraphNoteId] = useState<number | null>(null);
 
+  // bulk (vim visual) mode
+  const [bulk, setBulk] = useState(false);
+  const [bulkAnchor, setBulkAnchor] = useState<number | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const bulkRange = useMemo(() => {
+    if (!bulk || bulkAnchor == null) return null;
+    return [Math.min(bulkAnchor, selectedIndex), Math.max(bulkAnchor, selectedIndex)] as const;
+  }, [bulk, bulkAnchor, selectedIndex]);
+
+  const bulkIds = useMemo(() => {
+    if (!bulkRange) return [];
+    return articles.slice(bulkRange[0], bulkRange[1] + 1).map((a) => a.id);
+  }, [bulkRange, articles]);
+
   const lastGRef = useRef(0);
   const graphTimer = useRef<number | null>(null);
   const busyRef = useRef(false);
@@ -110,6 +125,20 @@ export default function App() {
   }, []);
   useEffect(() => { void loadArticles(); }, [view, loadArticles]);
 
+  // auto-refresh: quietly fetch new articles every 15 minutes.
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const iv = window.setInterval(async () => {
+      try {
+        const r = await api.fetch();
+        if (r.newArticles > 0) notify(`${r.newArticles} nuevos artículos`);
+        void loadArticles();
+        void loadStatus();
+      } catch { /* network hiccup */ }
+    }, 15 * 60 * 1000);
+    return () => window.clearInterval(iv);
+  }, [autoRefresh, loadArticles, loadStatus, notify]);
+
   const selectSource = useCallback(async (id: number | null) => {
     setFilterSource(id);
     await loadArticles(id ? { sourceId: id } : {});
@@ -122,6 +151,14 @@ export default function App() {
   }, []);
 
   // ---- article actions ----
+  // apply an async action to an explicit set of article ids.
+  const applyToIds = useCallback(async (ids: number[], fn: (a: ArticleDTO) => Promise<void>, after?: () => void) => {
+    if (ids.length === 0) return;
+    const targets = ids.map((id) => articles.find((a) => a.id === id)).filter((a): a is ArticleDTO => !!a);
+    await Promise.all(targets.map((a) => fn(a)));
+    after?.();
+    void loadStatus();
+  }, [articles, loadStatus]);
   const openArticle = useCallback(async (id: number) => {
     try {
       const full = await api.getArticle(id);
@@ -155,14 +192,16 @@ export default function App() {
     void loadStatus();
   }, [articles, selectedIndex, loadStatus]);
 
-  const archiveRange = useCallback((count: number) => {
-    const batch = articles.slice(selectedIndex, selectedIndex + Math.max(1, count));
+  const exitBulk = useCallback(() => { setBulk(false); setBulkAnchor(null); }, []);
+
+  const archiveIds = useCallback((ids: number[]) => {
+    if (ids.length === 0) return;
+    const batch = ids.map((id) => articles.find((a) => a.id === id)).filter((a): a is ArticleDTO => !!a);
     if (batch.length === 0) return;
-    // toggle: archived → restore, else → archive
     const restoring = batch[0].status === "archived";
     const undo: Record<number, string> = {};
     for (const a of batch) undo[a.id] = a.status;
-    void applyRange(batch.length, async (a) => {
+    void applyToIds(ids, async (a) => {
       await api.setArticleStatus(a.id, restoring ? "unread" : "archived");
     }, () => {
       setArticles((prev) => prev.filter((a) => !batch.some((b) => b.id === a.id)));
@@ -172,7 +211,11 @@ export default function App() {
         void loadArticles();
       });
     });
-  }, [articles, selectedIndex, applyRange, notify, loadArticles]);
+  }, [articles, applyToIds, notify, loadArticles]);
+
+  const archiveRange = useCallback((count: number) => {
+    archiveIds(articles.slice(selectedIndex, selectedIndex + Math.max(1, count)).map((a) => a.id));
+  }, [articles, selectedIndex, archiveIds]);
 
   const toggleReadRange = useCallback((count: number) => {
     void applyRange(count, async (a) => {
@@ -180,6 +223,22 @@ export default function App() {
       await api.setArticleStatus(a.id, a.status === "read" ? "unread" : "read");
     }, () => void loadArticles());
   }, [applyRange, loadArticles]);
+
+  // action entry point that honors bulk mode.
+  const bulkAction = useCallback((verb: "archive" | "read") => {
+    if (bulk && bulkIds.length > 0) {
+      if (verb === "archive") archiveIds(bulkIds);
+      else {
+        void applyToIds(bulkIds, async (a) => {
+          if (a.status === "archived") return;
+          await api.setArticleStatus(a.id, a.status === "read" ? "unread" : "read");
+        }, () => void loadArticles());
+      }
+      exitBulk();
+      return true;
+    }
+    return false;
+  }, [bulk, bulkIds, archiveIds, applyToIds, exitBulk, loadArticles]);
 
   const toggleStar = useCallback(async () => {
     if (!selected) return;
@@ -300,6 +359,7 @@ export default function App() {
     } },
     { name: "search index", hint: "Indexar embeddings", run: () => void runCmd(api.searchIndex, "índice actualizado") },
     { name: "digest", hint: "Digest diario", run: () => void generateDigest() },
+    { name: "auto-refresh", hint: autoRefresh ? "Desactivar refresco automático" : "Activar refresco cada 15 min", run: () => setAutoRefresh((v) => !v) },
     { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => setSourceForm({ initial: null }) },
     { name: "theme", hint: `Cambiar tema (${THEMES.map((t) => t.name).join(" | ")})`, run: () => {
       const next = THEMES[(THEMES.findIndex((t) => t.name === theme) + 1) % THEMES.length];
@@ -307,7 +367,7 @@ export default function App() {
     } },
     { name: "open vault", hint: "Abrir vault en Obsidian", run: () => void api.openVault() },
     { name: "quit", hint: "Salir", run: () => void api.quit() },
-  ], [runCmd, generateDigest, reloadAll, theme]);
+  ], [runCmd, generateDigest, reloadAll, theme, autoRefresh]);
 
   // ---- keyboard (vim grammar) ----
   useEffect(() => {
@@ -322,6 +382,7 @@ export default function App() {
       const now = Date.now();
 
       if (k === "Escape") {
+        if (bulk) { exitBulk(); return; }
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (helpOpen) { setHelpOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
@@ -340,6 +401,23 @@ export default function App() {
         if (k === "k" || k === "ArrowUp") { moveDigestFocus(-1); return; }
         if (k === "Enter") { openDigestFocus(); return; }
         if (k === "1") { setDigestOpen(false); return; }
+      }
+
+      // bulk (vim visual) mode
+      if (k === "v") {
+        if (bulk) exitBulk();
+        else { setBulk(true); setBulkAnchor(selectedIndex); }
+        return;
+      }
+      if (bulk) {
+        const bn = Math.max(0, articles.length - 1);
+        if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + 1, bn)); return; }
+        if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - 1, 0)); return; }
+        if (k === "a") { bulkAction("archive"); return; }
+        if (k === "t") { bulkAction("read"); return; }
+        if (k === "y") { void summarize(); return; }
+        if (k === "m") { void toggleStar(); return; }
+        return; // consume everything else while in bulk
       }
 
       // count prefix
@@ -402,7 +480,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => { window.removeEventListener("keydown", handler); clearGraphTimer(); };
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
 
   // ---- source CRUD ----
   const saveSource = useCallback(async (data: { name: string; type: string; url: string; group: string }) => {
@@ -505,6 +583,7 @@ export default function App() {
             <DigestView
               digest={digest}
               loading={digestLoading}
+              unreadCount={status?.unreadArticles ?? 0}
               focusId={digestFocusId}
               onFocus={setDigestFocusId}
               onGenerate={generateDigest}
@@ -521,6 +600,7 @@ export default function App() {
               selectedIndex={selectedIndex}
               loading={loadingList}
               view={view}
+              bulkRange={bulkRange}
               onView={(v) => void switchView(v)}
               onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
             />
@@ -579,7 +659,11 @@ export default function App() {
         modeLabel={modeLabel}
         filter={filterLabel}
         count={countBuf ? parseInt(countBuf, 10) : undefined}
+        bulk={bulk}
+        bulkCount={bulkIds.length}
+        autoRefresh={autoRefresh}
         llmOn={!!status?.llmEnabled}
+        onToggleAuto={() => setAutoRefresh((v) => !v)}
       />
 
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}

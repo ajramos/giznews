@@ -101,3 +101,15 @@ test.describe("themes", () => {
     await shot(page, "11-dracula");
   });
 });
+
+test.describe("workflows", () => {
+  test("auto-refresh toggle in the status bar", async ({ page }) => {
+    await gotoApp(page);
+    const pill = page.locator(".statusbar .pill.auto");
+    await expect(pill).toContainText("auto 15m");
+    await pill.click();
+    await expect(pill).toContainText("auto off");
+    await pill.click();
+    await expect(pill).toContainText("auto 15m");
+  });
+});
