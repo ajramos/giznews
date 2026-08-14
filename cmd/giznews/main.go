@@ -44,6 +44,8 @@ func main() {
 		runServe(args, logger)
 	case "sources":
 		runSources(args, logger)
+	case "gmail-auth":
+		runGmailAuth(args, logger)
 	case "help", "--help", "-h":
 		usage()
 	default:
@@ -66,6 +68,7 @@ Commands:
   kb        Knowledge-graph operations (build, list, sync)
   search    Semantic + keyword search over notes and articles
   sources   Manage news sources (list, add, enable, disable)
+  gmail-auth  Run the Gmail OAuth flow (newsletters)
   serve     Run the daemon (background fetch on schedule)
   version   Show version
   help      Show this help

@@ -5,16 +5,8 @@ import (
 	"log"
 )
 
-// The pipeline commands (fetch, digest, kb, search, serve) are wired into the
-// config + database plumbing now; their real logic lands in the phase that
-// owns them. Each command already proves the bootstrap chain works.
-
-func runFetch(args []string, logger *log.Logger) {
-	_, d, _ := loadAndOpenDB(args, logger)
-	defer d.Close()
-	logger.Println("fetch: not implemented yet (phase 2 — sources + fetch pipeline)")
-	fmt.Println("fetch: nothing to do")
-}
+// The pipeline commands (digest, kb, search, serve) are wired into the config +
+// database plumbing now; their real logic lands in the phase that owns them.
 
 func runDigest(args []string, logger *log.Logger) {
 	_, d, _ := loadAndOpenDB(args, logger)

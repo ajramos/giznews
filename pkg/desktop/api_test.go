@@ -120,7 +120,6 @@ func TestNotImplementedMethods(t *testing.T) {
 	app := newTestApp(t)
 	ctx := context.Background()
 	for name, fn := range map[string]func() error{
-		"fetch":     func() error { _, err := app.Fetch(ctx); return err },
 		"digest":    func() error { _, err := app.Digest(ctx); return err },
 		"listnotes": func() error { _, err := app.ListNotes(ctx, "atom"); return err },
 		"getnote":   func() error { _, err := app.GetNote(ctx, 1); return err },
