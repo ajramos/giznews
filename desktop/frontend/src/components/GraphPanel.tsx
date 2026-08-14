@@ -24,9 +24,9 @@ const H = 400;
 const MARGIN = 46;
 
 const TYPE_COLOR: Record<string, string> = {
-  atom: "#4f8cff",
-  electron: "#a78bfa",
-  molecule: "#e3b341",
+  atom: "var(--accent)",
+  electron: "var(--cat-research)",
+  molecule: "var(--cat-funding)",
 };
 
 // deterministic PRNG so the layout is stable across renders

@@ -27,7 +27,11 @@ func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*Ar
 	}
 	out := make([]*ArticleDTO, 0, len(articles))
 	for _, art := range articles {
-		out = append(out, toArticleDTO(art))
+		dto := toArticleDTO(art)
+		// Keep the list payload light: full bodies are fetched on demand via
+		// GetArticle when the reader opens an article.
+		dto.ContentMD = ""
+		out = append(out, dto)
 	}
 	return out, nil
 }
