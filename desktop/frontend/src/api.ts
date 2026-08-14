@@ -48,15 +48,37 @@ export function installRuntimeShim(): void {
   };
 }
 
-// normalize maps a Wails JSON object (PascalCase Go field names) onto a
-// camelCase interface, ignoring unknown keys.
+// camel converts a Wails wire key (snake_case json tag) to the camelCase
+// field used by the TS interfaces: content_md → contentMD, content_html →
+// contentHTML, source_id → sourceId, llm_enabled → llmEnabled.
+function camel(key: string): string {
+  return key.replace(/_([a-z]+)/g, (_, w: string) => {
+    if (w === "md") return "MD";
+    if (w === "html") return "HTML";
+    return w[0].toUpperCase() + w.slice(1);
+  });
+}
+
+// snake converts camelCase back to the snake_case json tag Wails expects in
+// struct arguments: importanceMin → importance_min, sourceId → source_id.
+function snake(key: string): string {
+  return key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
+}
+
+function toSnakeArgs(obj: object): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) out[snake(k)] = v;
+  return out;
+}
+
+// normalize maps a Wails JSON object onto the camelCase interface, ignoring
+// unknown keys.
 function normalize<T>(obj: unknown): T {
   if (obj === null || obj === undefined) return {} as T;
   const src = obj as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(src)) {
-    const key = k.charAt(0).toLowerCase() + k.slice(1);
-    out[key] = v;
+    out[camel(k)] = v;
   }
   return out as T;
 }
@@ -109,7 +131,7 @@ const realApi: APIShape = {
     call("DeleteSource", id).then(() => undefined),
 
   listArticles: (opts: ListArticlesOptions) =>
-    call("ListArticles", opts).then((v) => arr<ArticleDTO>(v)),
+    call("ListArticles", toSnakeArgs(opts)).then((v) => arr<ArticleDTO>(v)),
   getArticle: (id: number) =>
     call("GetArticle", id).then((v) => normalize<ArticleDTO>(v)),
   getArticleContent: (id: number) =>

@@ -656,6 +656,7 @@ export default function App() {
               article={reader}
               summarizing={summarizing}
               contentLoading={contentLoading}
+              llmAvailable={!!status?.llmEnabled && !!status?.llmReachable}
               onSummarize={summarize}
               onArchive={() => archiveRange(1)}
               onStar={() => void toggleStar()}
