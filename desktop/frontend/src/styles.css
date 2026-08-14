@@ -470,10 +470,25 @@ img, video, iframe { max-width: 100%; height: auto; }
 .graph-current { margin-bottom: 12px; }
 .graph-current h2 { margin: 6px 0; font-size: 15px; }
 .graph-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); min-height: 300px; flex: 1; }
-.graph-legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: var(--fg-dim); align-items: center; }
+.graph-legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: var(--fg-dim); align-items: center; flex-wrap: wrap; }
 .graph-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
 .graph-node { cursor: pointer; }
-.graph-node text { font-size: 10px; fill: var(--fg-dim); pointer-events: none; }
+.graph-label {
+  font-size: 12px;
+  fill: var(--fg);
+  stroke: var(--bg-panel);
+  stroke-width: 3px;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.graph-sublabel {
+  font-size: 10px;
+  fill: var(--fg-dim);
+  stroke: var(--bg-panel);
+  stroke-width: 3px;
+  paint-order: stroke;
+  pointer-events: none;
+}
 
 /* ---- palette / help / modals ---- */
 .overlay {

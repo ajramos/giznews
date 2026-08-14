@@ -16,61 +16,117 @@ interface GNode {
   type: string;
   x: number;
   y: number;
+  r: number;
   isCenter: boolean;
 }
 
-const W = 620;
-const H = 400;
-const MARGIN = 46;
+const W = 660;
+const H = 440;
+const MARGIN = 60;
 
 const TYPE_COLOR: Record<string, string> = {
   atom: "var(--accent)",
   electron: "var(--cat-research)",
   molecule: "var(--cat-funding)",
+  inbox: "var(--fg-dim)",
 };
 
 // deterministic PRNG so the layout is stable across renders
 function mulberry32(seed: number) {
   let a = seed;
   return () => {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-function layout(nodes: { id: number; title: string; type: string; isCenter: boolean }[]): GNode[] {
+interface SimNode extends GNode {
+  vx: number;
+  vy: number;
+}
+
+// Fruchterman–Reingold force layout: Coulomb repulsion + edge springs +
+// collision avoidance + gravity, with cooling. Produces a clean, stable,
+// non-overlapping layout for the small star-shaped knowledge graph.
+function layout(input: { id: number; title: string; type: string; isCenter: boolean }[]): GNode[] {
   const rnd = mulberry32(42);
-  const pts = nodes.map((n) => ({
+  const pts: SimNode[] = input.map((n) => ({
     ...n,
-    x: n.isCenter ? W / 2 : MARGIN + rnd() * (W - 2 * MARGIN),
-    y: n.isCenter ? H / 2 : MARGIN + rnd() * (H - 2 * MARGIN),
-    vx: 0, vy: 0,
+    x: 0, y: 0, vx: 0, vy: 0,
+    r: n.isCenter ? 24 : 15,
   }));
-  // simple force: repulsion + pull to center
-  const C = 0.018, R = 9000, SPRING = 0.02;
-  for (let iter = 0; iter < 140; iter++) {
+
+  // initial placement: centre node at centre, others on a circle around it
+  pts.forEach((p, i) => {
+    if (p.isCenter) {
+      p.x = W / 2; p.y = H / 2;
+    } else {
+      const ang = (i / Math.max(1, pts.length)) * Math.PI * 2 - Math.PI / 2;
+      p.x = W / 2 + Math.cos(ang) * 150;
+      p.y = H / 2 + Math.sin(ang) * 150;
+    }
+  });
+
+  const K = 160; // ideal edge length
+  const ITER = 320;
+
+  for (let iter = 0; iter < ITER; iter++) {
+    const t = Math.max(0.02, 1 - iter / ITER); // cooling factor
+
+    // repulsion + collision between every pair
     for (let i = 0; i < pts.length; i++) {
-      let fx = 0, fy = 0;
-      const a = pts[i];
-      for (let j = 0; j < pts.length; j++) {
-        if (i === j) continue;
-        const b = pts[j];
+      for (let j = i + 1; j < pts.length; j++) {
+        const a = pts[i], b = pts[j];
         let dx = a.x - b.x, dy = a.y - b.y;
-        let d2 = dx * dx + dy * dy || 1;
-        let inv = R / d2;
-        fx += dx * inv; fy += dy * inv;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 0.01) { dx = rnd() - 0.5; dy = rnd() - 0.5; d2 = dx * dx + dy * dy; }
+        const d = Math.sqrt(d2);
+        const rep = (K * K) / d * 0.9 * t;
+        const fx = (dx / d) * rep, fy = (dy / d) * rep;
+        a.vx += fx; a.vy += fy;
+        b.vx -= fx; b.vy -= fy;
+
+        const minD = a.r + b.r + 14;
+        if (d < minD) {
+          const push = ((minD - d) / 2) * 0.9;
+          a.x += (dx / d) * push; a.y += (dy / d) * push;
+          b.x -= (dx / d) * push; b.y -= (dy / d) * push;
+        }
       }
-      fx += (W / 2 - a.x) * SPRING;
-      fy += (H / 2 - a.y) * SPRING;
-      a.vx = (a.vx + fx * C) * 0.85;
-      a.vy = (a.vy + fy * C) * 0.85;
-      a.x = Math.max(MARGIN, Math.min(W - MARGIN, a.x + a.vx));
-      a.y = Math.max(MARGIN, Math.min(H - MARGIN, a.y + a.vy));
+    }
+
+    // springs: every node pulls toward the centre (star-shaped edges)
+    for (const p of pts) {
+      if (p.isCenter) continue;
+      const dx = W / 2 - p.x, dy = H / 2 - p.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const spr = (d - K) * 0.06 * t;
+      p.vx += (dx / d) * spr;
+      p.vy += (dy / d) * spr;
+    }
+
+    // gravity keeps the component centred; centre node is pinned
+    for (const p of pts) {
+      if (p.isCenter) {
+        p.vx *= 0.05; p.vy *= 0.05;
+      } else {
+        p.vx += (W / 2 - p.x) * 0.012;
+        p.vy += (H / 2 - p.y) * 0.012;
+      }
+    }
+
+    // integrate with damping
+    for (const p of pts) {
+      p.vx *= 0.82;
+      p.vy *= 0.82;
+      p.x = Math.max(MARGIN, Math.min(W - MARGIN, p.x + p.vx));
+      p.y = Math.max(MARGIN, Math.min(H - MARGIN, p.y + p.vy));
     }
   }
-  return pts.map((p) => ({ id: p.id, title: p.title, type: p.type, x: p.x, y: p.y, isCenter: p.isCenter }));
+
+  return pts.map(({ vx, vy, ...rest }) => rest);
 }
 
 export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
@@ -141,6 +197,7 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
       <div className="graph-current">
         <span className="note-type">{center.type}</span>
         <h2>{center.title}</h2>
+        <span className="muted" style={{ fontSize: 12 }}>{neighbors.length} conexión(es) — clic en un nodo para centrarlo, doble clic para abrir</span>
       </div>
 
       <svg className="graph-canvas" viewBox={`0 0 ${W} ${H}`} width="100%" height="100%">
@@ -153,43 +210,48 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
           <line
             key={`e-${n.id}`}
             x1={W / 2} y1={H / 2} x2={n.x} y2={n.y}
-            stroke="var(--border)" strokeWidth="1.2" markerEnd="url(#arrow)"
+            stroke="var(--border)" strokeWidth="1.4"
           />
         ))}
-        {nodes.map((n) => (
-          <g
-            key={n.id}
-            className="graph-node"
-            transform={`translate(${n.x},${n.y})`}
-            onMouseEnter={() => setHover(n.id)}
-            onMouseLeave={() => setHover(null)}
-            onClick={() => !n.isCenter && void load(n.id)}
-            onDoubleClick={() => onOpenNote(n.id)}
-          >
-            <circle
-              r={n.isCenter ? 16 : 10}
-              fill={TYPE_COLOR[n.type] ?? "var(--fg-dim)"}
-              opacity={n.isCenter ? 1 : 0.85}
-              stroke={n.isCenter ? "var(--fg)" : "none"}
-              strokeWidth={n.isCenter ? 2 : 0}
-            />
-            {(hover === n.id || n.isCenter || nodes.length <= 9) && (
-              <text y={n.isCenter ? 30 : 22} textAnchor="middle" className="graph-label">
-                [{n.type}] {n.title.length > 22 ? n.title.slice(0, 21) + "…" : n.title}
+        {nodes.map((n) => {
+          const color = TYPE_COLOR[n.type] ?? "var(--fg-dim)";
+          const r = hover === n.id ? n.r + 2 : n.r;
+          return (
+            <g
+              key={n.id}
+              className="graph-node"
+              transform={`translate(${n.x},${n.y})`}
+              onMouseEnter={() => setHover(n.id)}
+              onMouseLeave={() => setHover(null)}
+              onClick={() => !n.isCenter && void load(n.id)}
+              onDoubleClick={() => onOpenNote(n.id)}
+            >
+              <title>{`[${n.type}] ${n.title}`}</title>
+              <circle
+                r={r}
+                fill={color}
+                stroke={n.isCenter ? "var(--fg)" : "var(--bg)"}
+                strokeWidth={n.isCenter ? 2.5 : 2}
+              />
+              {n.isCenter && <circle r={n.r - 7} fill="var(--bg)" opacity={0.35} />}
+              <text y={r + 14} textAnchor="middle" className="graph-label" fontWeight={n.isCenter ? 600 : 400}>
+                {n.title.length > 26 ? n.title.slice(0, 25) + "…" : n.title}
               </text>
-            )}
-          </g>
-        ))}
+              <text y={r + 26} textAnchor="middle" className="graph-label graph-sublabel">
+                {n.type}
+              </text>
+            </g>
+          );
+        })}
       </svg>
 
       <div className="graph-legend">
         {Object.entries(legend).map(([type, count]) => (
           <span key={type} className="lg">
-            <span style={{ width: 10, height: 10, borderRadius: "50%", background: TYPE_COLOR[type] ?? "var(--fg-dim)", display: "inline-block" }} />
+            <span style={{ width: 11, height: 11, borderRadius: "50%", background: TYPE_COLOR[type] ?? "var(--fg-dim)", display: "inline-block" }} />
             {type} ({count})
           </span>
         ))}
-        <span className="muted">· clic = expandir · doble clic = abrir nota</span>
       </div>
     </div>
   );
