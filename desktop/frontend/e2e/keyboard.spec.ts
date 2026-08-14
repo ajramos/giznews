@@ -114,6 +114,31 @@ test.describe("vim keyboard grammar", () => {
     await expect(page.locator(".article-list")).toBeVisible();
   });
 
+  test("J/K open next/previous article", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "Enter");
+    const first = await page.locator(".reader-head h1").innerText();
+    await press(page, "J");
+    await expect(page.locator(".reader-head h1")).not.toHaveText(first, { timeout: 4000 });
+    const second = await page.locator(".reader-head h1").innerText();
+    await press(page, "K");
+    await expect(page.locator(".reader-head h1")).toHaveText(first, { timeout: 4000 });
+  });
+
+  test("space scrolls the reader", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "Enter");
+    const el = page.locator(".reader-scroll");
+    await el.evaluate((node) => { node.scrollTop = 0; });
+    await press(page, " ");
+    const top = await el.evaluate((node) => node.scrollTop);
+    expect(top).toBeGreaterThan(0);
+    // Shift+space scrolls back up
+    await press(page, "Shift+Space");
+    const top2 = await el.evaluate((node) => node.scrollTop);
+    expect(top2).toBeLessThan(top);
+  });
+
   test("? opens help, Esc closes", async ({ page }) => {
     await gotoApp(page);
     await press(page, "?");

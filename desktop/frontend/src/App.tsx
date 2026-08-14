@@ -206,6 +206,19 @@ export default function App() {
     if (url) void api.openURL(url);
   }, [reader, selected]);
 
+  const scrollReader = useCallback((dir: number) => {
+    const el = document.querySelector<HTMLElement>(".reader-scroll");
+    if (el) el.scrollBy({ top: dir * el.clientHeight * 0.9 });
+  }, []);
+
+  const openAdjacent = useCallback((delta: number) => {
+    const n = Math.max(0, articles.length - 1);
+    const ni = Math.max(0, Math.min(selectedIndex + delta, n));
+    setSelectedIndex(ni);
+    const a = articles[ni];
+    if (a) void openArticle(a.id);
+  }, [articles, selectedIndex, openArticle]);
+
   // ---- panels ----
   const generateDigest = useCallback(async () => {
     if (busyRef.current) return;
@@ -340,6 +353,23 @@ export default function App() {
       e.preventDefault();
 
       const n = Math.max(0, articles.length - 1);
+
+      // reader paging (space / Ctrl+d / Ctrl+u) when an article is open
+      if (k === " ") {
+        scrollReader(e.shiftKey ? -0.9 : 0.9);
+        return;
+      }
+      if (k === "d" && e.ctrlKey) {
+        if (reader) scrollReader(0.9); else setSelectedIndex((i) => Math.min(i + 8, n));
+        return;
+      }
+      if (k === "u" && e.ctrlKey) {
+        if (reader) scrollReader(-0.9); else setSelectedIndex((i) => Math.max(i - 8, 0));
+        return;
+      }
+
+      if (k === "J") { openAdjacent(count); return; }
+      if (k === "K") { openAdjacent(-count); return; }
       if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + count, n)); return; }
       if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - count, 0)); return; }
       if (k === "Home") { setSelectedIndex(0); return; }
@@ -355,12 +385,6 @@ export default function App() {
         return;
       }
       if (k === "G") { setSelectedIndex(n); return; }
-      if (k === "d" && e.ctrlKey) {
-        setSelectedIndex((i) => Math.min(i + 8, n)); return;
-      }
-      if (k === "u" && e.ctrlKey) {
-        setSelectedIndex((i) => Math.max(i - 8, 0)); return;
-      }
       if (k === "Enter") { if (selected) void openArticle(selected.id); return; }
       if (k === "y") { void summarize(); return; }
       if (k === "a") { archiveRange(count); return; }
@@ -378,7 +402,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => { window.removeEventListener("keydown", handler); clearGraphTimer(); };
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader]);
 
   // ---- source CRUD ----
   const saveSource = useCallback(async (data: { name: string; type: string; url: string; group: string }) => {

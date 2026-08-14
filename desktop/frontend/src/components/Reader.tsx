@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, ExternalLink, Archive, Star, Loader2 } from "lucide-react";
 import type { ArticleDTO } from "../types";
 import { Markdown, stars, catClass } from "./Markdown";
@@ -13,9 +13,20 @@ interface Props {
 }
 
 export function Reader({ article, summarizing, onSummarize, onArchive, onStar, onOpenLink }: Props) {
+  const [progress, setProgress] = useState(0);
+
   useEffect(() => {
-    document.querySelector(".reader-scroll")?.scrollTo({ top: 0 });
+    const el = document.querySelector(".reader-scroll");
+    if (el) el.scrollTo({ top: 0 });
+    setProgress(0);
   }, [article?.id]);
+
+  const onScroll = () => {
+    const el = document.querySelector(".reader-scroll");
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    setProgress(max > 0 ? Math.min(1, el.scrollTop / max) : 0);
+  };
 
   if (!article) {
     return (
@@ -28,6 +39,7 @@ export function Reader({ article, summarizing, onSummarize, onArchive, onStar, o
 
   return (
     <div className="reader">
+      <div className="read-progress"><span style={{ width: `${progress * 100}%` }} /></div>
       <div className="reader-head">
         <h1>{article.title}</h1>
         <div className="reader-meta">
@@ -63,7 +75,7 @@ export function Reader({ article, summarizing, onSummarize, onArchive, onStar, o
         </div>
       )}
 
-      <div className="reader-scroll">
+      <div className="reader-scroll" onScroll={onScroll}>
         <Markdown content={article.contentMD || ""} />
       </div>
     </div>

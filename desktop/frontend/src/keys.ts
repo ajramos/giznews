@@ -22,6 +22,9 @@ export const HELP: HelpCategory[] = [
   {
     title: "Acciones sobre el artículo",
     rows: [
+      { keys: "Enter", label: "Abrir / cerrar artículo" },
+      { keys: "J / K", label: "Siguiente / anterior artículo (abre)" },
+      { keys: "Espacio / Shift+Espacio", label: "Página abajo / arriba en el lector" },
       { keys: "y", label: "Resumen IA" },
       { keys: "a", label: "Archivar (5a = archivar 5) — deshacer con toast" },
       { keys: "t", label: "Marcar leído / no leído" },
@@ -61,7 +64,8 @@ export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
     { key: "?", label: "ayuda" },
   ],
   reader: [
-    { key: "j/k", label: "navegar" },
+    { key: "J/K", label: "siguiente/prev" },
+    { key: "space", label: "página" },
     { key: "y", label: "resumen" },
     { key: "a", label: "archivar" },
     { key: "m", label: "destacar" },

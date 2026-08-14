@@ -24,7 +24,22 @@ const sampleSources: SourceDTO[] = [
   { id: 4, name: "arXiv cs.AI", type: "arxiv", url: "http://export.arxiv.org/rss/cs.AI", group: "research", enabled: false },
 ];
 
-const md = (body: string) => `# Title placeholder\n\n${body}\n\n- item one\n- item two\n\n> blockquote\n\n\`inline\` and **bold** and [link](https://example.com).`;
+const lorem = (n: number) =>
+  Array.from({ length: n }, (_, i) => `Paragraph ${i + 1}. This is a substantial body of text so the reader panel has enough height to scroll. It covers the key developments, the actors involved, and why the story matters for practitioners building on these systems.`)
+    .join("\n\n");
+
+const md = (body: string) => `# Title placeholder
+
+${body}
+
+${lorem(14)}
+
+- item one
+- item two
+
+> A meaningful pull quote worth highlighting.
+
+\`inline code\` and **bold** and [a link](https://example.com).`;
 
 const sampleArticles: ArticleDTO[] = [
   { id: 1, sourceId: 1, sourceName: "HN RSS", url: "https://deepseek.com/harness", title: "DeepSeek Harness developer preview", importance: 3, status: "unread", category: "models", tags: ["deepseek", "llm"], summary: "DeepSeek released a developer preview of its new harness toolchain.", contentMD: md("DeepSeek **Harness** is a developer preview of a toolchain for evaluating and deploying language models at scale."), fetchedAt: "2026-08-14T09:00:00Z", published: "2026-08-14T09:00:00Z" },
