@@ -87,6 +87,9 @@ export default function App() {
   const lastGRef = useRef(0);
   const graphTimer = useRef<number | null>(null);
   const busyRef = useRef(false);
+  const loadingIdRef = useRef<number | null>(null);
+  const articlesRef = useRef(articles);
+  articlesRef.current = articles;
 
   const notify = useCallback((msg: string, undo?: () => void) => {
     setToast({ msg, undo });
@@ -165,8 +168,12 @@ export default function App() {
     void loadStatus();
   }, [articles, loadStatus]);
   const openArticle = useCallback(async (id: number) => {
+    // Guard: skip if this article is already the one loading (dedupes the
+    // auto-load effect vs Enter vs adjacent-nav all racing on the same id).
+    if (loadingIdRef.current === id) return;
+    loadingIdRef.current = id;
     // Show the title immediately from the list while content is extracted.
-    const listArt = articles.find((a) => a.id === id);
+    const listArt = articlesRef.current.find((a) => a.id === id);
     if (listArt) { setReader(listArt); setNoteReader(null); }
     setContentLoading(true);
     try {
@@ -178,8 +185,8 @@ export default function App() {
         void loadStatus();
       }
     } catch (e) { notify(String(e)); }
-    finally { setContentLoading(false); }
-  }, [articles, notify, loadStatus]);
+    finally { setContentLoading(false); loadingIdRef.current = null; }
+  }, [notify, loadStatus]);
 
   const openNote = useCallback(async (id: number) => {
     try {
@@ -281,11 +288,24 @@ export default function App() {
 
   const openAdjacent = useCallback((delta: number) => {
     const n = Math.max(0, articles.length - 1);
-    const ni = Math.max(0, Math.min(selectedIndex + delta, n));
-    setSelectedIndex(ni);
-    const a = articles[ni];
-    if (a) void openArticle(a.id);
-  }, [articles, selectedIndex, openArticle]);
+    setSelectedIndex((i) => Math.max(0, Math.min(i + delta, n)));
+  }, [articles.length]);
+
+  // ---- lazy loading: the selected article loads automatically (debounced),
+  // and the adjacent ones are prefetched so navigation is instant. ----
+  useEffect(() => {
+    const art = articlesRef.current[selectedIndex];
+    if (!art) return;
+    const t = window.setTimeout(() => void openArticle(art.id), 120);
+    return () => window.clearTimeout(t);
+  }, [selectedIndex, articles.length, openArticle]);
+
+  useEffect(() => {
+    const next = articlesRef.current[selectedIndex + 1];
+    const prev = articlesRef.current[selectedIndex - 1];
+    if (next) void api.getArticleContent(next.id).catch(() => {});
+    if (prev) void api.getArticleContent(prev.id).catch(() => {});
+  }, [selectedIndex, articles.length]);
 
   // ---- panels ----
   const generateDigest = useCallback(async () => {
@@ -322,15 +342,18 @@ export default function App() {
   }, [digestFocusId, articles, openArticle]);
 
   const openGraph = useCallback(async () => {
-    setPanel("graph");
-    setGraphNoteId(null);
+    // Resolve the article's note first, then open the panel so it never shows
+    // the "no note" empty state while the lookup is still in flight.
+    let id: number | null = null;
     if (selected) {
       try {
         const notes = await api.listNotes("atom");
         const match = notes.find((n) => n.title.toLowerCase() === selected.title.toLowerCase());
-        setGraphNoteId(match?.id ?? null);
-      } catch { setGraphNoteId(null); }
+        id = match?.id ?? null;
+      } catch { id = null; }
     }
+    setGraphNoteId(id);
+    setPanel("graph");
   }, [selected]);
 
   const buildAndOpenGraph = useCallback(async () => {
@@ -489,8 +512,14 @@ export default function App() {
       if (k === "*") { void switchView("starred"); return; }
     };
     window.addEventListener("keydown", handler);
-    return () => { window.removeEventListener("keydown", handler); clearGraphTimer(); };
+    return () => window.removeEventListener("keydown", handler);
   }, [paletteOpen, helpOpen, sourceForm, deleteSource, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
+
+  // clear any pending graph-open timer only on unmount (the keyboard effect
+  // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
+  useEffect(() => () => {
+    if (graphTimer.current != null) window.clearTimeout(graphTimer.current);
+  }, []);
 
   // ---- source CRUD ----
   const saveSource = useCallback(async (data: { name: string; type: string; url: string; group: string }) => {

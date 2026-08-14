@@ -13,9 +13,10 @@ export const HELP: HelpCategory[] = [
   {
     title: "Navegación",
     rows: [
-      { keys: "j / k", label: "Siguiente / anterior (5j = saltar 5)" },
+      { keys: "j / k", label: "Siguiente / anterior (5j = saltar 5) — carga automática" },
       { keys: "gg / G", label: "Inicio / final de la lista" },
       { keys: "Ctrl+d / Ctrl+u", label: "Media página abajo / arriba" },
+      { keys: "J / K", label: "Abrir siguiente / anterior artículo" },
       { keys: "Enter", label: "Abrir artículo seleccionado" },
     ],
   },

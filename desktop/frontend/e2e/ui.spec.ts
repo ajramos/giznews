@@ -13,7 +13,8 @@ test.describe("UI render", () => {
     await expect(page.locator(".sources-col .source-item")).toHaveCount(4);
     await expect(page.locator(".article-row")).toHaveCount(7); // 7 unread in mock
 
-    await expect(page.locator(".reader-col")).toContainText("Selecciona un artículo");
+    // first article auto-loads into the reader (lazy loading)
+    await expect(page.locator(".reader-head h1").first()).toBeVisible({ timeout: 6000 });
     await expect(page.locator(".statusbar")).toBeVisible();
 
     const overflow = await page.evaluate(

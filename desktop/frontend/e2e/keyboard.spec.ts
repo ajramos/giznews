@@ -41,16 +41,20 @@ test.describe("vim keyboard grammar", () => {
     await expect(page.locator(".reader .ai-summary")).toBeVisible({ timeout: 6000 });
   });
 
-  test("a archives with undo toast; row disappears", async ({ page }) => {
+  test("a archives with undo; undo restores the article", async ({ page }) => {
     await gotoApp(page);
     const before = await page.locator(".article-row").count();
     await press(page, "a");
     await expect(page.locator(".article-row")).toHaveCount(before - 1);
     await expect(page.locator(".toast")).toContainText("archivado");
     await shot(page, "04-archive-undo");
-    // Undo restores the row.
+    // Undo restores the archived article (it was read by auto-load, so it
+    // returns to the read view, not the unread list).
     await page.locator(".toast .toast-undo").click();
-    await expect(page.locator(".article-row")).toHaveCount(before);
+    await press(page, "x"); // archived view
+    await expect(page.locator(".article-row")).toHaveCount(0);
+    await press(page, "r"); // read view: mock's pre-read article + the restored one
+    await expect(page.locator(".article-row")).toHaveCount(2);
   });
 
   test("count prefix: 3a archives 3", async ({ page }) => {

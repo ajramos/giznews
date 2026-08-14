@@ -34,7 +34,7 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
     return (
       <div className="empty with-icon reader-hint">
         <Sparkles size={34} />
-        <span>Selecciona un artículo con <kbd>j</kbd>/<kbd>k</kbd> y pulsa <kbd>Enter</kbd></span>
+        <span>Navega con <kbd>j</kbd>/<kbd>k</kbd> — el artículo se carga automáticamente</span>
       </div>
     );
   }

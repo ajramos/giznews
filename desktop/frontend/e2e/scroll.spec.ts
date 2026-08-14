@@ -45,6 +45,20 @@ test.describe("scroll & layout", () => {
     const doc = await page.evaluate(() => document.body.scrollHeight);
     expect(doc).toBeLessThanOrEqual(900);
   });
+
+  test("wide images and long URLs do not overflow the reader", async ({ page }) => {
+    await gotoDense(page);
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".reader-scroll")).toBeVisible({ timeout: 6000 });
+    // inject a very wide image + an unbreakable long token into the markdown
+    await page.locator(".reader-scroll .markdown").evaluate((el) => {
+      el.innerHTML =
+        '<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="2000" height="40" alt="wide">' +
+        '<p>https://very-long-url.example.com/path/' + "x".repeat(400) + "</p>";
+    });
+    const overflow = await page.locator(".reader-scroll").evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
 });
 
 test.describe("status bar", () => {
