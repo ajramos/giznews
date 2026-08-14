@@ -6,15 +6,13 @@ export type UIContext = "list" | "reader" | "search" | "graph" | "digest";
 const Ctx = createContext<UIContext>("list");
 export const useUIContext = () => useContext(Ctx);
 
-// Bottom status bar: mode/filter/unread on the left, contextual keys, and
-// LLM + auto-refresh state on the right. (The top title bar was removed, so
-// the unread count and source filter live here now.)
+// Bottom status bar: mode/filter/count on the left, contextual keys, and
+// LLM + auto-refresh state on the right.
 export function StatusBar({
   context,
   modeLabel,
   filter,
   count,
-  unread,
   bulk,
   bulkCount,
   autoRefresh,
@@ -22,13 +20,11 @@ export function StatusBar({
   llmReachable,
   llmProvider,
   onToggleAuto,
-  onClearFilter,
 }: {
   context: UIContext;
   modeLabel: string;
   filter?: string;
   count?: number;
-  unread?: number;
   bulk: boolean;
   bulkCount: number;
   autoRefresh: boolean;
@@ -36,7 +32,6 @@ export function StatusBar({
   llmReachable: boolean;
   llmProvider: string;
   onToggleAuto: () => void;
-  onClearFilter: () => void;
 }) {
   const keys = CONTEXT_KEYS[context] ?? CONTEXT_KEYS.list;
   return (
@@ -47,12 +42,7 @@ export function StatusBar({
         ) : (
           <span className="mode">{modeLabel}</span>
         )}
-        {unread !== undefined && <span className="pill">{unread} no leídos</span>}
-        {filter && (
-          <button className="pill filter" onClick={onClearFilter} title="Quitar filtro">
-            ✕ {filter}
-          </button>
-        )}
+        {filter && <span className="muted">· {filter}</span>}
         {count !== undefined && <span className="count-badge">{count}</span>}
       </div>
       <div className="sb-keys">

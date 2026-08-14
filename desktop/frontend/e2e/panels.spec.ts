@@ -126,8 +126,8 @@ test.describe("sources", () => {
     await page.keyboard.press("f"); // filter by DeepMind Blog
     await expect(page.locator(".source-picker")).toHaveCount(0);
     await expect(page.locator(".article-row")).toHaveCount(1);
-    await expect(page.locator(".statusbar .pill.filter")).toBeVisible();
-    await page.locator(".statusbar .pill.filter").click();
+    await expect(page.locator(".topbar .pill.filter")).toBeVisible();
+    await page.locator(".topbar .pill.filter").click();
     await expect(page.locator(".article-row")).toHaveCount(7);
   });
 });

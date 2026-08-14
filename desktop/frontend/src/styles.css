@@ -166,10 +166,6 @@ body {
 .app { display: flex; flex-direction: column; height: 100vh; }
 
 /* slim window-drag strip replacing the removed title bar */
-.drag-strip {
-  height: 26px; flex-shrink: 0;
-  --wails-draggable: drag;
-  user-select: none;
 }
 
 /* ---- shared controls ---- */
@@ -343,15 +339,6 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .view-tab.active { color: var(--fg); background: var(--bg-elev); border-color: var(--border); }
 
 .article-list { overflow-y: auto; flex: 1; min-height: 0; }
-.col-header {
-  display: flex; gap: 8px; padding: 6px 10px; font-size: 10px; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--fg-dim); border-bottom: 1px solid var(--border);
-}
-.col-header .c-flag { width: 30px; }
-.col-header .c-imp { width: 46px; }
-.col-header .c-title { flex: 1; }
-.col-header .c-src { width: 96px; }
-.col-header .c-time { width: 46px; text-align: right; }
 
 .article-row {
   display: flex; gap: 8px; padding: 8px 10px; cursor: pointer;

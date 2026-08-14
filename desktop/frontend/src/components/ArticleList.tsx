@@ -58,13 +58,6 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
         </div>
       ) : (
         <>
-          <div className="col-header">
-            <span className="c-flag" title="Estado">●</span>
-            <span className="c-imp" title="Importancia (0-3)">Imp.</span>
-            <span className="c-title">Título</span>
-            <span className="c-src">Fuente</span>
-            <span className="c-time">Fecha</span>
-          </div>
           <div className="article-list" ref={containerRef}>
             {articles.map((a, i) => {
               const inBulk = bulkRange ? i >= bulkRange[0] && i <= bulkRange[1] : false;

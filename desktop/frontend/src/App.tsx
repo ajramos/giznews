@@ -21,8 +21,10 @@ import { HelpOverlay } from "./components/HelpOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { Markdown } from "./components/Markdown";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
+import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
+import { CircleHelp, Command, RefreshCw } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
 
@@ -565,7 +567,30 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="drag-strip" />
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark">G</span>
+          <span className="brand-name">Giz<em>News</em></span>
+        </div>
+        {status && (
+          <div className="status">
+            <span className="pill">{status.unreadArticles} no leídos</span>
+            <span className="pill">🧠 {status.totalNotes} notas</span>
+            {filterSource && (
+              <button className="pill filter" onClick={() => void selectSource(null)}>
+                ✕ {filterLabel}
+              </button>
+            )}
+          </div>
+        )}
+        <div className="topbar-actions">
+          <ThemePicker value={theme} onChange={(t) => { applyTheme(t); setTheme(t); }} />
+          <button className="icon-btn" onClick={() => void reloadAll()} title="Recargar"><RefreshCw size={15} /></button>
+          <button className="icon-btn" onClick={() => setHelpOpen(true)} title="Ayuda (?)"><CircleHelp size={15} /></button>
+          <button className="icon-btn" onClick={() => setPaletteOpen(true)} title="Comandos (:)"><Command size={15} /></button>
+        </div>
+      </header>
+
       <main className="layout">
         <section className="col list-col">
           {digestOpen ? (
@@ -651,7 +676,6 @@ export default function App() {
         modeLabel={modeLabel}
         filter={filterLabel}
         count={countBuf ? parseInt(countBuf, 10) : undefined}
-        unread={status?.unreadArticles}
         bulk={bulk}
         bulkCount={bulkIds.length}
         autoRefresh={autoRefresh}
@@ -659,7 +683,6 @@ export default function App() {
         llmReachable={!!status?.llmReachable}
         llmProvider={status?.llmProvider ?? "llm"}
         onToggleAuto={() => setAutoRefresh((v) => !v)}
-        onClearFilter={() => void selectSource(null)}
       />
 
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
