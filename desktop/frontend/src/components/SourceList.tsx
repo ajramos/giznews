@@ -1,5 +1,16 @@
-import { Pencil, Trash2, Plus, Rss } from "lucide-react";
+import { Pencil, Trash2, Plus, Rss, Mail, BookOpen, MessageSquare, type LucideIcon } from "lucide-react";
 import type { SourceDTO } from "../types";
+
+const TYPE_ICON: Record<string, LucideIcon> = {
+  rss: Rss,
+  hackernews: MessageSquare,
+  arxiv: BookOpen,
+  gmail: Mail,
+};
+
+function typeIcon(t: string): LucideIcon {
+  return TYPE_ICON[t] ?? Rss;
+}
 
 interface Props {
   sources: SourceDTO[];
@@ -38,42 +49,37 @@ export function SourceList({ sources, activeId, onSelect, onToggle, onAdd, onEdi
           {[...groups.entries()].map(([group, items]) => (
             <div key={group}>
               <div className="source-group-title">{group}</div>
-              {items.map((s) => (
-                <div
-                  key={s.id}
-                  className={`source-item ${activeId === s.id ? "active" : ""}`}
-                  onClick={() => onSelect(activeId === s.id ? null : s.id)}
-                  title={`${s.name} (${s.type})`}
-                >
-                  <span className="dot" data-state={s.enabled ? "on" : "off"} />
-                  <span className="source-name">{s.name}</span>
-                  <span className="source-type">{s.type}</span>
-                  <button
-                    className={s.enabled ? "switch on" : "switch"}
-                    data-on={s.enabled}
-                    aria-pressed={s.enabled}
-                    title={s.enabled ? "Desactivar" : "Activar"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggle(s.id, !s.enabled);
-                    }}
-                  />
-                  <button
-                    className="icon-btn source-act"
-                    title="Editar"
-                    onClick={(e) => { e.stopPropagation(); onEdit(s); }}
+              {items.map((s) => {
+                const Icon = typeIcon(s.type);
+                return (
+                  <div
+                    key={s.id}
+                    className={`source-item ${activeId === s.id ? "active" : ""}`}
+                    onClick={() => onSelect(activeId === s.id ? null : s.id)}
+                    title={`${s.name} (${s.type})`}
                   >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    className="icon-btn source-act"
-                    title="Eliminar de la lista (los artículos se conservan)"
-                    onClick={(e) => { e.stopPropagation(); onDelete(s); }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
+                    <span className={`dot ${s.enabled ? "on" : "off"}`} />
+                    <span className="source-name">{s.name}</span>
+                    <span className="source-type"><Icon size={12} /></span>
+                    <button
+                      className={s.enabled ? "switch on" : "switch"}
+                      data-on={s.enabled}
+                      aria-pressed={s.enabled}
+                      title={s.enabled ? "Desactivar" : "Activar"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggle(s.id, !s.enabled);
+                      }}
+                    />
+                    <button className="icon-btn source-act" title="Editar" onClick={(e) => { e.stopPropagation(); onEdit(s); }}>
+                      <Pencil size={13} />
+                    </button>
+                    <button className="icon-btn source-act" title="Eliminar de la lista (los artículos se conservan)" onClick={(e) => { e.stopPropagation(); onDelete(s); }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

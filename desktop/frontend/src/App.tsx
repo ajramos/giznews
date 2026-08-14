@@ -24,6 +24,7 @@ import { Markdown } from "./components/Markdown";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
+import { SourcePicker } from "./components/SourcePicker";
 import { CircleHelp, Command, RefreshCw } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -52,6 +53,7 @@ export default function App() {
   const [sourceForm, setSourceForm] = useState<{ initial: SourceDTO | null } | null>(null);
   const [deleteSource, setDeleteSource] = useState<SourceDTO | null>(null);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
   const [welcome, setWelcome] = useState(() => {
@@ -395,7 +397,8 @@ export default function App() {
     { name: "search index", hint: "Indexar embeddings", run: () => void runCmd(api.searchIndex, "índice actualizado") },
     { name: "digest", hint: "Digest diario", run: () => void generateDigest() },
     { name: "auto-refresh", hint: autoRefresh ? "Desactivar refresco automático" : "Activar refresco cada 15 min", run: () => setAutoRefresh((v) => !v) },
-    { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => setSourceForm({ initial: null }) },
+    { name: "sources", hint: "Gestionar fuentes (picker)", run: () => setSourcePickerOpen(true) },
+    { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
     { name: "theme", hint: "Elegir tema (picker)", run: () => setThemeModalOpen(true) },
     { name: "open vault", hint: "Abrir vault en Obsidian", run: () => void api.openVault() },
     { name: "quit", hint: "Salir", run: () => void api.quit() },
@@ -418,6 +421,7 @@ export default function App() {
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (helpOpen) { setHelpOpen(false); return; }
         if (themeModalOpen) { setThemeModalOpen(false); return; }
+        if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
         if (deleteSource) { setDeleteSource(null); return; }
         if (panel !== "none") { setPanel("none"); return; }
@@ -426,7 +430,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen) return;
+      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -514,7 +518,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -713,6 +717,16 @@ export default function App() {
           value={theme}
           onChange={(t) => { applyTheme(t); setTheme(t); }}
           onClose={() => setThemeModalOpen(false)}
+        />
+      )}
+      {sourcePickerOpen && (
+        <SourcePicker
+          sources={sources}
+          onToggle={(id, enabled) => { void api.setSourceEnabled(id, enabled).then(() => loadSources()); }}
+          onAdd={() => { setSourcePickerOpen(false); setSourceForm({ initial: null }); }}
+          onEdit={(s) => { setSourcePickerOpen(false); setSourceForm({ initial: s }); }}
+          onDelete={(s) => { setSourcePickerOpen(false); setDeleteSource(s); }}
+          onClose={() => setSourcePickerOpen(false)}
         />
       )}
       {welcome && (

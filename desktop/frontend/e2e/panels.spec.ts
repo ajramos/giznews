@@ -61,6 +61,22 @@ test.describe("panels", () => {
 });
 
 test.describe("sources", () => {
+  test("source picker via :sources, keyboard toggle", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("sources");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toBeVisible();
+    await expect(page.locator(".source-picker-item")).toHaveCount(4);
+    // Enter toggles the focused source
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker-item").first().locator(".sp-dot")).toHaveAttribute("data-on", "false");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker-item").first().locator(".sp-dot")).toHaveAttribute("data-on", "true");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".source-picker")).toHaveCount(0);
+  });
+
   test("add source via modal", async ({ page }) => {
     await gotoApp(page);
     await page.locator(".sources-col").getByRole("button", { name: "Añadir" }).first().click();
