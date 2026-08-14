@@ -97,6 +97,62 @@
   --cat-general: #7986cb;
 }
 
+[data-theme="nord"] {
+  --bg: #2e3440;
+  --bg-panel: #3b4252;
+  --bg-elev: #434c5e;
+  --border: #4c566a;
+  --fg: #d8dee9;
+  --fg-dim: #81a1c1;
+  --accent: #88c0d0;
+  --accent-dim: #4c566a;
+  --good: #a3be8c;
+  --warn: #ebcb8b;
+  --bad: #bf616a;
+  --info: #81a1c1;
+  --sel-bg: rgba(136, 192, 208, 0.16);
+  --sel-border: #88c0d0;
+  --input-bg: #434c5e;
+  --status-bg: #272c36;
+  --cat-models: #88c0d0;
+  --cat-research: #81a1c1;
+  --cat-industry: #a3be8c;
+  --cat-funding: #ebcb8b;
+  --cat-regulation: #bf616a;
+  --cat-tools: #d08770;
+  --cat-open-source: #8fbcbb;
+  --cat-opinion: #81a1c1;
+  --cat-general: #81a1c1;
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-panel: #f6f8fa;
+  --bg-elev: #eef1f5;
+  --border: #d0d7de;
+  --fg: #1f2328;
+  --fg-dim: #656d76;
+  --accent: #0969da;
+  --accent-dim: #0550ae;
+  --good: #1a7f37;
+  --warn: #9a6700;
+  --bad: #cf222e;
+  --info: #0969da;
+  --sel-bg: rgba(9, 105, 218, 0.12);
+  --sel-border: #0969da;
+  --input-bg: #ffffff;
+  --status-bg: #eef1f5;
+  --cat-models: #0969da;
+  --cat-research: #8250df;
+  --cat-industry: #1a7f37;
+  --cat-funding: #9a6700;
+  --cat-regulation: #cf222e;
+  --cat-tools: #bc4c00;
+  --cat-open-source: #0969da;
+  --cat-opinion: #656d76;
+  --cat-general: #656d76;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 
@@ -418,6 +474,11 @@ kbd {
 }
 .help-note { margin: 10px 18px 0; font-size: 12px; color: var(--fg-dim); border-top: 1px solid var(--border); padding-top: 10px; }
 
+.welcome { width: 520px; max-width: 94vw; }
+.welcome-body { padding: 8px 20px 16px; font-size: 13.5px; line-height: 1.6; }
+.welcome-body p { margin: 8px 0 12px; }
+.welcome-tip { padding: 4px 0; font-size: 13px; }
+
 /* modal (source form) */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 60; }
 .modal { width: 460px; max-width: 94vw; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
@@ -461,6 +522,11 @@ kbd {
 @keyframes pulse { 0%,100% { opacity: .4; } 50% { opacity: .9; } }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* accessibility: honour reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
 
 .toast {
   position: fixed; bottom: 44px; left: 50%; transform: translateX(-50%);

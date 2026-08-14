@@ -44,4 +44,14 @@ test.describe("UI render", () => {
     await expect(page.locator(".col-header")).toContainText("Título");
     await expect(page.locator(".cat-chip").first()).toBeVisible();
   });
+
+  test("welcome overlay shows on first run and is dismissed", async ({ page }) => {
+    await page.addInitScript(() => localStorage.removeItem("giznews-welcomed"));
+    await page.goto("/");
+    await expect(page.locator(".welcome")).toBeVisible({ timeout: 8000 });
+    await expect(page.locator(".welcome")).toContainText("Bienvenido a GizNews");
+    await page.locator(".welcome").getByRole("button", { name: "Empezar" }).click();
+    await expect(page.locator(".welcome")).toHaveCount(0);
+    await expect(page.locator(".article-row").first()).toBeVisible();
+  });
 });

@@ -1,7 +1,7 @@
 // Theme system: CSS-variable token palettes following giztui's
 // foundation/semantic structure. Switching sets [data-theme] on <html>.
 
-export type ThemeName = "giznews" | "dracula" | "slate";
+export type ThemeName = "giznews" | "dracula" | "slate" | "nord" | "light";
 
 export interface Theme {
   name: ThemeName;
@@ -12,6 +12,8 @@ export const THEMES: Theme[] = [
   { name: "giznews", label: "GizNews Dark" },
   { name: "dracula", label: "Dracula" },
   { name: "slate", label: "Slate Blue" },
+  { name: "nord", label: "Nord" },
+  { name: "light", label: "Light" },
 ];
 
 const KEY = "giznews-theme";

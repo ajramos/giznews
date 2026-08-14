@@ -21,6 +21,7 @@ import { CommandPalette, type PaletteCommand } from "./components/CommandPalette
 import { HelpOverlay } from "./components/HelpOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { Markdown } from "./components/Markdown";
+import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { CircleHelp, Command, RefreshCw } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -50,6 +51,9 @@ export default function App() {
   const [deleteSource, setDeleteSource] = useState<SourceDTO | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
+  const [welcome, setWelcome] = useState(() => {
+    try { return !localStorage.getItem("giznews-welcomed"); } catch { return false; }
+  });
 
   // ---- reader / panels ----
   const [reader, setReader] = useState<ArticleDTO | null>(null);
@@ -668,6 +672,14 @@ export default function App() {
 
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {helpOpen && <HelpOverlay onClose={() => setHelpOpen(false)} />}
+      {welcome && (
+        <WelcomeOverlay
+          onDone={() => {
+            try { localStorage.setItem("giznews-welcomed", "1"); } catch { /* ignore */ }
+            setWelcome(false);
+          }}
+        />
+      )}
       {sourceForm && (
         <SourceForm initial={sourceForm.initial} onSave={saveSource} onCancel={() => setSourceForm(null)} />
       )}

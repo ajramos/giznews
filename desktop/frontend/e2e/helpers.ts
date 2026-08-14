@@ -19,6 +19,8 @@ export async function shot(page: Page, name: string): Promise<void> {
 }
 
 export async function gotoApp(page: Page): Promise<void> {
+  // First-run welcome overlay is skipped in tests (a dedicated test covers it).
+  await page.addInitScript(() => localStorage.setItem("giznews-welcomed", "1"));
   await page.goto("/");
   await expect(page.locator(".article-row").first()).toBeVisible({ timeout: 8000 });
 }
