@@ -548,13 +548,6 @@ export default function App() {
     finally { setDeleteSource(null); }
   }, [deleteSource, filterSource, selectSource, loadSources, notify]);
 
-  const uiCtx: "list" | "reader" | "search" | "graph" | "digest" =
-    panel === "search" ? "search"
-    : panel === "graph" ? "graph"
-    : digestOpen ? "digest"
-    : reader ? "reader"
-    : "list";
-
   const modeLabel = panel === "search" ? "BUSCAR"
     : panel === "graph" ? "GRAFO"
     : digestOpen ? "DIGEST"
@@ -681,7 +674,6 @@ export default function App() {
       </main>
 
       <StatusBar
-        context={uiCtx}
         modeLabel={modeLabel}
         filter={filterLabel}
         count={countBuf ? parseInt(countBuf, 10) : undefined}
