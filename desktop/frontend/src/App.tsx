@@ -26,6 +26,8 @@ import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
 import { NotesPicker } from "./components/NotesPicker";
 import { PipelineModal, type PipelineStep } from "./components/PipelineModal";
+import { PromptModal } from "./components/PromptModal";
+import { StatusModal } from "./components/StatusModal";
 import { CircleHelp, Command, RefreshCw, Tag, Network, Search } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -58,6 +60,8 @@ export default function App() {
   const [notesPickerOpen, setNotesPickerOpen] = useState(false);
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
+  const [synthPrompt, setSynthPrompt] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
   const [welcome, setWelcome] = useState(() => {
@@ -446,15 +450,13 @@ export default function App() {
       notify(`${k.atomsCreated} atoms · ${k.electronsCreated} electrons`);
       await loadStatus();
     }, "kb build") },
-    { name: "kb synth <categoría>", hint: "Molecule de una categoría", run: () => {
-      const cat = window.prompt("Categoría (models, research, industry…)");
-      if (cat) void runCmd(() => api.ksynthesize(cat), `molecule de ${cat}`);
-    } },
+    { name: "kb synth <categoría>", hint: "Molecule de una categoría", run: () => setSynthPrompt(true) },
     { name: "search index", hint: "Indexar embeddings", run: () => void runCmd(api.searchIndex, "índice actualizado") },
     { name: "digest", hint: "Digest diario", run: () => void generateDigest() },
     { name: "auto-refresh", hint: autoRefresh ? "Desactivar refresco automático" : "Activar refresco cada 15 min", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Gestionar fuentes (picker)", run: () => setSourcePickerOpen(true) },
     { name: "notes", hint: "Ver notas del knowledge graph", run: () => setNotesPickerOpen(true) },
+    { name: "status", hint: "Resumen del estado (artículos, notas, LLM)", run: () => setStatusOpen(true) },
     { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
     { name: "theme", hint: "Elegir tema (picker)", run: () => setThemeModalOpen(true) },
     { name: "open vault", hint: "Abrir vault en Obsidian", run: () => void api.openVault() },
@@ -481,6 +483,8 @@ export default function App() {
         if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
         if (notesPickerOpen) { setNotesPickerOpen(false); return; }
         if (pipelineOpen) { setPipelineOpen(false); return; }
+        if (synthPrompt) { setSynthPrompt(false); return; }
+        if (statusOpen) { setStatusOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
         if (deleteSource) { setDeleteSource(null); return; }
         if (panel !== "none") { setPanel("none"); return; }
@@ -489,7 +493,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen) return;
+      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen || synthPrompt || statusOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -600,7 +604,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -796,6 +800,15 @@ export default function App() {
         />
       )}
       {pipelineOpen && <PipelineModal steps={pipelineSteps} onClose={() => setPipelineOpen(false)} />}
+      {synthPrompt && (
+        <PromptModal
+          title="Categoría para la síntesis"
+          placeholder="models, research, industry…"
+          onSubmit={(cat) => { setSynthPrompt(false); void runCmd(() => api.ksynthesize(cat), `molecule de ${cat}`); }}
+          onClose={() => setSynthPrompt(false)}
+        />
+      )}
+      {statusOpen && <StatusModal onClose={() => setStatusOpen(false)} />}
       {welcome && (
         <WelcomeOverlay
           onDone={() => {

@@ -206,4 +206,27 @@ test.describe("workflows", () => {
     await page.locator(".pipeline-modal").getByRole("button", { name: "Cerrar" }).click();
     await expect(page.locator(".pipeline-modal")).toHaveCount(0);
   });
+
+  test(":status opens the status modal", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("status");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".status-modal")).toBeVisible();
+    await expect(page.locator(".status-modal")).toContainText("Artículos");
+    await expect(page.locator(".status-modal")).toContainText("Atoms");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".status-modal")).toHaveCount(0);
+  });
+
+  test(":kb synth opens a prompt modal", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("kb synth");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".prompt-modal")).toBeVisible();
+    await page.locator(".prompt-modal input").fill("models");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".toast")).toBeVisible({ timeout: 6000 });
+  });
 });
