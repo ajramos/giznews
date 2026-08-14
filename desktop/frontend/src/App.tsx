@@ -47,6 +47,7 @@ export default function App() {
 
   const [status, setStatus] = useState<StatusDTO | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [filterSource, setFilterSource] = useState<number | null>(null);
   const lastGRef = useRef(0);
   const busyRef = useRef(false);
 
@@ -80,6 +81,14 @@ export default function App() {
       notify(String(e));
     }
   }, [notify]);
+
+  const selectSource = useCallback(
+    async (id: number | null) => {
+      setFilterSource(id);
+      await loadArticles(id ? { sourceId: id } : {});
+    },
+    [loadArticles]
+  );
 
   useEffect(() => {
     void loadSources();
@@ -261,18 +270,18 @@ export default function App() {
         name: "open vault",
         hint: "Abrir vault en Obsidian",
         run: () => {
-          if (window.go && window.go.main && window.go.main.App && (window.go.main.App as Record<string, unknown>)["OpenVault"]) {
-            void (window.go.main.App as unknown as { OpenVault: () => Promise<void> }).OpenVault();
-          }
+          const api2 = window.go?.main?.App as unknown as { OpenVault?: () => Promise<void> } | undefined;
+          if (api2?.OpenVault) void api2.OpenVault();
+          else notify("vault (browser mode): ~/Documents/obsidian/chronicles-ai");
         },
       },
       {
         name: "quit",
         hint: "Salir de la aplicación",
         run: () => {
-          if (window.go && window.go.main && window.go.main.App && (window.go.main.App as Record<string, unknown>)["Quit"]) {
-            void (window.go.main.App as unknown as { Quit: () => Promise<void> }).Quit();
-          }
+          const api2 = window.go?.main?.App as unknown as { Quit?: () => Promise<void> } | undefined;
+          if (api2?.Quit) void api2.Quit();
+          else notify("quit (browser mode): no-op");
         },
       },
     ];
@@ -283,25 +292,27 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-      if (typing) return;
-
-      if (paletteOpen || helpOpen) return;
-
       const k = e.key;
-      const now = Date.now();
 
+      // Escape always closes the topmost layer, even with an overlay open.
       if (k === "Escape") {
-        if (panel !== "none") setPanel("none");
-        else if (view !== "articles") setView("articles");
+        if (paletteOpen) { setPaletteOpen(false); return; }
+        if (helpOpen) { setHelpOpen(false); return; }
+        if (panel !== "none") { setPanel("none"); return; }
+        if (view !== "articles") { setView("articles"); return; }
         return;
       }
+
+      if (typing || paletteOpen || helpOpen) return;
+
+      const now = Date.now();
+      e.preventDefault();
+
       if (k === "j" || k === "ArrowDown") {
-        e.preventDefault();
         setSelectedIndex((i) => Math.min(i + 1, Math.max(0, articles.length - 1)));
         return;
       }
       if (k === "k" || k === "ArrowUp") {
-        e.preventDefault();
         setSelectedIndex((i) => Math.max(i - 1, 0));
         return;
       }
@@ -356,6 +367,11 @@ export default function App() {
             <span className="pill">{status.unreadArticles} no leídos</span>
             <span className={`pill llm ${status.llmEnabled ? "on" : "off"}`}>{status.llmProvider}</span>
             <span className="pill">🧠 {status.totalNotes} notas</span>
+            {filterSource != null && (
+              <button className="pill" onClick={() => void selectSource(null)} title="Quitar filtro">
+                ✕ filtro: {sources.find((s) => s.id === filterSource)?.name ?? "?"}
+              </button>
+            )}
           </div>
         )}
         <div className="topbar-actions">
@@ -370,11 +386,12 @@ export default function App() {
         <aside className="col sources-col">
           <SourceList
             sources={sources}
-            activeId={null}
-            onSelect={() => {}}
+            activeId={filterSource}
+            onSelect={(id) => void selectSource(id)}
             onToggle={async (id, enabled) => {
               await api.setSourceEnabled(id, enabled);
               await loadSources();
+              if (filterSource === id && !enabled) await selectSource(null);
             }}
           />
         </aside>

@@ -1,7 +1,11 @@
 // Typed bridge to the Wails-bound Go API (window.go.main.App.*).
 // Wails injects context.Context automatically, so calls pass ONLY the declared
 // method arguments (no leading null).
+//
+// In a plain browser (vite dev / Playwright) window.go is absent, so the api
+// falls back to the mock backend for fully offline UI development.
 
+import { mockBackend } from "./apiMock";
 import type {
   ArticleDTO,
   ClassifyResult,
@@ -28,6 +32,22 @@ declare global {
   }
 }
 
+// isWails reports whether the real backend bindings are present.
+export const isWails = (): boolean =>
+  typeof window !== "undefined" && !!window.go?.main?.App;
+
+// runtimeShim exposes a minimal window.runtime for browser mode so palette
+// actions (OpenVault/Quit) degrade gracefully.
+export function installRuntimeShim(): void {
+  const win = window as unknown as { runtime?: unknown };
+  if (typeof window === "undefined" || win.runtime) return;
+  win.runtime = {
+    WindowStartDragging: () => {},
+    EventsOn: () => () => {},
+    EventsOff: () => {},
+  };
+}
+
 // normalize maps a Wails JSON object (PascalCase Go field names) onto a
 // camelCase interface, ignoring unknown keys.
 function normalize<T>(obj: unknown): T {
@@ -51,15 +71,36 @@ async function call<T>(name: string, ...args: unknown[]): Promise<T> {
   return fn(...args) as Promise<T>;
 }
 
-export const api = {
-  // Sources
+// Build the API surface: real Wails bindings or the mock backend.
+export interface APIShape {
+  listSources: () => Promise<SourceDTO[]>;
+  addSource: (name: string, type: string, url: string, group: string) => Promise<SourceDTO>;
+  setSourceEnabled: (id: number, enabled: boolean) => Promise<void>;
+  listArticles: (opts: ListArticlesOptions) => Promise<ArticleDTO[]>;
+  getArticle: (id: number) => Promise<ArticleDTO>;
+  setArticleStatus: (id: number, status: string) => Promise<void>;
+  setArticleImportance: (id: number, importance: number) => Promise<void>;
+  fetch: () => Promise<FetchResult>;
+  classify: (limit: number) => Promise<ClassifyResult>;
+  summarizeArticle: (id: number) => Promise<ArticleDTO>;
+  digest: () => Promise<DigestDTO>;
+  kbuild: () => Promise<KBResult>;
+  ksynthesize: (category: string) => Promise<KBResult>;
+  listNotes: (type: string) => Promise<NoteDTO[]>;
+  getNote: (id: number) => Promise<NoteDTO>;
+  graphNeighbors: (id: number) => Promise<NoteDTO[]>;
+  searchIndex: () => Promise<IndexResult>;
+  search: (query: string, limit: number) => Promise<SearchResultDTO[]>;
+  status: () => Promise<StatusDTO>;
+}
+
+const realApi: APIShape = {
   listSources: () => call("ListSources").then((v) => arr<SourceDTO>(v)),
   addSource: (name: string, type: string, url: string, group: string) =>
     call("AddSource", name, type, url, group).then((v) => normalize<SourceDTO>(v)),
   setSourceEnabled: (id: number, enabled: boolean) =>
     call("SetSourceEnabled", id, enabled).then(() => undefined),
 
-  // Articles
   listArticles: (opts: ListArticlesOptions) =>
     call("ListArticles", opts).then((v) => arr<ArticleDTO>(v)),
   getArticle: (id: number) =>
@@ -69,25 +110,23 @@ export const api = {
   setArticleImportance: (id: number, importance: number) =>
     call("SetArticleImportance", id, importance).then(() => undefined),
 
-  // Pipeline
   fetch: () => call<FetchResult>("Fetch"),
   classify: (limit: number) => call<ClassifyResult>("Classify", limit),
   summarizeArticle: (id: number) =>
     call("SummarizeArticle", id).then((v) => normalize<ArticleDTO>(v)),
   digest: () => call<DigestDTO>("Digest"),
 
-  // Knowledge graph
   kbuild: () => call<KBResult>("KBuild"),
   ksynthesize: (category: string) => call<KBResult>("KSynthesize", category),
   listNotes: (type: string) => call("ListNotes", type).then((v) => arr<NoteDTO>(v)),
   getNote: (id: number) => call("GetNote", id).then((v) => normalize<NoteDTO>(v)),
   graphNeighbors: (id: number) => call("GraphNeighbors", id).then((v) => arr<NoteDTO>(v)),
 
-  // Search
   searchIndex: () => call<IndexResult>("SearchIndex"),
   search: (query: string, limit: number) =>
     call("Search", query, limit).then((v) => arr<SearchResultDTO>(v)),
 
-  // Meta
   status: () => call("Status").then((v) => normalize<StatusDTO>(v)),
 };
+
+export const api: APIShape = isWails() ? realApi : mockBackend;
