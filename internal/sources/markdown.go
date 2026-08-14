@@ -6,6 +6,12 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
 
+// HTMLToMarkdown converts HTML article bodies to markdown for the reader and
+// the knowledge base. Failures degrade to plain text.
+func HTMLToMarkdown(raw string) string {
+	return htmlToMarkdown(raw)
+}
+
 // htmlToMarkdown converts HTML article bodies to markdown for the reader and
 // the knowledge base. Failures degrade to plain text.
 func htmlToMarkdown(raw string) string {

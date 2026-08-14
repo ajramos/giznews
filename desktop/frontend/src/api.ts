@@ -79,6 +79,7 @@ export interface APIShape {
   deleteSource: (id: number) => Promise<void>;
   listArticles: (opts: ListArticlesOptions) => Promise<ArticleDTO[]>;
   getArticle: (id: number) => Promise<ArticleDTO>;
+  getArticleContent: (id: number) => Promise<ArticleDTO>;
   setArticleStatus: (id: number, status: string) => Promise<void>;
   setArticleImportance: (id: number, importance: number) => Promise<void>;
   fetch: () => Promise<FetchResult>;
@@ -111,6 +112,8 @@ const realApi: APIShape = {
     call("ListArticles", opts).then((v) => arr<ArticleDTO>(v)),
   getArticle: (id: number) =>
     call("GetArticle", id).then((v) => normalize<ArticleDTO>(v)),
+  getArticleContent: (id: number) =>
+    call("GetArticleContent", id).then((v) => normalize<ArticleDTO>(v)),
   setArticleStatus: (id: number, status: string) =>
     call("SetArticleStatus", id, status).then(() => undefined),
   setArticleImportance: (id: number, importance: number) =>

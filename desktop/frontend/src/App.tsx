@@ -59,6 +59,7 @@ export default function App() {
   const [reader, setReader] = useState<ArticleDTO | null>(null);
   const [noteReader, setNoteReader] = useState<NoteDTO | null>(null);
   const [summarizing, setSummarizing] = useState(false);
+  const [contentLoading, setContentLoading] = useState(false);
   const [digest, setDigest] = useState<DigestDTO | null>(null);
   const [digestLoading, setDigestLoading] = useState(false);
   const [digestFocusId, setDigestFocusId] = useState<number | null>(null);
@@ -164,17 +165,21 @@ export default function App() {
     void loadStatus();
   }, [articles, loadStatus]);
   const openArticle = useCallback(async (id: number) => {
+    // Show the title immediately from the list while content is extracted.
+    const listArt = articles.find((a) => a.id === id);
+    if (listArt) { setReader(listArt); setNoteReader(null); }
+    setContentLoading(true);
     try {
-      const full = await api.getArticle(id);
+      const full = await api.getArticleContent(id);
       setReader(full);
-      setNoteReader(null);
       if (full.status === "unread") {
         await api.setArticleStatus(id, "read");
         setArticles((prev) => prev.map((a) => (a.id === id ? { ...a, status: "read" } : a)));
         void loadStatus();
       }
     } catch (e) { notify(String(e)); }
-  }, [notify, loadStatus]);
+    finally { setContentLoading(false); }
+  }, [articles, notify, loadStatus]);
 
   const openNote = useCallback(async (id: number) => {
     try {
@@ -649,6 +654,7 @@ export default function App() {
             <Reader
               article={reader}
               summarizing={summarizing}
+              contentLoading={contentLoading}
               onSummarize={summarize}
               onArchive={() => archiveRange(1)}
               onStar={() => void toggleStar()}

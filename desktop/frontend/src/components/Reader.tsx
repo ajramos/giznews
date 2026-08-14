@@ -6,13 +6,14 @@ import { Markdown, stars, catClass } from "./Markdown";
 interface Props {
   article: ArticleDTO | null;
   summarizing: boolean;
+  contentLoading: boolean;
   onSummarize: () => void;
   onArchive: () => void;
   onStar: () => void;
   onOpenLink: () => void;
 }
 
-export function Reader({ article, summarizing, onSummarize, onArchive, onStar, onOpenLink }: Props) {
+export function Reader({ article, summarizing, contentLoading, onSummarize, onArchive, onStar, onOpenLink }: Props) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -76,7 +77,13 @@ export function Reader({ article, summarizing, onSummarize, onArchive, onStar, o
       )}
 
       <div className="reader-scroll" onScroll={onScroll}>
-        <Markdown content={article.contentMD || ""} />
+        {contentLoading && !article.contentMD ? (
+          <div className="empty with-icon">
+            <Loader2 size={24} className="spin" /> Extrayendo el artículo…
+          </div>
+        ) : (
+          <Markdown content={article.contentMD || ""} />
+        )}
       </div>
     </div>
   );

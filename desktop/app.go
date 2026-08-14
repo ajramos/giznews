@@ -39,6 +39,9 @@ func (a *App) ListArticles(opts gizdesktop.ListArticlesOptions) ([]*gizdesktop.A
 func (a *App) GetArticle(id int64) (*gizdesktop.ArticleDTO, error) {
 	return a.api.GetArticle(bg(), id)
 }
+func (a *App) GetArticleContent(id int64) (*gizdesktop.ArticleDTO, error) {
+	return a.api.GetArticleContent(bg(), id)
+}
 func (a *App) SetArticleStatus(id int64, status string) error {
 	return a.api.SetArticleStatus(bg(), id, status)
 }

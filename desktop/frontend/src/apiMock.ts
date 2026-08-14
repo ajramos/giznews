@@ -116,6 +116,12 @@ export const mockBackend: APIShape = {
     if (!a) throw new Error("article not found");
     return { ...a };
   },
+  getArticleContent: async (id: number): Promise<ArticleDTO> => {
+    await delay(120); // simulate extraction
+    const a = sampleArticles.find((x) => x.id === id);
+    if (!a) throw new Error("article not found");
+    return { ...a };
+  },
   setArticleStatus: async (id: number, status: string): Promise<void> => {
     await delay();
     const a = sampleArticles.find((x) => x.id === id);

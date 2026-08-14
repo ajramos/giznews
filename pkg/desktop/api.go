@@ -21,6 +21,7 @@ type API interface {
 	// Articles
 	ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*ArticleDTO, error)
 	GetArticle(ctx context.Context, id int64) (*ArticleDTO, error)
+	GetArticleContent(ctx context.Context, id int64) (*ArticleDTO, error)
 	SetArticleStatus(ctx context.Context, id int64, status string) error
 	SetArticleImportance(ctx context.Context, id int64, importance int) error
 

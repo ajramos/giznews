@@ -373,6 +373,17 @@ func (r *ArticleRepo) SetArticleEmbedding(ctx context.Context, id int64, embeddi
 	return checkAffected(res, "set article embedding")
 }
 
+// SetContent persists extracted article content (HTML + markdown).
+func (r *ArticleRepo) SetContent(ctx context.Context, id int64, contentHTML, contentMD string) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET content_html = ?, content_md = ?, updated_at = ? WHERE id = ?",
+		contentHTML, contentMD, Now(), id)
+	if err != nil {
+		return fmt.Errorf("set article content: %w", err)
+	}
+	return checkAffected(res, "set article content")
+}
+
 // GetArticleEmbedding returns the stored embedding for an article, or nil.
 func (r *ArticleRepo) GetArticleEmbedding(ctx context.Context, id int64) ([]float32, error) {
 	var blob []byte
