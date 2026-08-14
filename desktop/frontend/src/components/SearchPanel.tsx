@@ -1,4 +1,4 @@
-import { Search, Loader2, FileText, Brain } from "lucide-react";
+import { Search, Loader2, FileText, Brain, X } from "lucide-react";
 import type { SearchResultDTO } from "../types";
 
 interface Props {
@@ -30,6 +30,11 @@ export function SearchPanel({ query, onQuery, searching, results, focus, onFocus
           }}
           placeholder="p. ej. watermarking, agentic workflows, LoRA…"
         />
+        {query && (
+          <button className="search-clear" title="Limpiar" onClick={() => onQuery("")}>
+            <X size={14} />
+          </button>
+        )}
       </div>
       {searching && <div className="empty with-icon"><Loader2 size={22} className="spin" /> Buscando…</div>}
       {!searching && query && results.length === 0 && <div className="empty">Sin resultados.</div>}

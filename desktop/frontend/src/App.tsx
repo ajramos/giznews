@@ -342,6 +342,8 @@ export default function App() {
       const n = Math.max(0, articles.length - 1);
       if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + count, n)); return; }
       if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - count, 0)); return; }
+      if (k === "Home") { setSelectedIndex(0); return; }
+      if (k === "End") { setSelectedIndex(n); return; }
       if (k === "g") {
         if (now - lastGRef.current < 300) {
           lastGRef.current = 0;
