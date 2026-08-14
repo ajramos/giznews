@@ -574,8 +574,8 @@ export default function App() {
         </div>
         {status && (
           <div className="status">
-            <span className="pill">{status.unreadArticles} no leídos</span>
-            <span className="pill">🧠 {status.totalNotes} notas</span>
+            <span className="pill" title="Artículos sin leer">{status.unreadArticles} no leídos</span>
+            <span className="pill" title="Notas del knowledge graph en Obsidian (atoms + electrons + molecules)">🧠 {status.totalNotes} notas</span>
             {filterSource && (
               <button className="pill filter" onClick={() => void selectSource(null)}>
                 ✕ {filterLabel}
