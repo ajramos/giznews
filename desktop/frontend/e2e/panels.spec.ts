@@ -192,4 +192,18 @@ test.describe("workflows", () => {
     await pill.click();
     await expect(pill).toContainText("auto 15m");
   });
+
+  test(":procesar runs the pipeline and shows per-step results", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("procesar");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".pipeline-modal")).toBeVisible();
+    await expect(page.locator(".pipeline-step")).toHaveCount(4);
+    // all steps finish (mock is fast)
+    await expect(page.locator(".pipeline-step .pl-status.done")).toHaveCount(4, { timeout: 10000 });
+    await expect(page.locator(".pipeline-step").nth(0)).toContainText("nuevos");
+    await page.locator(".pipeline-modal").getByRole("button", { name: "Cerrar" }).click();
+    await expect(page.locator(".pipeline-modal")).toHaveCount(0);
+  });
 });

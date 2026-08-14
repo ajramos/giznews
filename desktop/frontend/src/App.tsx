@@ -25,7 +25,8 @@ import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
 import { NotesPicker } from "./components/NotesPicker";
-import { CircleHelp, Command, RefreshCw } from "lucide-react";
+import { PipelineModal, type PipelineStep } from "./components/PipelineModal";
+import { CircleHelp, Command, RefreshCw, Tag, Network, Search } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
 
@@ -55,6 +56,8 @@ export default function App() {
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [notesPickerOpen, setNotesPickerOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
   const [welcome, setWelcome] = useState(() => {
@@ -87,6 +90,7 @@ export default function App() {
   const graphTimer = useRef<number | null>(null);
   const busyRef = useRef(false);
   const loadingIdRef = useRef<number | null>(null);
+  const searchIndexedRef = useRef(false);
   const articlesRef = useRef(articles);
   articlesRef.current = articles;
 
@@ -387,13 +391,61 @@ export default function App() {
     try { await fn(); notify(msg); } catch (e) { notify(String(e)); }
   }, [notify]);
 
+  const runPipeline = useCallback(async () => {
+    setPipelineOpen(true);
+    const steps: PipelineStep[] = [
+      { key: "fetch", label: "Traer artículos", icon: <RefreshCw size={14} />, status: "pending" },
+      { key: "classify", label: "Clasificar (reglas + LLM)", icon: <Tag size={14} />, status: "pending" },
+      { key: "kb", label: "Construir knowledge graph", icon: <Network size={14} />, status: "pending" },
+      { key: "index", label: "Indexar búsqueda semántica", icon: <Search size={14} />, status: "pending" },
+    ];
+    const update = (key: string, patch: Partial<PipelineStep>) =>
+      setPipelineSteps((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+    setPipelineSteps(steps);
+
+    try {
+      update("fetch", { status: "running" });
+      const f = await api.fetch();
+      update("fetch", { status: "done", summary: `${f.newArticles} nuevos · ${f.extracted} extraídos` });
+      await loadArticles();
+      await loadSources();
+      await loadStatus();
+
+      update("classify", { status: "running" });
+      const c = await api.classify(500);
+      update("classify", { status: "done", summary: `${c.classified} clasificados (⚡ ${c.byRules} · ${c.byLLM} LLM)` });
+      await loadArticles();
+
+      update("kb", { status: "running" });
+      const k = await api.kbuild();
+      update("kb", { status: "done", summary: `${k.atomsCreated} atoms · ${k.electronsCreated} electrons` });
+      await loadStatus();
+
+      update("index", { status: "running" });
+      const idx = await api.searchIndex();
+      update("index", { status: "done", summary: `${idx.notesEmbedded} notas · ${idx.articlesEmbedded} artículos` });
+
+      notify("Procesado completado");
+    } catch (e) {
+      setPipelineSteps((prev) => prev.map((s) => (s.status === "running" ? { ...s, status: "error", summary: String(e) } : s)));
+    }
+  }, [loadArticles, loadSources, loadStatus, notify]);
+
   const commands = useMemo<PaletteCommand[]>(() => [
+    { name: "procesar", hint: "Pipeline completo: fetch → clasificar → kb", run: () => void runPipeline() },
     { name: "fetch", hint: "Traer nuevos artículos (+ extraer cuerpos)", run: () => void runCmd(async () => {
       const r = await api.fetch(); await reloadAll();
       notify(`${r.newArticles} nuevos${r.extracted ? ` · ${r.extracted} extraídos` : ""}`);
     }, "fetch") },
-    { name: "classify", hint: "Clasificar (reglas + LLM)", run: () => void runCmd(() => api.classify(200), "clasificación completa") },
-    { name: "kb build", hint: "Generar atoms/electrons", run: () => void runCmd(api.kbuild, "knowledge graph actualizado") },
+    { name: "classify", hint: "Clasificar (reglas + LLM)", run: () => void runCmd(async () => {
+      const c = await api.classify(200);
+      notify(`${c.classified} clasificados (⚡ ${c.byRules} reglas · ${c.byLLM} LLM)`);
+    }, "clasificación") },
+    { name: "kb build", hint: "Generar atoms/electrons", run: () => void runCmd(async () => {
+      const k = await api.kbuild();
+      notify(`${k.atomsCreated} atoms · ${k.electronsCreated} electrons`);
+      await loadStatus();
+    }, "kb build") },
     { name: "kb synth <categoría>", hint: "Molecule de una categoría", run: () => {
       const cat = window.prompt("Categoría (models, research, industry…)");
       if (cat) void runCmd(() => api.ksynthesize(cat), `molecule de ${cat}`);
@@ -407,7 +459,7 @@ export default function App() {
     { name: "theme", hint: "Elegir tema (picker)", run: () => setThemeModalOpen(true) },
     { name: "open vault", hint: "Abrir vault en Obsidian", run: () => void api.openVault() },
     { name: "quit", hint: "Salir", run: () => void api.quit() },
-  ], [runCmd, generateDigest, reloadAll, theme, autoRefresh]);
+  ], [runCmd, generateDigest, reloadAll, theme, autoRefresh, runPipeline]);
 
   // ---- keyboard (vim grammar) ----
   useEffect(() => {
@@ -428,6 +480,7 @@ export default function App() {
         if (themeModalOpen) { setThemeModalOpen(false); return; }
         if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
         if (notesPickerOpen) { setNotesPickerOpen(false); return; }
+        if (pipelineOpen) { setPipelineOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
         if (deleteSource) { setDeleteSource(null); return; }
         if (panel !== "none") { setPanel("none"); return; }
@@ -436,7 +489,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen) return;
+      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -528,7 +581,14 @@ export default function App() {
       if (k === "t") { toggleReadRange(count); return; }
       if (k === "m") { void toggleStar(); return; }
       if (k === "O" || k === "o") { openExternal(); return; }
-      if (k === "s") { setPanel((p) => (p === "search" ? "none" : "search")); return; }
+      if (k === "s") {
+        setPanel((p) => (p === "search" ? "none" : "search"));
+        if (!searchIndexedRef.current) {
+          searchIndexedRef.current = true;
+          void api.searchIndex().catch(() => {});
+        }
+        return;
+      }
       if (k === "n") { setNotesPickerOpen(true); return; }
       if (k === "d") { void generateDigest(); return; }
       if (k === ":") { setPaletteOpen(true); return; }
@@ -540,7 +600,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -735,6 +795,7 @@ export default function App() {
           notify={notify}
         />
       )}
+      {pipelineOpen && <PipelineModal steps={pipelineSteps} onClose={() => setPipelineOpen(false)} />}
       {welcome && (
         <WelcomeOverlay
           onDone={() => {

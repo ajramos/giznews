@@ -54,6 +54,11 @@ export function DigestView({ digest, loading, unreadCount, focusId, onGenerate, 
 
       {digest && (
         <>
+          {digest.themes.length > 0 && digest.themes.every((t) => t.theme === "general") && (
+            <div className="digest-warn">
+              Estos artículos aún no están clasificados. Ejecuta <code>:procesar</code> para categorizarlos y agrupar el digest por temas.
+            </div>
+          )}
           {digest.overview && <div className="digest-overview">{digest.overview}</div>}
           {digest.themes.length === 0 && <div className="empty">No hay temas todavía. Ejecuta <code>:fetch</code> + <code>:classify</code>.</div>}
           {digest.themes.map((th) => (

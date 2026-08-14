@@ -62,6 +62,7 @@ export const HELP: HelpCategory[] = [
   {
     title: "App",
     rows: [
+      { keys: ":procesar", label: "Pipeline completo (fetch → clasificar → kb)" },
       { keys: "q", label: "Salir de GizNews" },
     ],
   },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Network, Loader2, RefreshCw, FolderOpen } from "lucide-react";
 import { api } from "../api";
 import type { NoteDTO } from "../types";
@@ -133,21 +133,27 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
   const [center, setCenter] = useState<NoteDTO | null>(null);
   const [neighbors, setNeighbors] = useState<NoteDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [expanding, setExpanding] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
+  const centerRef = useRef<NoteDTO | null>(null);
 
-  const load = useCallback(async (id: number) => {
-    setLoading(true);
+  const load = useCallback(async (id: number, expand = false) => {
+    if (expand && centerRef.current) setExpanding(true);
+    else setLoading(true);
     try {
       const c = await api.getNote(id);
       const nb = await api.graphNeighbors(id);
+      centerRef.current = c;
       setCenter(c);
       setNeighbors(nb);
     } catch (e) {
       notify(String(e));
+      centerRef.current = null;
       setCenter(null);
       setNeighbors([]);
     } finally {
       setLoading(false);
+      setExpanding(false);
     }
   }, [notify]);
 
@@ -201,6 +207,12 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
       </div>
 
       <svg className="graph-canvas" viewBox={`0 0 ${W} ${H}`} width="100%" height="100%">
+        {expanding && (
+          <g className="graph-expanding">
+            <rect x="0" y="0" width={W} height={H} fill="var(--bg-panel)" opacity="0.5" />
+            <text x={W / 2} y={H / 2} textAnchor="middle" className="graph-label">expandiendo…</text>
+          </g>
+        )}
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
             <path d="M0,0 L0,6 L8,3 z" fill="var(--border)" />
@@ -223,7 +235,7 @@ export function GraphPanel({ noteId, onOpenNote, onBuild, notify }: Props) {
               transform={`translate(${n.x},${n.y})`}
               onMouseEnter={() => setHover(n.id)}
               onMouseLeave={() => setHover(null)}
-              onClick={() => !n.isCenter && void load(n.id)}
+              onClick={() => !n.isCenter && void load(n.id, true)}
               onDoubleClick={() => onOpenNote(n.id)}
             >
               <title>{`[${n.type}] ${n.title}`}</title>
