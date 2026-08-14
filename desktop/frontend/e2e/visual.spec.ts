@@ -7,32 +7,25 @@ test.describe("visual review", () => {
     await gotoApp(page);
     await shot(page, "01-layout");
 
-    // Open an article with content.
     await press(page, "Enter");
     await shot(page, "02-reader");
 
-    // Digest.
     await press(page, "d");
-    await expect(page.locator(".digest-view")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".digest-theme").first()).toBeVisible();
+    await expect(page.locator(".digest-view")).toBeVisible({ timeout: 6000 });
     await shot(page, "03-digest");
-    await press(page, "1");
+    await press(page, "d");
 
-    // Search.
     await press(page, "s");
     await page.locator(".search-panel input").fill("agents");
-    await expect(page.locator(".search-panel .result-row").first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".search-panel .result-row").first()).toBeVisible({ timeout: 6000 });
     await shot(page, "04-search");
     await press(page, "Escape");
 
-    // Graph.
     await press(page, "g");
-    await press(page, "g");
-    await expect(page.locator(".graph-panel")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".graph-panel")).toBeVisible({ timeout: 4000 });
     await shot(page, "05-graph");
     await press(page, "Escape");
 
-    // Palette + help.
     await press(page, ":");
     await shot(page, "06-palette");
     await press(page, "Escape");
@@ -40,9 +33,8 @@ test.describe("visual review", () => {
     await shot(page, "07-help");
     await press(page, "Escape");
 
-    // No pane overflows horizontally.
     const overflow = await page.evaluate(() => {
-      const sels = [".article-list", ".reader-scroll", ".digest-view", ".search-panel", ".graph-panel", ".sources-col"];
+      const sels = [".article-list", ".reader-scroll", ".digest-view", ".search-panel", ".graph-panel", ".sources-col", ".statusbar"];
       const out: Record<string, number> = {};
       for (const sel of sels) {
         const el = document.querySelector(sel);

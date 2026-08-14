@@ -76,7 +76,16 @@ export const mockBackend: APIShape = {
     sampleSources.push(s);
     return s;
   },
-  setSourceEnabled: async (_id: number, _enabled: boolean): Promise<void> => { await delay(); },
+  setSourceEnabled: async (id: number, enabled: boolean): Promise<void> => {
+    await delay();
+    const s = sampleSources.find((x) => x.id === id);
+    if (s) s.enabled = enabled;
+  },
+  deleteSource: async (id: number): Promise<void> => {
+    await delay();
+    const i = sampleSources.findIndex((s) => s.id === id);
+    if (i >= 0) sampleSources.splice(i, 1);
+  },
 
   listArticles: async (opts: ListArticlesOptions): Promise<ArticleDTO[]> => {
     await delay();
@@ -92,7 +101,11 @@ export const mockBackend: APIShape = {
     if (!a) throw new Error("article not found");
     return { ...a };
   },
-  setArticleStatus: async (_id: number, _status: string): Promise<void> => { await delay(); },
+  setArticleStatus: async (id: number, status: string): Promise<void> => {
+    await delay();
+    const a = sampleArticles.find((x) => x.id === id);
+    if (a) a.status = status as ArticleDTO["status"];
+  },
   setArticleImportance: async (_id: number, _importance: number): Promise<void> => { await delay(); },
 
   fetch: async (): Promise<FetchResult> => { await delay(60); return { newArticles: 3, updated: 0, sourcesFetched: 4, sourcesFailed: 0, elapsedMs: 500 }; },
@@ -126,4 +139,8 @@ export const mockBackend: APIShape = {
     await delay();
     return { dbPath: "/mock/db", vaultPath: "/mock/vault", llmProvider: "ollama", llmEnabled: true, llmReachable: true, embeddingsModel: "nomic-embed-text", unreadArticles: sampleArticles.filter((a) => a.status === "unread").length, totalArticles: sampleArticles.length, totalNotes: sampleNotes.length };
   },
+
+  openURL: async (_url: string): Promise<void> => { await delay(); },
+  openVault: async (): Promise<void> => { await delay(); },
+  quit: async (): Promise<void> => { await delay(); },
 };

@@ -1,3 +1,5 @@
+import { type ReactNode } from "react";
+import { Newspaper, Loader2, Boxes, Bot, FlaskConical, Building2, Coins, Scale, Wrench, Code2, MessageSquare, FileText } from "lucide-react";
 import type { DigestDTO } from "../types";
 import { stars } from "./Markdown";
 
@@ -8,33 +10,56 @@ interface Props {
   onOpenArticle: (id: number) => void;
 }
 
+const CAT_ICONS: Record<string, ReactNode> = {
+  models: <Bot size={15} />,
+  research: <FlaskConical size={15} />,
+  industry: <Building2 size={15} />,
+  funding: <Coins size={15} />,
+  regulation: <Scale size={15} />,
+  tools: <Wrench size={15} />,
+  "open-source": <Code2 size={15} />,
+  opinion: <MessageSquare size={15} />,
+  general: <FileText size={15} />,
+};
+
 export function DigestView({ digest, loading, onGenerate, onOpenArticle }: Props) {
   return (
     <div className="digest-view">
       <div className="digest-head">
-        <h1>Digest de IA</h1>
+        <h1><Newspaper size={19} /> Digest de IA</h1>
         {digest && <span className="muted">{digest.date}</span>}
         <button onClick={onGenerate} disabled={loading}>
-          {loading ? "Generando…" : "d · Generar digest"}
+          {loading ? <Loader2 size={13} className="spin" /> : <Newspaper size={13} />}
+          {loading ? "Generando…" : "Generar (d)"}
         </button>
       </div>
 
-      {!digest && !loading && <div className="empty">Pulsa para generar el digest diario.</div>}
-      {loading && <div className="empty">Resumiendo con IA…</div>}
+      {!digest && !loading && (
+        <div className="empty with-icon">
+          <Newspaper size={32} />
+          <span>Pulsa para generar el digest diario con la IA.</span>
+          <button onClick={onGenerate}>Generar digest</button>
+        </div>
+      )}
+      {loading && <div className="empty with-icon"><Loader2 size={28} className="spin" /> Resumiendo con IA…</div>}
 
       {digest && (
         <>
           {digest.overview && <div className="digest-overview">{digest.overview}</div>}
+          {digest.themes.length === 0 && <div className="empty">No hay temas todavía. Ejecuta <code>:fetch</code> + <code>:classify</code>.</div>}
           {digest.themes.map((th) => (
             <section key={th.theme} className="digest-theme">
-              <h2>{th.theme}</h2>
+              <div className="digest-theme-header">
+                <h2>{CAT_ICONS[th.theme] ?? <Boxes size={15} />} {th.theme}</h2>
+                <span className="theme-count">{th.articles.length}</span>
+              </div>
               {th.summary && <p className="theme-summary">{th.summary}</p>}
               <ul className="digest-articles">
                 {th.articles.map((a) => (
                   <li key={a.id} onClick={() => onOpenArticle(a.id)}>
                     <span className="imp" data-level={a.importance}>{stars(a.importance)}</span>
-                    <span>{a.title}</span>
-                    <span className="muted"> — {a.sourceName}</span>
+                    <span className="dart-title">{a.title}</span>
+                    <span className="muted">— {a.sourceName}</span>
                   </li>
                 ))}
               </ul>

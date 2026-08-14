@@ -1,38 +1,85 @@
-// Keyboard shortcuts (mirror giztui muscle memory).
-export const KEYS = {
-  down: ["j", "ArrowDown"],
-  up: ["k", "ArrowUp"],
-  open: ["Enter"],
-  top: ["g", "Home"],
-  bottom: ["G", "End"],
-  search: ["s"],
-  summarize: ["y"],
-  graph: ["g"], // hmm, conflicts with top; handled in App with timing
-  archive: ["a"],
-  toggleRead: ["t"],
-  digest: ["d"],
-  articles: ["1"],
-  palette: [":"],
-  help: ["?"],
-  esc: ["Escape"],
-};
+// Keyboard grammar — vim-consistent, single-letter panels.
+// Motions: j/k (con prefijo de conteo 5j), gg/G, Ctrl+d/u
+// Verbs:  y resumen · a archivar · t leído · m destacar · O abrir · Enter
+// Paneles (toggle): s búsqueda · g grafo · d digest · : palette · ? ayuda
+// Vistas: u no leídos · r leídos · x archivados · * destacados
 
-export interface ShortcutRow {
-  key: string;
-  label: string;
+export interface HelpCategory {
+  title: string;
+  rows: { keys: string; label: string }[];
 }
 
-export const HELP_ROWS: ShortcutRow[] = [
-  { key: "j / k", label: "Navegar por artículos" },
-  { key: "Enter", label: "Abrir artículo" },
-  { key: "g / G", label: "Ir al inicio / final" },
-  { key: "s", label: "Búsqueda semántica" },
-  { key: "y", label: "Resumen IA del artículo" },
-  { key: "g g", label: "Grafo del artículo (knowledge graph)" },
-  { key: "a", label: "Archivar artículo" },
-  { key: "t", label: "Marcar leído / no leído" },
-  { key: "d", label: "Digest diario" },
-  { key: "1 / 2", label: "Vista artículos / digest" },
-  { key: ":", label: "Command palette" },
-  { key: "Esc", label: "Cerrar panel" },
+export const HELP: HelpCategory[] = [
+  {
+    title: "Navegación",
+    rows: [
+      { keys: "j / k", label: "Siguiente / anterior (5j = saltar 5)" },
+      { keys: "gg / G", label: "Inicio / final de la lista" },
+      { keys: "Ctrl+d / Ctrl+u", label: "Media página abajo / arriba" },
+      { keys: "Enter", label: "Abrir artículo seleccionado" },
+    ],
+  },
+  {
+    title: "Acciones sobre el artículo",
+    rows: [
+      { keys: "y", label: "Resumen IA" },
+      { keys: "a", label: "Archivar (5a = archivar 5) — deshacer con toast" },
+      { keys: "t", label: "Marcar leído / no leído" },
+      { keys: "m", label: "Destacar (star)" },
+      { keys: "O", label: "Abrir en el navegador" },
+    ],
+  },
+  {
+    title: "Paneles (toggle)",
+    rows: [
+      { keys: "s", label: "Búsqueda semántica" },
+      { keys: "g", label: "Grafo de conocimiento" },
+      { keys: "d", label: "Digest diario" },
+      { keys: ":", label: "Command palette" },
+      { keys: "Esc", label: "Cerrar panel / volver" },
+    ],
+  },
+  {
+    title: "Vistas de la lista",
+    rows: [
+      { keys: "u / r / x / *", label: "No leídos · Leídos · Archivados · Destacados" },
+    ],
+  },
 ];
+
+export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
+  list: [
+    { key: "j/k", label: "navegar" },
+    { key: "Enter", label: "abrir" },
+    { key: "y", label: "resumen" },
+    { key: "a", label: "archivar" },
+    { key: "t", label: "leído" },
+    { key: "m", label: "destacar" },
+    { key: "s", label: "buscar" },
+    { key: "g", label: "grafo" },
+    { key: ":", label: "cmd" },
+    { key: "?", label: "ayuda" },
+  ],
+  reader: [
+    { key: "j/k", label: "navegar" },
+    { key: "y", label: "resumen" },
+    { key: "a", label: "archivar" },
+    { key: "m", label: "destacar" },
+    { key: "O", label: "abrir web" },
+  ],
+  search: [
+    { key: "↑/↓", label: "resultados" },
+    { key: "Enter", label: "abrir" },
+    { key: "Esc", label: "cerrar" },
+  ],
+  graph: [
+    { key: "clic", label: "expandir nodo" },
+    { key: "dbl", label: "abrir nota" },
+    { key: "Esc", label: "cerrar" },
+  ],
+  digest: [
+    { key: "1..9", label: "conteo" },
+    { key: "j/k", label: "navegar" },
+    { key: "Esc", label: "volver" },
+  ],
+};

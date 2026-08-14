@@ -16,6 +16,7 @@ type API interface {
 	ListSources(ctx context.Context) ([]*SourceDTO, error)
 	AddSource(ctx context.Context, name, srcType, url, group string) (*SourceDTO, error)
 	SetSourceEnabled(ctx context.Context, id int64, enabled bool) error
+	DeleteSource(ctx context.Context, id int64) error
 
 	// Articles
 	ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*ArticleDTO, error)

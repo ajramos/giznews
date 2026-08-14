@@ -54,11 +54,11 @@ func (r *SourceRepo) GetByName(ctx context.Context, name string) (*Source, error
 	return scanSource(row)
 }
 
-// List returns all sources, ordered by group then name.
+// List returns all non-hidden sources, ordered by group then name.
 func (r *SourceRepo) List(ctx context.Context) ([]*Source, error) {
 	rows, err := r.db.sql.QueryContext(ctx, `
 		SELECT id, name, type, url, params, group_name, enabled, last_fetch, created_at, updated_at
-		FROM sources ORDER BY group_name, name`)
+		FROM sources WHERE hidden = 0 ORDER BY group_name, name`)
 	if err != nil {
 		return nil, fmt.Errorf("list sources: %w", err)
 	}
@@ -73,6 +73,16 @@ func (r *SourceRepo) List(ctx context.Context) ([]*Source, error) {
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// SetHidden soft-deletes a source (keeps its articles for history).
+func (r *SourceRepo) SetHidden(ctx context.Context, id int64, hidden bool) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE sources SET hidden = ?, updated_at = ? WHERE id = ?", boolToInt(hidden), Now(), id)
+	if err != nil {
+		return fmt.Errorf("set source hidden: %w", err)
+	}
+	return checkAffected(res, "set source hidden")
 }
 
 // ListEnabled returns enabled sources.

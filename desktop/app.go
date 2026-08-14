@@ -28,6 +28,9 @@ func (a *App) AddSource(name, srcType, url, group string) (*gizdesktop.SourceDTO
 func (a *App) SetSourceEnabled(id int64, enabled bool) error {
 	return a.api.SetSourceEnabled(bg(), id, enabled)
 }
+func (a *App) DeleteSource(id int64) error {
+	return a.api.DeleteSource(bg(), id)
+}
 
 // ---- Articles ----
 func (a *App) ListArticles(opts gizdesktop.ListArticlesOptions) ([]*gizdesktop.ArticleDTO, error) {
@@ -90,6 +93,12 @@ func (a *App) Status() (*gizdesktop.StatusDTO, error) {
 // ---- Actions ----
 func (a *App) OpenVault() error {
 	return exec.Command("open", a.api.VaultPath()).Start()
+}
+func (a *App) OpenURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	return exec.Command("open", raw).Start()
 }
 func (a *App) Quit() {
 	runtime.Quit(bg())

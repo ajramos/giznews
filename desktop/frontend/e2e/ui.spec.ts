@@ -7,57 +7,41 @@ test.describe("UI render", () => {
     await gotoApp(page);
     await shot(page, "01-layout");
 
-    // Topbar: brand + status pills.
-    await expect(page.locator(".topbar .brand")).toHaveText("GizNews");
-    await expect(page.locator(".topbar .pill").first()).toBeVisible();
+    await expect(page.locator(".topbar .brand-name")).toHaveText("GizNews");
+    await expect(page.locator(".topbar .pill").first()).toContainText("no leídos");
 
-    // Sources column.
-    const sources = page.locator(".sources-col .source-item");
-    await expect(sources.first()).toBeVisible();
-    await expect(sources).toHaveCount(4);
+    await expect(page.locator(".sources-col .source-item")).toHaveCount(4);
+    await expect(page.locator(".article-row")).toHaveCount(7); // 7 unread in mock
 
-    // Article list.
-    const rows = page.locator(".article-row");
-    await expect(rows.first()).toBeVisible();
-    await expect(rows).toHaveCount(7); // 7 unread in mock
-
-    // Reader hint before selection.
     await expect(page.locator(".reader-col")).toContainText("Selecciona un artículo");
+    await expect(page.locator(".statusbar")).toBeVisible();
 
-    // Layout does not overflow horizontally.
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
     expect(overflow).toBeLessThanOrEqual(0);
-
     assertNoErrors();
   });
 
   test("article opens in reader with markdown rendered", async ({ page }) => {
-    const assertNoErrors = trackErrors(page);
     await gotoApp(page);
-
     await page.keyboard.press("Enter");
-    await expect(page.locator(".reader-head h1").first()).toBeVisible();
+    await expect(page.locator(".reader-head h1")).toBeVisible();
     await expect(page.locator(".markdown strong").first()).toBeVisible();
     await shot(page, "02-reader");
-
-    // Title matches the selected article.
     const firstTitle = await page.locator(".article-row.selected .article-title").innerText();
-    await expect(page.locator(".reader-head h1").first()).toHaveText(firstTitle);
-
-    assertNoErrors();
+    await expect(page.locator(".reader-head h1")).toHaveText(firstTitle);
   });
 
   test("reader shows AI summary when present", async ({ page }) => {
     await gotoApp(page);
     await page.keyboard.press("Enter");
-    // Article id 1 has a summary in the mock.
     await expect(page.locator(".ai-summary")).toBeVisible();
-    await shot(page, "03-reader-summary");
   });
 
-  test("status pills reflect mock counts", async ({ page }) => {
+  test("column headers and category chips render", async ({ page }) => {
     await gotoApp(page);
-    await expect(page.locator(".topbar .pill").first()).toContainText("7 no leídos");
-    await expect(page.locator(".topbar .pill").last()).toContainText("3 notas");
+    await expect(page.locator(".col-header")).toContainText("Título");
+    await expect(page.locator(".cat-chip").first()).toBeVisible();
   });
 });

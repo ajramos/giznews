@@ -1,17 +1,26 @@
-import { HELP_ROWS } from "../keys";
+import { CircleHelp } from "lucide-react";
+import { HELP } from "../keys";
 
 export function HelpOverlay({ onClose }: { onClose: () => void }) {
   return (
-    <div className="palette-overlay" onClick={onClose}>
+    <div className="overlay" onClick={onClose}>
       <div className="palette help" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-title">Atajos de teclado</div>
+        <div className="palette-head"><CircleHelp size={14} /> Atajos de teclado</div>
         <div className="help-list">
-          {HELP_ROWS.map((r) => (
-            <div key={r.key} className="help-row">
-              <kbd>{r.key}</kbd>
-              <span>{r.label}</span>
+          {HELP.map((cat) => (
+            <div key={cat.title}>
+              <div className="help-cat">{cat.title}</div>
+              {cat.rows.map((r) => (
+                <div key={r.keys} className="help-row">
+                  <span className="keys"><kbd>{r.keys}</kbd></span>
+                  <span>{r.label}</span>
+                </div>
+              ))}
             </div>
           ))}
+        </div>
+        <div className="help-note">
+          <strong>Archivar es lógico:</strong> los artículos nunca se borran físicamente; todo es recuperable desde la vista de archivados o con el toast de deshacer.
         </div>
       </div>
     </div>

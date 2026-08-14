@@ -35,3 +35,10 @@ func (a *App) AddSource(ctx context.Context, name, srcType, url, group string) (
 func (a *App) SetSourceEnabled(ctx context.Context, id int64, enabled bool) error {
 	return db.NewSourceRepo(a.db).SetEnabled(ctx, id, enabled)
 }
+
+// DeleteSource soft-deletes a source from the registry. Its articles are kept
+// for history; the deletion is fully reversible (re-adding the source restores
+// its feed without losing anything).
+func (a *App) DeleteSource(ctx context.Context, id int64) error {
+	return db.NewSourceRepo(a.db).SetHidden(ctx, id, true)
+}

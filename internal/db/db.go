@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -202,4 +202,11 @@ CREATE INDEX IF NOT EXISTS idx_articles_classified ON articles(classified);
 // one from the V1 schema).
 const schemaV3 = `
 ALTER TABLE articles ADD COLUMN embedding BLOB;
+`
+
+// schemaV4 soft-deletes sources: a hidden source stops appearing in the UI but
+// its articles are preserved (no FK violation, fully reversible).
+const schemaV4 = `
+ALTER TABLE sources ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_sources_hidden ON sources(hidden);
 `

@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("user_version = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("user_version = %d, want 4", version)
 	}
 }
 
@@ -34,7 +34,7 @@ func TestMigrateFromV1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Strip V2/V3 additions to simulate a V1 db.
+	// Strip V2/V3/V4 additions to simulate a V1 db.
 	if _, err := d.sql.Exec("DROP INDEX IF EXISTS idx_articles_classified;"); err != nil {
 		t.Fatal(err)
 	}
@@ -42,6 +42,12 @@ func TestMigrateFromV1(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN embedding;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("DROP INDEX IF EXISTS idx_sources_hidden;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("ALTER TABLE sources DROP COLUMN hidden;"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
@@ -58,13 +64,16 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("user_version after reopen = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("user_version after reopen = %d, want 4", version)
 	}
 	// Columns must exist now.
 	var n int
 	if err := d2.sql.QueryRow("SELECT COUNT(*) FROM articles WHERE classified = 0 AND embedding IS NULL;").Scan(&n); err != nil {
 		t.Fatalf("columns missing after migration: %v", err)
+	}
+	if _, err := d2.sql.Query("SELECT id FROM sources WHERE hidden = 0"); err != nil {
+		t.Fatalf("sources.hidden missing after migration: %v", err)
 	}
 }
 

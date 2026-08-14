@@ -76,6 +76,7 @@ export interface APIShape {
   listSources: () => Promise<SourceDTO[]>;
   addSource: (name: string, type: string, url: string, group: string) => Promise<SourceDTO>;
   setSourceEnabled: (id: number, enabled: boolean) => Promise<void>;
+  deleteSource: (id: number) => Promise<void>;
   listArticles: (opts: ListArticlesOptions) => Promise<ArticleDTO[]>;
   getArticle: (id: number) => Promise<ArticleDTO>;
   setArticleStatus: (id: number, status: string) => Promise<void>;
@@ -92,6 +93,9 @@ export interface APIShape {
   searchIndex: () => Promise<IndexResult>;
   search: (query: string, limit: number) => Promise<SearchResultDTO[]>;
   status: () => Promise<StatusDTO>;
+  openURL: (url: string) => Promise<void>;
+  openVault: () => Promise<void>;
+  quit: () => Promise<void>;
 }
 
 const realApi: APIShape = {
@@ -100,6 +104,8 @@ const realApi: APIShape = {
     call("AddSource", name, type, url, group).then((v) => normalize<SourceDTO>(v)),
   setSourceEnabled: (id: number, enabled: boolean) =>
     call("SetSourceEnabled", id, enabled).then(() => undefined),
+  deleteSource: (id: number) =>
+    call("DeleteSource", id).then(() => undefined),
 
   listArticles: (opts: ListArticlesOptions) =>
     call("ListArticles", opts).then((v) => arr<ArticleDTO>(v)),
@@ -127,6 +133,11 @@ const realApi: APIShape = {
     call("Search", query, limit).then((v) => arr<SearchResultDTO>(v)),
 
   status: () => call("Status").then((v) => normalize<StatusDTO>(v)),
+
+  openURL: (url: string) =>
+    call("OpenURL", url).then(() => undefined),
+  openVault: () => call("OpenVault").then(() => undefined),
+  quit: () => call("Quit").then(() => undefined),
 };
 
 export const api: APIShape = isWails() ? realApi : mockBackend;

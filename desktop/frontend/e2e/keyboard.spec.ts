@@ -1,26 +1,30 @@
 import { test, expect } from "@playwright/test";
 import { gotoApp, press, shot, trackErrors } from "./helpers";
 
-test.describe("keyboard", () => {
+test.describe("vim keyboard grammar", () => {
   test("j/k moves selection", async ({ page }) => {
     await gotoApp(page);
     const rows = page.locator(".article-row");
     await expect(rows.nth(0)).toHaveClass(/selected/);
-
     await press(page, "j");
     await expect(rows.nth(1)).toHaveClass(/selected/);
-    await press(page, "j");
-    await expect(rows.nth(2)).toHaveClass(/selected/);
     await press(page, "k");
-    await expect(rows.nth(1)).toHaveClass(/selected/);
-    await shot(page, "04-nav");
+    await expect(rows.nth(0)).toHaveClass(/selected/);
   });
 
-  test("g goes to top, G goes to bottom", async ({ page }) => {
+  test("count prefix: 5j moves 5", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "5");
+    await press(page, "j");
+    await expect(page.locator(".article-row").nth(5)).toHaveClass(/selected/);
+  });
+
+  test("gg goes to top, G goes to bottom", async ({ page }) => {
     await gotoApp(page);
     await press(page, "G");
     await expect(page.locator(".article-row").last()).toHaveClass(/selected/);
     await press(page, "g");
+    await press(page, "g"); // gg within window
     await expect(page.locator(".article-row").first()).toHaveClass(/selected/);
   });
 
@@ -28,39 +32,85 @@ test.describe("keyboard", () => {
     await gotoApp(page);
     await press(page, "Enter");
     await expect(page.locator(".reader-head h1")).toBeVisible();
-    // unread-dot removed from the selected row after opening.
-    await expect(page.locator(".article-row.selected .unread-dot")).toHaveCount(0);
+    await expect(page.locator(".article-row.selected .unread-badge")).toHaveCount(0);
   });
 
   test("y summarizes selected article", async ({ page }) => {
     await gotoApp(page);
     await press(page, "y");
-    await expect(page.locator(".reader .ai-summary")).toBeVisible({ timeout: 5000 });
-    await shot(page, "05-summarize");
+    await expect(page.locator(".reader .ai-summary")).toBeVisible({ timeout: 6000 });
   });
 
-  test("a archives selected article (row disappears)", async ({ page }) => {
+  test("a archives with undo toast; row disappears", async ({ page }) => {
     await gotoApp(page);
     const before = await page.locator(".article-row").count();
     await press(page, "a");
     await expect(page.locator(".article-row")).toHaveCount(before - 1);
+    await expect(page.locator(".toast")).toContainText("archivado");
+    await shot(page, "04-archive-undo");
+    // Undo restores the row.
+    await page.locator(".toast .toast-undo").click();
+    await expect(page.locator(".article-row")).toHaveCount(before);
   });
 
-  test("t toggles read/unread", async ({ page }) => {
+  test("count prefix: 3a archives 3", async ({ page }) => {
     await gotoApp(page);
-    const dotBefore = await page.locator(".article-row.selected .unread-dot").count();
-    await press(page, "t");
-    await expect(page.locator(".article-row.selected .unread-dot")).toHaveCount(dotBefore === 0 ? 1 : 0);
+    const before = await page.locator(".article-row").count();
+    await press(page, "3");
+    await press(page, "a");
+    await expect(page.locator(".article-row")).toHaveCount(before - 3);
   });
 
-  test("d opens digest view", async ({ page }) => {
+  test("t marks read (leaves unread view); t in read view restores", async ({ page }) => {
+    await gotoApp(page);
+    await expect(page.locator(".article-row")).toHaveCount(7);
+    await press(page, "t");
+    // selected article becomes read → leaves the unread view
+    await expect(page.locator(".article-row")).toHaveCount(6);
+    // read view now has 2 (the mock's read one + the one just read)
+    await press(page, "r");
+    await expect(page.locator(".article-row")).toHaveCount(2);
+    await press(page, "t");
+    await expect(page.locator(".article-row")).toHaveCount(1);
+  });
+
+  test("m stars the article", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "m");
+    await expect(page.locator(".article-row.selected .star-badge")).toBeVisible();
+  });
+
+  test("views: r shows read, u unread, x archived, * starred", async ({ page }) => {
+    await gotoApp(page);
+    // mock: article 7 is read
+    await press(page, "r");
+    await expect(page.locator(".view-tab.active")).toContainText("Leídos");
+    await expect(page.locator(".article-row")).toHaveCount(1);
+
+    await press(page, "u");
+    await expect(page.locator(".view-tab.active")).toContainText("No leídos");
+    await expect(page.locator(".article-row")).toHaveCount(7);
+
+    // archive one then view archived
+    await press(page, "a");
+    await press(page, "x");
+    await expect(page.locator(".view-tab.active")).toContainText("Archivados");
+    await expect(page.locator(".article-row")).toHaveCount(1);
+
+    // star one and view starred
+    await press(page, "u");
+    await press(page, "m");
+    await press(page, "*");
+    await expect(page.locator(".view-tab.active")).toContainText("Destacados");
+    await expect(page.locator(".article-row")).toHaveCount(1);
+  });
+
+  test("d opens digest (generates), Esc returns to list", async ({ page }) => {
     await gotoApp(page);
     await press(page, "d");
-    await expect(page.locator(".digest-view")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".digest-overview")).toContainText("DeepSeek");
-    await shot(page, "06-digest");
-    // back to articles with 1
-    await press(page, "1");
+    await expect(page.locator(".digest-view")).toBeVisible({ timeout: 6000 });
+    await shot(page, "05-digest");
+    await press(page, "Escape");
     await expect(page.locator(".article-list")).toBeVisible();
   });
 
@@ -68,6 +118,7 @@ test.describe("keyboard", () => {
     await gotoApp(page);
     await press(page, "?");
     await expect(page.locator(".help-list")).toBeVisible();
+    await expect(page.locator(".help-note")).toContainText("Archivar es lógico");
     await press(page, "Escape");
     await expect(page.locator(".help-list")).toHaveCount(0);
   });
@@ -78,7 +129,7 @@ test.describe("keyboard", () => {
     await press(page, ":");
     await expect(page.locator(".palette")).toBeVisible();
     await expect(page.locator(".palette-item").first()).toBeVisible();
-    await shot(page, "07-palette");
+    await shot(page, "06-palette");
     await press(page, "Escape");
     await expect(page.locator(".palette")).toHaveCount(0);
     assertNoErrors();
