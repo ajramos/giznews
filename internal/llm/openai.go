@@ -20,7 +20,11 @@ type openAIProvider struct {
 	name     string
 	endpoint string
 	apiKey   string
-	timeout  time.Duration
+	client   *http.Client
+}
+
+func newOpenAIProvider(name, endpoint, apiKey string, timeout time.Duration) *openAIProvider {
+	return &openAIProvider{name: name, endpoint: endpoint, apiKey: apiKey, client: &http.Client{Timeout: timeout}}
 }
 
 func (p *openAIProvider) Name() string { return p.name }
@@ -149,9 +153,6 @@ func (p *openAIProvider) Embed(ctx context.Context, req EmbeddingRequest) (Embed
 }
 
 func (p *openAIProvider) do(ctx context.Context, path string, body []byte) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(ctx, p.timeout)
-	defer cancel()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(p.endpoint, "/")+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -161,7 +162,7 @@ func (p *openAIProvider) do(ctx context.Context, path string, body []byte) (*htt
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: %w", p.name, path, err)
 	}

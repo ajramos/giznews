@@ -22,8 +22,46 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 1 {
-		t.Fatalf("user_version = %d, want 1", version)
+	if version != 2 {
+		t.Fatalf("user_version = %d, want 2", version)
+	}
+}
+
+func TestMigrateFromV1(t *testing.T) {
+	// Create a V1 database, then reopen it and confirm V2 migration runs.
+	path := filepath.Join(t.TempDir(), "old.db")
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Force version back to 1 and drop the V2 column to simulate a V1 db.
+	if _, err := d.sql.Exec("DROP INDEX IF EXISTS idx_articles_classified;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN classified;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+
+	d2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d2.Close()
+	var version int
+	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 2 {
+		t.Fatalf("user_version after reopen = %d, want 2", version)
+	}
+	// Column must exist now.
+	var n int
+	if err := d2.sql.QueryRow("SELECT COUNT(*) FROM articles WHERE classified = 0;").Scan(&n); err != nil {
+		t.Fatalf("classified column missing: %v", err)
 	}
 }
 

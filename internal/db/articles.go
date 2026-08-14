@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ArticleRepo provides persistence for articles.
@@ -223,22 +224,121 @@ func (r *ArticleRepo) Count(ctx context.Context, status ArticleStatus) (int, err
 	return n, nil
 }
 
+// ListUnclassified returns unread articles that have not been classified yet,
+// limited to the last ageDays days.
+func (r *ArticleRepo) ListUnclassified(ctx context.Context, limit, ageDays int) ([]*Article, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if ageDays <= 0 {
+		ageDays = 14
+	}
+	cutoff := time.Now().Add(-time.Duration(ageDays) * 24 * time.Hour).UTC().Format(time.RFC3339)
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT `+articleColumns+articleFrom+`
+		WHERE a.status != 'archived' AND a.classified = 0 AND a.fetched_at >= ?
+		ORDER BY a.published IS NULL, a.published DESC
+		LIMIT ?`, cutoff, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list unclassified: %w", err)
+	}
+	defer rows.Close()
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ApplyClassification persists the results of classification for one article
+// and marks it as classified.
+func (r *ArticleRepo) ApplyClassification(ctx context.Context, id int64, category, summary string, tags []string, entities []Entity, importance int) error {
+	res, err := r.db.sql.ExecContext(ctx, `
+		UPDATE articles SET
+			category = ?, summary = ?, tags = ?, entities = ?, importance = ?,
+			classified = 1, updated_at = ?
+		WHERE id = ?`,
+		category, summary, marshalTags(tags), marshalEntities(entities), importance, Now(), id)
+	if err != nil {
+		return fmt.Errorf("apply classification: %w", err)
+	}
+	return checkAffected(res, "apply classification")
+}
+
+// SetSummary stores a per-article summary without marking it classified
+// (used by the interactive "summarize" action).
+func (r *ArticleRepo) SetSummary(ctx context.Context, id int64, summary string) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET summary = ?, updated_at = ? WHERE id = ?", summary, Now(), id)
+	if err != nil {
+		return fmt.Errorf("set summary: %w", err)
+	}
+	return checkAffected(res, "set summary")
+}
+
+// ListRecent returns non-archived articles fetched within the last sinceDays
+// days, newest first. Used by the digest generator.
+func (r *ArticleRepo) ListRecent(ctx context.Context, sinceDays, limit int) ([]*Article, error) {
+	if sinceDays <= 0 {
+		sinceDays = 7
+	}
+	if limit <= 0 {
+		limit = 500
+	}
+	cutoff := time.Now().Add(-time.Duration(sinceDays) * 24 * time.Hour).UTC().Format(time.RFC3339)
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT `+articleColumns+articleFrom+`
+		WHERE a.status != 'archived' AND a.fetched_at >= ?
+		ORDER BY a.published IS NULL, a.published DESC
+		LIMIT ?`, cutoff, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent: %w", err)
+	}
+	defer rows.Close()
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// CountUnclassified reports how many unread articles await classification.
+func (r *ArticleRepo) CountUnclassified(ctx context.Context) (int, error) {
+	var n int
+	err := r.db.sql.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM articles WHERE status != 'archived' AND classified = 0").Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count unclassified: %w", err)
+	}
+	return n, nil
+}
+
 func scanArticle(row scanner) (*Article, error) {
 	var (
 		a       Article
 		tagsRaw string
 		entRaw  string
+		simHash int64 // SQLite stores INTEGER as signed int64
 	)
 	if err := row.Scan(
 		&a.ID, &a.SourceID, &a.SourceName, &a.GUID, &a.URL, &a.Title, &a.Author,
 		&a.ContentHTML, &a.ContentMD, &a.Summary, &a.Category, &tagsRaw, &entRaw,
-		&a.Importance, &a.SimHash, &a.Status, &a.Published, &a.FetchedAt, &a.UpdatedAt,
+		&a.Importance, &simHash, &a.Status, &a.Published, &a.FetchedAt, &a.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("scan article: %w", err)
 	}
+	a.SimHash = uint64(simHash)
 	_ = json.Unmarshal([]byte(tagsRaw), &a.Tags)
 	_ = json.Unmarshal([]byte(entRaw), &a.Entities)
 	if a.Tags == nil {

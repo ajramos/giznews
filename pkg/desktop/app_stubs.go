@@ -7,12 +7,7 @@ import (
 	"github.com/ajramos/giznews/internal/db"
 )
 
-// Digest, knowledge-graph and search methods land in their owning phases.
-// They exist now to satisfy the API contract and prove the plumbing.
-
-func (a *App) Digest(ctx context.Context) (*DigestDTO, error) {
-	return nil, fmt.Errorf("digest not implemented yet (phase 3)")
-}
+// Knowledge-graph and search methods land in their owning phases.
 
 func (a *App) ListNotes(ctx context.Context, noteType string) ([]*NoteDTO, error) {
 	return nil, fmt.Errorf("knowledge graph not implemented yet (phase 4)")

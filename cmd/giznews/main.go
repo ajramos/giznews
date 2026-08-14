@@ -34,6 +34,8 @@ func main() {
 		runInit(logger)
 	case "fetch":
 		runFetch(args, logger)
+	case "classify":
+		runClassify(args, logger)
 	case "digest":
 		runDigest(args, logger)
 	case "kb":
@@ -64,6 +66,7 @@ Usage:
 Commands:
   init      Create default config, database and knowledge vault skeleton
   fetch     Fetch new articles from all enabled sources
+  classify  Classify unread articles (rules ⚡ + LLM)
   digest    Generate the daily digest (grouped by theme)
   kb        Knowledge-graph operations (build, list, sync)
   search    Semantic + keyword search over notes and articles

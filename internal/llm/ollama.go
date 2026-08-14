@@ -15,7 +15,11 @@ import (
 // ollamaProvider talks to a local Ollama server (/api/chat, /api/embeddings).
 type ollamaProvider struct {
 	endpoint string
-	timeout  time.Duration
+	client   *http.Client
+}
+
+func newOllamaProvider(endpoint string, timeout time.Duration) *ollamaProvider {
+	return &ollamaProvider{endpoint: endpoint, client: &http.Client{Timeout: timeout}}
 }
 
 func (p *ollamaProvider) Name() string { return "ollama" }
@@ -25,7 +29,7 @@ func (p *ollamaProvider) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("ollama unreachable at %s: %w", p.endpoint, err)
 	}
@@ -135,16 +139,15 @@ func (p *ollamaProvider) Embed(ctx context.Context, req EmbeddingRequest) (Embed
 }
 
 func (p *ollamaProvider) do(ctx context.Context, path string, body []byte) (*http.Response, error) {
-	ctx, cancel := context.WithTimeout(ctx, p.timeout)
-	defer cancel()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	// client.Timeout covers connection, request AND body reads, so long
+	// generations are bounded without canceling mid-read.
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("ollama %s: %w", path, err)
 	}

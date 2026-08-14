@@ -27,11 +27,11 @@ func NewProvider(opts Options) (Provider, error) {
 
 	switch opts.Provider {
 	case "", "ollama":
-		return &ollamaProvider{endpoint: opts.Endpoint, timeout: opts.Timeout}, nil
+		return newOllamaProvider(opts.Endpoint, opts.Timeout), nil
 	case "openai", "custom":
-		return &openAIProvider{name: opts.Provider, endpoint: opts.Endpoint, apiKey: opts.APIKey, timeout: opts.Timeout}, nil
+		return newOpenAIProvider(opts.Provider, opts.Endpoint, opts.APIKey, opts.Timeout), nil
 	case "anthropic":
-		return &anthropicProvider{endpoint: opts.Endpoint, apiKey: opts.APIKey, timeout: opts.Timeout}, nil
+		return newAnthropicProvider(opts.Endpoint, opts.APIKey, opts.Timeout), nil
 	case "bedrock":
 		return nil, fmt.Errorf("provider %q: %w", opts.Provider, ErrNotImplemented)
 	default:

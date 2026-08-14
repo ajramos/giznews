@@ -56,7 +56,7 @@ func TestOllamaCompleteAndEmbed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &ollamaProvider{endpoint: srv.URL, timeout: 5 * time.Second}
+	p := newOllamaProvider(srv.URL, 5*time.Second)
 	ctx := context.Background()
 
 	resp, err := p.Complete(ctx, CompletionRequest{Model: "llama3.2", Messages: []Message{{Role: RoleUser, Content: "hi"}}})
@@ -92,7 +92,7 @@ func TestOllamaStreaming(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &ollamaProvider{endpoint: srv.URL, timeout: 5 * time.Second}
+	p := newOllamaProvider(srv.URL, 5*time.Second)
 	var got string
 	resp, err := p.StreamingComplete(context.Background(),
 		CompletionRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}},
@@ -132,7 +132,7 @@ func TestOpenAICompleteAndEmbed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &openAIProvider{name: "openai", endpoint: srv.URL, apiKey: "sk-test", timeout: 5 * time.Second}
+	p := newOpenAIProvider("openai", srv.URL, "sk-test", 5*time.Second)
 	ctx := context.Background()
 
 	resp, err := p.Complete(ctx, CompletionRequest{Model: "gpt-4o-mini", Messages: []Message{{Role: RoleUser, Content: "hi"}}})
@@ -166,7 +166,7 @@ func TestOpenAIStreaming(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &openAIProvider{name: "custom", endpoint: srv.URL, timeout: 5 * time.Second}
+	p := newOpenAIProvider("custom", srv.URL, "", 5*time.Second)
 	var got string
 	resp, err := p.StreamingComplete(context.Background(),
 		CompletionRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}},
@@ -194,7 +194,7 @@ func TestAnthropicComplete(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := &anthropicProvider{endpoint: srv.URL, apiKey: "sk-ant", timeout: 5 * time.Second}
+	p := newAnthropicProvider(srv.URL, "sk-ant", 5*time.Second)
 	resp, err := p.Complete(context.Background(), CompletionRequest{
 		Model: "claude-sonnet-4-20250514",
 		Messages: []Message{

@@ -73,6 +73,16 @@ type DigestDTO struct {
 	Themes   []*DigestThemeDTO `json:"themes"`
 }
 
+// ClassifyResult reports what a classification run did.
+type ClassifyResult struct {
+	Classified   int      `json:"classified"`
+	ByRules      int      `json:"by_rules"`
+	ByLLM        int      `json:"by_llm"`
+	SkippedNoLLM int      `json:"skipped_no_llm"`
+	Batches      int      `json:"batches"`
+	Errors       []string `json:"errors,omitempty"`
+}
+
 // ListArticlesOptions mirrors db.ListOptions in JSON-friendly form.
 type ListArticlesOptions struct {
 	Status        string `json:"status,omitempty"`

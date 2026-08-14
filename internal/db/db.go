@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1}
+	migrations := []string{schemaV1, schemaV2}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -189,4 +189,11 @@ CREATE TABLE IF NOT EXISTS ingests (
 	created_at TEXT    NOT NULL,
 	UNIQUE (ref_type, ref_id)
 );
+`
+
+// schemaV2 marks articles that have passed through classification so the
+// pipeline does not re-classify the same batch every run.
+const schemaV2 = `
+ALTER TABLE articles ADD COLUMN classified INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_articles_classified ON articles(classified);
 `

@@ -15,7 +15,11 @@ import (
 type anthropicProvider struct {
 	endpoint string
 	apiKey   string
-	timeout  time.Duration
+	client   *http.Client
+}
+
+func newAnthropicProvider(endpoint, apiKey string, timeout time.Duration) *anthropicProvider {
+	return &anthropicProvider{endpoint: endpoint, apiKey: apiKey, client: &http.Client{Timeout: timeout}}
 }
 
 func (p *anthropicProvider) Name() string { return "anthropic" }
@@ -54,9 +58,6 @@ func (p *anthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 		return CompletionResponse{}, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, p.timeout)
-	defer cancel()
-
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(p.endpoint, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
 		return CompletionResponse{}, err
@@ -65,7 +66,7 @@ func (p *anthropicProvider) Complete(ctx context.Context, req CompletionRequest)
 	httpReq.Header.Set("x-api-key", p.apiKey)
 	httpReq.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := p.client.Do(httpReq)
 	if err != nil {
 		return CompletionResponse{}, fmt.Errorf("anthropic messages: %w", err)
 	}
