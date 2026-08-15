@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -187,6 +188,11 @@ func (a *App) Digest(ctx context.Context) (*DigestDTO, error) {
 				dt.Articles = append(dt.Articles, toArticleDTO(art))
 			}
 			out.Themes = append(out.Themes, dt)
+		}
+		if themesJSON, err := json.Marshal(out.Themes); err == nil {
+			if err := db.NewDigestRepo(a.db).Save(jctx, out.Date, out.Overview, string(themesJSON)); err != nil {
+				a.logger().Printf("save digest: %v", err)
+			}
 		}
 		p.Message(fmt.Sprintf("%d themes", len(out.Themes)))
 		return nil

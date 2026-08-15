@@ -68,6 +68,15 @@ func (a *App) SummarizeArticle(id int64) (*gizdesktop.ArticleDTO, error) {
 func (a *App) Digest() (*gizdesktop.DigestDTO, error) {
 	return a.api.Digest(bg())
 }
+func (a *App) ListDigests() ([]*gizdesktop.DigestMeta, error) {
+	return a.api.ListDigests(bg())
+}
+func (a *App) GetDigest(date string) (*gizdesktop.DigestDTO, error) {
+	return a.api.GetDigest(bg(), date)
+}
+func (a *App) Flow() (*gizdesktop.FlowStatus, error) {
+	return a.api.Flow(bg())
+}
 
 // ---- Knowledge graph ----
 func (a *App) KBuild() (*gizdesktop.KBResult, error) {

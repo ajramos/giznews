@@ -11,7 +11,9 @@ import type {
   BulkResult,
   ClassifyResult,
   DigestDTO,
+  DigestMeta,
   FetchResult,
+  FlowStatus,
   IndexResult,
   JobDTO,
   KBResult,
@@ -112,6 +114,9 @@ export interface APIShape {
   classifyArticles: (ids: number[]) => Promise<ClassifyResult>;
   summarizeArticle: (id: number) => Promise<ArticleDTO>;
   digest: () => Promise<DigestDTO>;
+  listDigests: () => Promise<DigestMeta[]>;
+  getDigest: (date: string) => Promise<DigestDTO | null>;
+  flow: () => Promise<FlowStatus>;
   kbuild: () => Promise<KBResult>;
   ksynthesize: (category: string) => Promise<KBResult>;
   ensureArticleNote: (articleID: number) => Promise<NoteDTO>;
@@ -161,6 +166,10 @@ const realApi: APIShape = {
   summarizeArticle: (id: number) =>
     call("SummarizeArticle", id).then((v) => normalize<ArticleDTO>(v)),
   digest: () => call<DigestDTO>("Digest"),
+  listDigests: () => call("ListDigests").then((v) => arr<DigestMeta>(v)),
+  getDigest: (date: string) =>
+    call("GetDigest", date).then((v) => (v ? normalize<DigestDTO>(v) : null)),
+  flow: () => call("Flow").then((v) => normalize<FlowStatus>(v)),
 
   kbuild: () => call<KBResult>("KBuild"),
   ksynthesize: (category: string) => call<KBResult>("KSynthesize", category),

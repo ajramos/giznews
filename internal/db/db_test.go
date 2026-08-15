@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 5 {
-		t.Fatalf("user_version = %d, want 5", version)
+	if version != 6 {
+		t.Fatalf("user_version = %d, want 6", version)
 	}
 }
 
@@ -56,6 +56,9 @@ func TestMigrateFromV1(t *testing.T) {
 	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN extracted;"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := d.sql.Exec("DROP TABLE IF EXISTS digests;"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
 		t.Fatal(err)
 	}
@@ -70,16 +73,23 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 5 {
-		t.Fatalf("user_version after reopen = %d, want 5", version)
+	if version != 6 {
+		t.Fatalf("user_version after reopen = %d, want 6", version)
 	}
 	// Columns must exist now.
 	var n int
 	if err := d2.sql.QueryRow("SELECT COUNT(*) FROM articles WHERE classified = 0 AND embedding IS NULL;").Scan(&n); err != nil {
 		t.Fatalf("columns missing after migration: %v", err)
 	}
-	if _, err := d2.sql.Query("SELECT id FROM sources WHERE hidden = 0"); err != nil {
+	if rows, err := d2.sql.Query("SELECT id FROM sources WHERE hidden = 0"); err != nil {
 		t.Fatalf("sources.hidden missing after migration: %v", err)
+	} else {
+		rows.Close()
+	}
+	if rows, err := d2.sql.Query("SELECT date FROM digests"); err != nil {
+		t.Fatalf("digests table missing after migration: %v", err)
+	} else {
+		rows.Close()
 	}
 }
 

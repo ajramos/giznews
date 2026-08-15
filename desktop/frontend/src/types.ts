@@ -132,9 +132,30 @@ export interface ListArticlesOptions {
   sourceId?: number;
   group?: string;
   importanceMin?: number;
+  unclassified?: boolean;
   query?: string;
   limit?: number;
   offset?: number;
+}
+
+export interface DigestMeta {
+  date: string;
+  overview: string;
+}
+
+export interface FlowStatus {
+  sourcesTotal: number;
+  sourcesEnabled: number;
+  articlesTotal: number;
+  classified: number;
+  pendingClassify: number;
+  atoms: number;
+  electrons: number;
+  molecules: number;
+  vaultPath: string;
+  notesEmbedded: number;
+  articlesEmbedded: number;
+  runningJobs: number;
 }
 
 export type ViewMode = "articles" | "digest";

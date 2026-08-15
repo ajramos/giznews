@@ -150,6 +150,7 @@ type ListOptions struct {
 	SourceID      int64         // 0 = all
 	Group         string        // source group; empty = all
 	ImportanceMin int           // only articles with importance >= this
+	Unclassified  bool          // only articles not yet classified
 	Query         string        // LIKE filter on title/author; empty = all
 	Limit         int           // 0 = default 200
 	Offset        int
@@ -179,6 +180,9 @@ func (r *ArticleRepo) List(ctx context.Context, opts ListOptions) ([]*Article, e
 	if opts.ImportanceMin > 0 {
 		conds = append(conds, "a.importance >= ?")
 		args = append(args, opts.ImportanceMin)
+	}
+	if opts.Unclassified {
+		conds = append(conds, "a.classified = 0")
 	}
 	if opts.Query != "" {
 		conds = append(conds, "(a.title LIKE ? OR a.author LIKE ?)")

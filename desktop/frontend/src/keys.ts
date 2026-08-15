@@ -49,6 +49,14 @@ export const HELP: HelpCategory[] = [
     ],
   },
   {
+    title: "Filters (classification)",
+    rows: [
+      { keys: ";", label: "Filter by category (All / Unclassified / models / research / …)" },
+      { keys: "[ / ]", label: "Importance filter (any → ≥1★ → ≥2★ → ≥3★)" },
+      { keys: "chips", label: "Click the chips under the list to filter (category + importance)" },
+    ],
+  },
+  {
     title: "List views",
     rows: [
       { keys: "u / r / x / *", label: "Unread · Read · Archived · Starred" },
@@ -71,6 +79,7 @@ export const HELP: HelpCategory[] = [
       { keys: ":process", label: "Full pipeline (fetch → classify → kb → index)" },
       { keys: ":url", label: "Add an article by URL" },
       { keys: ":jobs", label: "Browse background jobs (cancel / remove)" },
+      { keys: ":flow", label: "Pipeline flow (live counts per stage)" },
       { keys: "f", label: "Vault flow: h/l stage · j/k items · L links · Enter open" },
       { keys: "q", label: "Quit GizNews" },
     ],
@@ -85,6 +94,8 @@ export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
     { key: "a", label: "archive" },
     { key: "t", label: "read" },
     { key: "m", label: "star" },
+    { key: ";", label: "filter" },
+    { key: "[/]", label: "importance" },
     { key: "s", label: "search" },
     { key: "g", label: "graph" },
     { key: ":", label: "cmd" },

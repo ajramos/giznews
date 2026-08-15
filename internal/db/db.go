@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -216,4 +216,17 @@ CREATE INDEX IF NOT EXISTS idx_sources_hidden ON sources(hidden);
 const schemaV5 = `
 ALTER TABLE articles ADD COLUMN extracted INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_articles_extracted ON articles(extracted);
+`
+
+// schemaV6 stores generated daily digests (one per day) so past digests can be
+// re-opened later without re-running the LLM.
+const schemaV6 = `
+CREATE TABLE IF NOT EXISTS digests (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	date       TEXT    NOT NULL UNIQUE,        -- YYYY-MM-DD
+	overview   TEXT    NOT NULL DEFAULT '',
+	themes     TEXT    NOT NULL DEFAULT '[]',  -- JSON array of DigestThemeDTO
+	created_at TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_digests_date ON digests(date);
 `

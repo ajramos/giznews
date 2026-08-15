@@ -13,6 +13,25 @@ desktop/             ← módulo Wails anidado (replace → ../) + frontend Reac
 
 ## Pipeline de noticias
 
+```mermaid
+flowchart LR
+  RSS[RSS] --> FETCH
+  HN[Hacker News] --> FETCH
+  ARX[arXiv] --> FETCH
+  GMAIL[Gmail] --> FETCH
+  URL[":url manual"] --> FETCH
+  FETCH[<b>Fetch</b><br/>dedup URL/simhash<br/>extract readability] --> CLASSIFY
+  CLASSIFY[<b>Classify</b><br/>reglas + LLM en lotes<br/>categoría/importancia/tags] --> LIST[Lista: ★ + chips]
+  CLASSIFY --> KB[<b>KB build</b><br/>atoms + electrons + molecules]
+  KB --> VAULT[Obsidian vault<br/>02-Atoms · 01-Electrons · 03-Molecules]
+  CLASSIFY --> DIGEST[<b>Digest</b><br/>agrupado por tema]
+  KB --> SEARCH[<b>Search</b><br/>FTS5 ⊕ embeddings]
+  JOBS[z: jobs en segundo plano] -.-> FETCH
+  JOBS -.-> CLASSIFY
+  JOBS -.-> KB
+  JOBS -.-> SEARCH
+```
+
 ```
 fetch ──► normalize + dedupe (simhash/URL) ──► SQLite
    │
@@ -22,7 +41,7 @@ classify ──► reglas deterministas ⚡ → LLM en batch (categoría, import
    │
 kb build ──► atoms (artículos) + electrons (conceptos) + molecules (síntesis) en el vault
    │
-digest ──► agrupado por tema + overview LLM
+digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digests`, uno por día)
    │
 search ──► FTS5 (keyword) ⊕ embeddings (Ollama, coseno) con RRF
 ```
@@ -54,6 +73,7 @@ incrementales por `PRAGMA user_version` en `internal/db/db.go`:
 3. `articles.embedding`
 4. `sources.hidden` (borrado lógico de fuentes)
 5. `articles.extracted` (extracción en batch)
+6. `digests` (digest diario persistido, uno por fecha)
 
 ## Desktop (Wails)
 

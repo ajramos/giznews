@@ -23,6 +23,7 @@ func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*Ar
 		SourceID:      opts.SourceID,
 		Group:         opts.Group,
 		ImportanceMin: opts.ImportanceMin,
+		Unclassified:  opts.Unclassified,
 		Query:         opts.Query,
 		Limit:         limit,
 		Offset:        offset,

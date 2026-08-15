@@ -4,6 +4,7 @@ import { applyTheme, currentTheme } from "./theme";
 import type {
   ArticleDTO,
   DigestDTO,
+  DigestMeta,
   ListArticlesOptions,
   NoteDTO,
   SearchResultDTO,
@@ -26,6 +27,8 @@ import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
 import { NotesPicker } from "./components/NotesPicker";
 import { JobsPanel } from "./components/JobsPanel";
+import { CategoryPicker } from "./components/CategoryPicker";
+import { FlowPanel } from "./components/FlowPanel";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
 import { VaultPanel } from "./components/VaultPanel";
@@ -48,6 +51,11 @@ export default function App() {
   const [loadingList, setLoadingList] = useState(false);
   const [view, setView] = useState<ViewFilter>("unread");
   const [filterSource, setFilterSource] = useState<number | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [filterImportance, setFilterImportance] = useState(0); // 0 = any
+  const [filterUnclassified, setFilterUnclassified] = useState(false);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
   const [status, setStatus] = useState<StatusDTO | null>(null);
 
   // ---- ui chrome ----
@@ -82,6 +90,8 @@ export default function App() {
   const [digest, setDigest] = useState<DigestDTO | null>(null);
   const [digestLoading, setDigestLoading] = useState(false);
   const [digestFocusId, setDigestFocusId] = useState<number | null>(null);
+  const [digestHistory, setDigestHistory] = useState<DigestMeta[]>([]);
+  const [digestDate, setDigestDate] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
   const [searching, setSearching] = useState(false);
@@ -123,7 +133,14 @@ export default function App() {
   const loadArticles = useCallback(async (opts: ListArticlesOptions = {}) => {
     setLoadingList(true);
     try {
-      const list = await api.listArticles({ status: view, limit: 400, ...opts });
+      const list = await api.listArticles({
+        status: view,
+        limit: 400,
+        ...(filterCategory ? { category: filterCategory } : {}),
+        ...(filterImportance > 0 ? { importanceMin: filterImportance } : {}),
+        ...(filterUnclassified ? { unclassified: true } : {}),
+        ...opts,
+      });
       setArticles(list);
       setSelectedIndex((i) => Math.min(i, Math.max(0, list.length - 1)));
     } catch (e) {
@@ -131,7 +148,7 @@ export default function App() {
     } finally {
       setLoadingList(false);
     }
-  }, [view, notify]);
+  }, [view, notify, filterCategory, filterImportance, filterUnclassified]);
 
   const reloadAll = useCallback(() => {
     void loadSources();
@@ -144,6 +161,7 @@ export default function App() {
     void loadSources();
     void loadArticles();
     void loadStatus();
+    void loadDigestHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { void loadArticles(); }, [view, loadArticles]);
@@ -374,7 +392,7 @@ export default function App() {
   // closing a modal does NOT re-trigger a load that would clobber a note).
   const modalOpen =
     paletteOpen || helpOpen || notesPickerOpen || sourcePickerOpen || themeModalOpen ||
-    jobsOpen || sourceForm != null || deleteSource != null || vaultOpen ||
+    jobsOpen || categoryPickerOpen || flowOpen || sourceForm != null || deleteSource != null || vaultOpen ||
     digestOpen || panel !== "none" || synthPrompt || urlPrompt || statusOpen || noteLinks != null;
   const modalOpenRef = useRef(modalOpen);
   modalOpenRef.current = modalOpen;
@@ -401,6 +419,10 @@ export default function App() {
   }, [selectedIndex, articles.length]);
 
   // ---- panels ----
+  const loadDigestHistory = useCallback(() => {
+    api.listDigests().then(setDigestHistory).catch(() => {});
+  }, []);
+
   const generateDigest = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true; setDigestLoading(true);
@@ -408,10 +430,27 @@ export default function App() {
       const d = await api.digest();
       setDigest(d);
       setDigestFocusId(d.themes[0]?.articles[0]?.id ?? null);
+      setDigestDate(null);
       setDigestOpen(true);
+      void loadDigestHistory();
     } catch (e) { notify(String(e)); }
     finally { busyRef.current = false; setDigestLoading(false); }
-  }, [notify]);
+  }, [notify, loadDigestHistory]);
+
+  const selectDigest = useCallback(async (date: string | null) => {
+    if (!date) { void generateDigest(); return; }
+    setDigestLoading(true);
+    try {
+      const d = await api.getDigest(date);
+      if (d) {
+        setDigest(d);
+        setDigestFocusId(d.themes[0]?.articles[0]?.id ?? null);
+        setDigestDate(date);
+        setDigestOpen(true);
+      }
+    } catch (e) { notify(String(e)); }
+    finally { setDigestLoading(false); }
+  }, [generateDigest, notify]);
 
   const digestIds = useMemo(() => {
     const ids: number[] = [];
@@ -535,6 +574,7 @@ export default function App() {
     { name: "digest", hint: "Daily digest", run: () => void generateDigest() },
     { name: "url", hint: "Add an article by URL", run: () => setUrlPrompt(true) },
     { name: "jobs", hint: "Background jobs", run: () => setJobsOpen(true) },
+    { name: "flow", hint: "Pipeline flow (live counts)", run: () => setFlowOpen(true) },
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
     { name: "notes", hint: "Browse knowledge-graph notes", run: () => setNotesPickerOpen(true) },
@@ -567,6 +607,8 @@ export default function App() {
         if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
         if (notesPickerOpen) { setNotesPickerOpen(false); return; }
         if (jobsOpen) { setJobsOpen(false); return; }
+        if (categoryPickerOpen) { setCategoryPickerOpen(false); return; }
+        if (flowOpen) { setFlowOpen(false); return; }
         if (synthPrompt) { setSynthPrompt(false); return; }
         if (urlPrompt) { setUrlPrompt(false); return; }
         if (statusOpen) { setStatusOpen(false); return; }
@@ -580,7 +622,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || jobsOpen || synthPrompt || urlPrompt || statusOpen || vaultOpen) return;
+      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || jobsOpen || categoryPickerOpen || flowOpen || synthPrompt || urlPrompt || statusOpen || vaultOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -700,6 +742,9 @@ export default function App() {
       if (k === "n") { setNotesPickerOpen(true); return; }
       if (k === "f") { setVaultOpen(true); return; }
       if (k === "z") { setJobsOpen(true); return; }
+      if (k === ";") { setCategoryPickerOpen(true); return; }
+      if (k === "[") { setFilterImportance((v) => (v + 3) % 4); return; }
+      if (k === "]") { setFilterImportance((v) => (v + 1) % 4); return; }
       if (k === "d") { void generateDigest(); return; }
       if (k === ":") { setPaletteOpen(true); return; }
       if (k === "?") { setHelpOpen(true); return; }
@@ -710,7 +755,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, jobsOpen, synthPrompt, urlPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, jobsOpen, categoryPickerOpen, flowOpen, synthPrompt, urlPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -779,6 +824,21 @@ export default function App() {
                 ✕ {filterLabel}
               </button>
             )}
+            {filterCategory && (
+              <button className="pill filter" onClick={() => setFilterCategory(null)}>
+                ✕ {filterCategory}
+              </button>
+            )}
+            {filterImportance > 0 && (
+              <button className="pill filter" onClick={() => setFilterImportance(0)}>
+                ✕ ≥{filterImportance}★
+              </button>
+            )}
+            {filterUnclassified && (
+              <button className="pill filter" onClick={() => setFilterUnclassified(false)}>
+                ✕ unclassified
+              </button>
+            )}
           </div>
         )}
         <div className="topbar-actions">
@@ -791,33 +851,22 @@ export default function App() {
 
       <main className="layout">
         <section className="col list-col">
-          {digestOpen ? (
-            <DigestView
-              digest={digest}
-              loading={digestLoading}
-              unreadCount={status?.unreadArticles ?? 0}
-              focusId={digestFocusId}
-              onFocus={setDigestFocusId}
-              onGenerate={generateDigest}
-              onOpenArticle={(id) => {
-                setDigestOpen(false);
-                const idx = articles.findIndex((a) => a.id === id);
-                if (idx >= 0) setSelectedIndex(idx);
-                void openArticle(id);
-              }}
-            />
-          ) : (
-            <ArticleList
-              articles={articles}
-              selectedIndex={selectedIndex}
-              loading={loadingList}
-              view={view}
-              hasSources={sources.length > 0}
-              bulkSel={bulkSel}
-              onView={(v) => void switchView(v)}
-              onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
-            />
-          )}
+          <ArticleList
+            articles={articles}
+            selectedIndex={selectedIndex}
+            loading={loadingList}
+            view={view}
+            hasSources={sources.length > 0}
+            bulkSel={bulkSel}
+            filterCategory={filterCategory}
+            filterImportance={filterImportance}
+            filterUnclassified={filterUnclassified}
+            onView={(v) => void switchView(v)}
+            onCategory={(c) => setFilterCategory(c)}
+            onImportance={(n) => setFilterImportance(n)}
+            onUnclassified={(v) => setFilterUnclassified(v)}
+            onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
+          />
         </section>
 
         <section className="col reader-col">
@@ -843,6 +892,24 @@ export default function App() {
               onOpenNote={openNote}
               onBuild={() => void buildAndOpenGraph()}
               notify={notify}
+            />
+          ) : digestOpen ? (
+            <DigestView
+              digest={digest}
+              loading={digestLoading}
+              unreadCount={status?.unreadArticles ?? 0}
+              focusId={digestFocusId}
+              history={digestHistory}
+              selectedDate={digestDate}
+              onFocus={setDigestFocusId}
+              onGenerate={generateDigest}
+              onSelectDate={selectDigest}
+              onOpenArticle={(id) => {
+                setDigestOpen(false);
+                const idx = articles.findIndex((a) => a.id === id);
+                if (idx >= 0) setSelectedIndex(idx);
+                void openArticle(id);
+              }}
             />
           ) : noteReader ? (
             <div className="reader">
@@ -927,6 +994,16 @@ export default function App() {
         />
       )}
       {jobsOpen && <JobsPanel onClose={() => setJobsOpen(false)} notify={notify} />}
+      {categoryPickerOpen && (
+        <CategoryPicker
+          current={filterCategory}
+          unclassified={filterUnclassified}
+          onPick={(c) => setFilterCategory(c)}
+          onUnclassified={(v) => setFilterUnclassified(v)}
+          onClose={() => setCategoryPickerOpen(false)}
+        />
+      )}
+      {flowOpen && <FlowPanel onClose={() => setFlowOpen(false)} />}
       {statusOpen && <StatusModal onClose={() => setStatusOpen(false)} />}
       {vaultOpen && (
         <VaultPanel

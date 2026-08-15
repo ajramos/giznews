@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { Inbox, Check, Archive, Star } from "lucide-react";
 import type { ArticleDTO } from "../types";
 import { stars, timeAgo, catClass } from "./Markdown";
+import { CATEGORIES } from "./CategoryPicker";
 
 export type ViewFilter = "unread" | "read" | "archived" | "starred";
 
@@ -19,11 +20,17 @@ interface Props {
   view: ViewFilter;
   hasSources: boolean;
   bulkSel: Set<number>;
+  filterCategory: string | null;
+  filterImportance: number;
+  filterUnclassified: boolean;
   onView: (v: ViewFilter) => void;
+  onCategory: (c: string | null) => void;
+  onImportance: (n: number) => void;
+  onUnclassified: (v: boolean) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulkSel, onView, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulkSel, filterCategory, filterImportance, filterUnclassified, onView, onCategory, onImportance, onUnclassified, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,6 +48,38 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
               onClick={() => onView(v.key)}
             >
               {v.icon} {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="filter-row">
+        <div className="filter-chips">
+          <button className={`chip ${filterCategory === null && !filterUnclassified ? "active" : ""}`} onClick={() => { onCategory(null); onUnclassified(false); }}>
+            All
+          </button>
+          <button className={`chip ${filterUnclassified ? "active" : ""}`} onClick={() => onUnclassified(!filterUnclassified)}>
+            Unclassified
+          </button>
+          {CATEGORIES.map((c) => (
+            <button
+              key={c}
+              className={`chip ${filterCategory === c ? "active" : ""}`}
+              onClick={() => { onCategory(filterCategory === c ? null : c); onUnclassified(false); }}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+        <div className="filter-imp">
+          {[0, 1, 2, 3].map((n) => (
+            <button
+              key={n}
+              className={`chip ${filterImportance === n ? "active" : ""}`}
+              onClick={() => onImportance(filterImportance === n ? 0 : n)}
+              title={n === 0 ? "Any importance" : `Importance ≥ ${n}`}
+            >
+              {n === 0 ? "★" : `≥${n}★`}
             </button>
           ))}
         </div>

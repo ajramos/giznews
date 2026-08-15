@@ -90,6 +90,7 @@ type ListArticlesOptions struct {
 	SourceID      int64  `json:"source_id,omitempty"`
 	Group         string `json:"group,omitempty"`
 	ImportanceMin int    `json:"importance_min,omitempty"`
+	Unclassified  bool   `json:"unclassified,omitempty"`
 	Query         string `json:"query,omitempty"`
 	Limit         int    `json:"limit,omitempty"`
 	Offset        int    `json:"offset,omitempty"`

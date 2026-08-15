@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { Newspaper, Loader2, Boxes, Bot, FlaskConical, Building2, Coins, Scale, Wrench, Code2, MessageSquare, FileText } from "lucide-react";
-import type { DigestDTO } from "../types";
+import type { DigestDTO, DigestMeta } from "../types";
 import { stars } from "./Markdown";
 
 interface Props {
@@ -8,7 +8,10 @@ interface Props {
   loading: boolean;
   unreadCount: number;
   focusId: number | null;
+  history: DigestMeta[];
+  selectedDate: string | null;
   onGenerate: () => void;
+  onSelectDate: (date: string | null) => void;
   onFocus: (id: number | null) => void;
   onOpenArticle: (id: number) => void;
 }
@@ -25,7 +28,7 @@ const CAT_ICONS: Record<string, ReactNode> = {
   general: <FileText size={15} />,
 };
 
-export function DigestView({ digest, loading, unreadCount, focusId, onGenerate, onFocus, onOpenArticle }: Props) {
+export function DigestView({ digest, loading, unreadCount, focusId, history, selectedDate, onGenerate, onSelectDate, onFocus, onOpenArticle }: Props) {
   const focusRef = useRef<HTMLLIElement>(null);
   useEffect(() => {
     focusRef.current?.scrollIntoView({ block: "nearest" });
@@ -34,12 +37,16 @@ export function DigestView({ digest, loading, unreadCount, focusId, onGenerate, 
   return (
     <div className="digest-view">
       <div className="digest-head">
-        <h1><Newspaper size={19} /> AI digest</h1>
-        {digest && <span className="muted">{digest.date}</span>}
+        <h1><Newspaper size={19} /> Digest</h1>
+        {digest && <span className="digest-date-pill">{digest.date}</span>}
+        <select value={selectedDate ?? ""} onChange={(e) => onSelectDate(e.target.value || null)} title="Saved digests">
+          <option value="">Today (live)</option>
+          {history.map((h) => <option key={h.date} value={h.date}>{h.date}</option>)}
+        </select>
         <span className="pill">{unreadCount} unread</span>
         <button onClick={onGenerate} disabled={loading}>
           {loading ? <Loader2 size={13} className="spin" /> : <Newspaper size={13} />}
-          {loading ? "Generating…" : "Generate (d)"}
+          {loading ? "Generating…" : "Generate today (d)"}
         </button>
       </div>
 

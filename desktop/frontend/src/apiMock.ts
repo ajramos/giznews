@@ -7,7 +7,9 @@ import type {
   BulkResult,
   ClassifyResult,
   DigestDTO,
+  DigestMeta,
   FetchResult,
+  FlowStatus,
   IndexResult,
   JobDTO,
   KBResult,
@@ -89,6 +91,7 @@ const delay = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 // the backend JobManager: running jobs show progress, finished ones persist.
 let jobSeq = 0;
 const mockJobs: JobDTO[] = [];
+const mockDigests: DigestDTO[] = [];
 
 function beginJob(name: string, type: string): number {
   const id = ++jobSeq;
@@ -174,6 +177,8 @@ export const mockBackend: APIShape = {
     if (opts.status) list = list.filter((a) => a.status === opts.status);
     if (opts.importanceMin) list = list.filter((a) => a.importance >= (opts.importanceMin ?? 0));
     if (opts.sourceId) list = list.filter((a) => a.sourceId === opts.sourceId);
+    if (opts.category) list = list.filter((a) => a.category === opts.category);
+    if (opts.unclassified) list = list.filter((a) => !a.category);
     return list;
   },
   listInbox: async (limit: number): Promise<ArticleDTO[]> => {
@@ -241,7 +246,33 @@ export const mockBackend: APIShape = {
     const id = beginJob("Generate digest", "digest");
     await delay(80);
     finishJob(id);
-    return DIGEST;
+    const d = { ...DIGEST, date: new Date().toISOString().slice(0, 10) };
+    const idx = mockDigests.findIndex((x) => x.date === d.date);
+    if (idx >= 0) mockDigests[idx] = d; else mockDigests.unshift(d);
+    return d;
+  },
+  listDigests: async (): Promise<DigestMeta[]> => {
+    await delay();
+    return mockDigests.map((d) => ({ date: d.date, overview: d.overview }));
+  },
+  getDigest: async (date: string): Promise<DigestDTO | null> => {
+    await delay();
+    return mockDigests.find((d) => d.date === date) ?? null;
+  },
+  flow: async (): Promise<FlowStatus> => {
+    await delay();
+    return {
+      sourcesTotal: SOURCES.length, sourcesEnabled: SOURCES.filter((s) => s.enabled).length,
+      articlesTotal: ARTICLES.length,
+      classified: ARTICLES.filter((a) => a.category).length,
+      pendingClassify: ARTICLES.filter((a) => !a.category).length,
+      atoms: NOTES.filter((n) => n.type === "atom").length,
+      electrons: NOTES.filter((n) => n.type === "electron").length,
+      molecules: NOTES.filter((n) => n.type === "molecule").length,
+      vaultPath: "/mock/vault",
+      notesEmbedded: NOTES.length, articlesEmbedded: ARTICLES.length,
+      runningJobs: mockJobs.filter((j) => j.status === "running").length,
+    };
   },
 
   kbuild: async (): Promise<KBResult> => {
