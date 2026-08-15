@@ -61,4 +61,25 @@ test.describe("note reader", () => {
     await press(page, "Escape");
     await expect(page.locator(".links-picker")).toHaveCount(0);
   });
+
+  test("Enter focuses the article reader: j/k scroll, Esc returns to the list", async ({ page }) => {
+    await gotoApp(page);
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
+    const first = await page.locator(".reader-head h1").innerText();
+
+    await press(page, "Enter"); // open + focus the reader
+    const el = page.locator(".reader-scroll");
+    await el.evaluate((node) => { node.scrollTop = 0; });
+
+    await press(page, "j");
+    await expect
+      .poll(() => el.evaluate((node) => node.scrollTop))
+      .toBeGreaterThan(0);
+    // still reading article 1 (j scrolled, it did not navigate)
+    await expect(page.locator(".reader-head h1")).toHaveText(first);
+
+    await press(page, "Escape"); // back to list focus
+    await press(page, "j"); // now j navigates the list
+    await expect(page.locator(".reader-head h1")).not.toHaveText(first);
+  });
 });

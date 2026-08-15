@@ -76,6 +76,7 @@ export default function App() {
   // ---- reader / panels ----
   const [reader, setReader] = useState<ArticleDTO | null>(null);
   const [noteReader, setNoteReader] = useState<NoteDTO | null>(null);
+  const [readerFocused, setReaderFocused] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [digest, setDigest] = useState<DigestDTO | null>(null);
@@ -543,6 +544,7 @@ export default function App() {
         if (panel !== "none") { setPanel("none"); return; }
         if (digestOpen) { setDigestOpen(false); return; }
         if (noteReader) { setNoteReader(null); return; }
+        if (readerFocused) { setReaderFocused(false); return; }
         return;
       }
       if (typing) return; // inputs handle their own keys
@@ -600,15 +602,20 @@ export default function App() {
 
       const n = Math.max(0, articles.length - 1);
 
-      // Note reader mode: j/k/arrows/space scroll the note; L opens its links.
-      if (noteReader) {
+      // Reader mode (note open, or article focused via Enter): j/k/arrows/space
+      // scroll the content; L opens its links; Esc returns focus to the list.
+      if (noteReader || readerFocused) {
         if (k === "j" || k === "ArrowDown") { scrollReader(0.35); return; }
         if (k === "k" || k === "ArrowUp") { scrollReader(-0.35); return; }
         if (k === " ") { scrollReader(e.shiftKey ? -0.9 : 0.9); return; }
-        if (k === "L") { void openNoteLinks(noteReader.id); return; }
+        if (k === "L") {
+          if (noteReader) void openNoteLinks(noteReader.id);
+          else if (reader) void openArticleLinks(reader.id);
+          return;
+        }
       }
 
-      // Article reader: L shows the article's knowledge-graph connections.
+      // Article reader (list focus): L shows the article's knowledge-graph connections.
       if (reader && k === "L") { void openArticleLinks(reader.id); return; }
 
       // reader paging (space / Ctrl+d / Ctrl+u) when an article is open
@@ -643,7 +650,7 @@ export default function App() {
         return;
       }
       if (k === "G") { setSelectedIndex(n); return; }
-      if (k === "Enter") { if (selected) void openArticle(selected.id); return; }
+      if (k === "Enter") { if (selected) { void openArticle(selected.id); setReaderFocused(true); } return; }
       if (k === "y") { void summarize(); return; }
       if (k === "a") { archiveRange(count); return; }
       if (k === "t") { toggleReadRange(count); return; }
@@ -669,7 +676,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
