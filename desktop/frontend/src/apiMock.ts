@@ -54,7 +54,7 @@ const sampleArticles: ArticleDTO[] = [
 
 const sampleNotes: NoteDTO[] = [
   { id: 101, type: "electron", title: "ai agents", slug: "ai-agents", content: "# ai agents\n\n## Definición\nConcepto recurrente — referenciado en 3 nota(s).\n\n## Fuentes\n- [[model-context-protocol-mcp-explained]] — MCP: how agents connect to tools\n- [[building-more-capable-ai-agents]] — World models\n", tags: ["ai", "concept"], wikilinks: ["mcp"], createdAt: "2026-08-14T10:00:00Z" },
-  { id: 102, type: "atom", title: "DeepSeek Harness developer preview", slug: "deepseek-harness-developer-preview", content: "# DeepSeek Harness developer preview\n\n## Resumen\nDeepSeek released a dev preview.\n\n## Conexiones\n- [[deepseek]]\n", tags: ["atom", "ai", "deepseek"], wikilinks: ["deepseek"], createdAt: "2026-08-14T10:01:00Z" },
+  { id: 102, type: "atom", title: "DeepSeek Harness developer preview", slug: "deepseek-harness-developer-preview", content: "# DeepSeek Harness developer preview\n\n## Resumen\nDeepSeek released a dev preview.\n\n" + lorem(20) + "\n\n## Conexiones\n- [[deepseek]]\n", tags: ["atom", "ai", "deepseek"], wikilinks: ["deepseek"], createdAt: "2026-08-14T10:01:00Z" },
   { id: 103, type: "molecule", title: "Síntesis de models", slug: "sintesis-models", content: "# 🧪 Síntesis de models\n\n## Central Idea\nThe current landscape is defined by performance and safety.\n\n## Conexiones\n- [[deepseek-harness-developer-preview]]\n", tags: ["synthesis", "ai"], wikilinks: ["deepseek-harness-developer-preview"], createdAt: "2026-08-14T10:02:00Z" },
 ];
 

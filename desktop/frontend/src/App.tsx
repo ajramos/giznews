@@ -29,6 +29,8 @@ import { PipelineModal, type PipelineStep } from "./components/PipelineModal";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
 import { VaultPanel } from "./components/VaultPanel";
+import { LinksPicker, type LinkItem } from "./components/LinksPicker";
+import { buildNoteLinks } from "./noteLinks";
 import { CircleHelp, Command, RefreshCw, Tag, Network, Search } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -64,6 +66,7 @@ export default function App() {
   const [synthPrompt, setSynthPrompt] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
   const [welcome, setWelcome] = useState(() => {
@@ -204,6 +207,15 @@ export default function App() {
       setNoteReader(n);
       setReader(null);
       setPanel("none"); // a note takes over the reader, closing any panel
+    } catch (e) { notify(String(e)); }
+  }, [notify]);
+
+  // Open the giztui-style links picker for a note (in the reader view).
+  const openNoteLinks = useCallback(async (id: number) => {
+    try {
+      const notes = await api.listNotes("");
+      const n = notes.find((x) => x.id === id);
+      if (n) setNoteLinks(buildNoteLinks(n, notes));
     } catch (e) { notify(String(e)); }
   }, [notify]);
 
@@ -490,6 +502,7 @@ export default function App() {
       const now = Date.now();
 
       if (k === "Escape") {
+        if (noteLinks) { setNoteLinks(null); return; }
         if (bulk) { exitBulk(); return; }
         if (paletteOpen) { setPaletteOpen(false); return; }
         if (helpOpen) { setHelpOpen(false); return; }
@@ -508,7 +521,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen || synthPrompt || statusOpen || vaultOpen) return;
+      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen || synthPrompt || statusOpen || vaultOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -561,6 +574,14 @@ export default function App() {
       e.preventDefault();
 
       const n = Math.max(0, articles.length - 1);
+
+      // Note reader mode: j/k/arrows/space scroll the note; L opens its links.
+      if (noteReader) {
+        if (k === "j" || k === "ArrowDown") { scrollReader(0.35); return; }
+        if (k === "k" || k === "ArrowUp") { scrollReader(-0.35); return; }
+        if (k === " ") { scrollReader(e.shiftKey ? -0.9 : 0.9); return; }
+        if (k === "L") { void openNoteLinks(noteReader.id); return; }
+      }
 
       // reader paging (space / Ctrl+d / Ctrl+u) when an article is open
       if (k === " ") {
@@ -620,7 +641,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -831,6 +852,13 @@ export default function App() {
           onOpenArticle={(id) => { setVaultOpen(false); void openArticle(id); }}
           onClose={() => setVaultOpen(false)}
           notify={notify}
+        />
+      )}
+      {noteLinks && (
+        <LinksPicker
+          links={noteLinks}
+          onPick={(id) => { setNoteLinks(null); void openNote(id); }}
+          onClose={() => setNoteLinks(null)}
         />
       )}
       {welcome && (
