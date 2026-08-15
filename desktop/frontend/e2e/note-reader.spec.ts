@@ -38,4 +38,15 @@ test.describe("note reader", () => {
     await press(page, "Escape");
     await expect(page.locator(".links-picker")).toHaveCount(0);
   });
+
+  test("L on an article shows its note connections", async ({ page }) => {
+    await gotoApp(page);
+    // article 1 auto-loads; it has a matching atom note in the mock
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
+    await press(page, "L");
+    await expect(page.locator(".links-picker")).toBeVisible({ timeout: 6000 });
+    await expect(page.locator(".links-picker .palette-item").first()).toBeVisible();
+    await press(page, "Escape");
+    await expect(page.locator(".links-picker")).toHaveCount(0);
+  });
 });

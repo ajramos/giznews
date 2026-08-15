@@ -224,6 +224,22 @@ export default function App() {
     } catch (e) { notify(String(e)); }
   }, [notify]);
 
+  // Open the links picker for an ARTICLE being read: find its Atom note (by
+  // title) and show that note's connections.
+  const openArticleLinks = useCallback(async (articleId: number) => {
+    try {
+      const notes = await api.listNotes("");
+      const art = articlesRef.current.find((a) => a.id === articleId);
+      if (!art) return;
+      const note = notes.find((n) => n.title.toLowerCase() === art.title.toLowerCase());
+      if (note) {
+        setNoteLinks(buildNoteLinks(note, notes));
+      } else {
+        notify("Este artículo aún no tiene nota — genera una con el grafo (g) o :procesar");
+      }
+    } catch (e) { notify(String(e)); }
+  }, [notify]);
+
   const selected = articles[selectedIndex] ?? null;
 
   // apply an async action to count consecutive articles from the selection.
@@ -596,6 +612,9 @@ export default function App() {
         if (k === "L") { void openNoteLinks(noteReader.id); return; }
       }
 
+      // Article reader: L shows the article's knowledge-graph connections.
+      if (reader && k === "L") { void openArticleLinks(reader.id); return; }
+
       // reader paging (space / Ctrl+d / Ctrl+u) when an article is open
       if (k === " ") {
         scrollReader(e.shiftKey ? -0.9 : 0.9);
@@ -654,7 +673,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
