@@ -80,7 +80,8 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchFocus, setSearchFocus] = useState(0);
-  const [graphNoteId, setGraphNoteId] = useState<number | null>(null);
+  const [graphFocusId, setGraphFocusId] = useState<number | null>(null);
+  const [graphRefresh, setGraphRefresh] = useState(0);
 
   // bulk mode (giztui-style): v to enter, space to toggle individual items,
   // then an action key applies to the selected set.
@@ -200,6 +201,7 @@ export default function App() {
       const n = await api.getNote(id);
       setNoteReader(n);
       setReader(null);
+      setPanel("none"); // a note takes over the reader, closing any panel
     } catch (e) { notify(String(e)); }
   }, [notify]);
 
@@ -365,7 +367,7 @@ export default function App() {
         id = match?.id ?? null;
       } catch { id = null; }
     }
-    setGraphNoteId(id);
+    setGraphFocusId(id);
     setPanel("graph");
   }, [selected]);
 
@@ -377,6 +379,7 @@ export default function App() {
     try {
       await api.ensureArticleNote(id);
       notify("Nota generada para este artículo");
+      setGraphRefresh((r) => r + 1);
       await openGraph();
     } catch (e) { notify(String(e)); }
   }, [selected, openGraph, notify]);
@@ -727,8 +730,8 @@ export default function App() {
             />
           ) : panel === "graph" ? (
             <GraphPanel
-              key={graphNoteId ?? "none"}
-              noteId={graphNoteId}
+              focusNoteId={graphFocusId}
+              refresh={graphRefresh}
               onOpenNote={openNote}
               onBuild={() => void buildAndOpenGraph()}
               notify={notify}

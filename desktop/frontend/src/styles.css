@@ -473,10 +473,16 @@ img, video, iframe { max-width: 100%; height: auto; }
 }
 .graph-current { margin-bottom: 12px; }
 .graph-current h2 { margin: 6px 0; font-size: 15px; }
-.graph-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); min-height: 300px; flex: 1; }
+.graph-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); min-height: 300px; flex: 1; cursor: grab; }
+.graph-canvas:active { cursor: grabbing; }
 .graph-legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: var(--fg-dim); align-items: center; flex-wrap: wrap; }
 .graph-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
 .graph-node { cursor: pointer; }
+.graph-node circle { transition: stroke 150ms ease; }
+.graph-node[data-hover="1"] circle,
+.graph-node[data-focus="1"] circle { stroke: var(--accent); stroke-width: 3; }
+.graph-node[data-focus="1"] .graph-label { fill: var(--accent); font-weight: 600; }
+.links path { transition: opacity 150ms ease; }
 .graph-label {
   font-size: 12px;
   fill: var(--fg);
