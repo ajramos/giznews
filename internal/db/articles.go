@@ -348,6 +348,36 @@ func (r *ArticleRepo) ListForKB(ctx context.Context, importanceMin, ageDays, lim
 	return out, rows.Err()
 }
 
+// ListPending returns non-archived articles that have not yet been ingested
+// into the knowledge graph (no ingests row). These are the vault "inbox":
+// the raw material waiting to become Atom notes.
+func (r *ArticleRepo) ListPending(ctx context.Context, limit int) ([]*Article, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT `+articleColumns+articleFrom+`
+		WHERE a.status != 'archived'
+		  AND NOT EXISTS (
+			SELECT 1 FROM ingests i WHERE i.ref_type = 'article' AND i.ref_id = CAST(a.id AS TEXT)
+		  )
+		ORDER BY a.importance DESC, a.published IS NULL, a.published DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list pending: %w", err)
+	}
+	defer rows.Close()
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // CountUnclassified reports how many unread articles await classification.
 func (r *ArticleRepo) CountUnclassified(ctx context.Context) (int, error) {
 	var n int

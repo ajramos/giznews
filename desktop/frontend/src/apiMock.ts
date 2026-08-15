@@ -128,7 +128,7 @@ const NOTES = dense ? sampleNotes : sampleNotes;
 const DIGEST = dense ? { ...sampleDigest, themes: sampleDigest.themes } : sampleDigest;
 
 export const mockBackend: APIShape = {
-  listSources: async (): Promise<SourceDTO[]> => { await delay(); return SOURCES; },
+  listSources: async (): Promise<SourceDTO[]> => { await delay(); return SOURCES.map((s) => ({ ...s })); },
   addSource: async (name: string, type: string, url: string, group: string): Promise<SourceDTO> => {
     await delay();
     const s: SourceDTO = { id: Date.now(), name, type, url, group: group || "general", enabled: true };
@@ -153,6 +153,12 @@ export const mockBackend: APIShape = {
     if (opts.importanceMin) list = list.filter((a) => a.importance >= (opts.importanceMin ?? 0));
     if (opts.sourceId) list = list.filter((a) => a.sourceId === opts.sourceId);
     return list;
+  },
+  listInbox: async (limit: number): Promise<ArticleDTO[]> => {
+    await delay();
+    // pending articles = those that have no matching atom note in the mock
+    const titled = new Set(NOTES.map((n) => n.title));
+    return ARTICLES.filter((a) => !titled.has(a.title)).slice(0, limit || 50);
   },
   getArticle: async (id: number): Promise<ArticleDTO> => {
     await delay();

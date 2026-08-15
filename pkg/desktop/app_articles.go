@@ -13,8 +13,7 @@ import (
 // alias of extract.MinLength for readability at call sites.
 const contentMinLength = extract.MinLength
 
-func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*ArticleDTO, error) {
-	limit, offset := opts.Limit, opts.Offset
+func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*ArticleDTO, error) {	limit, offset := opts.Limit, opts.Offset
 	if limit <= 0 {
 		limit = 200
 	}
@@ -36,6 +35,22 @@ func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*Ar
 		dto := toArticleDTO(art)
 		// Keep the list payload light: full bodies are fetched on demand via
 		// GetArticle when the reader opens an article.
+		dto.ContentMD = ""
+		out = append(out, dto)
+	}
+	return out, nil
+}
+
+// ListInbox returns the articles awaiting processing (no knowledge note yet) —
+// the vault "inbox" stage of the Zettelkasten flow.
+func (a *App) ListInbox(ctx context.Context, limit int) ([]*ArticleDTO, error) {
+	pending, err := db.NewArticleRepo(a.db).ListPending(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list inbox: %w", err)
+	}
+	out := make([]*ArticleDTO, 0, len(pending))
+	for _, art := range pending {
+		dto := toArticleDTO(art)
 		dto.ContentMD = ""
 		out = append(out, dto)
 	}

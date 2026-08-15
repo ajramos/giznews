@@ -100,6 +100,7 @@ export interface APIShape {
   setSourceEnabled: (id: number, enabled: boolean) => Promise<void>;
   deleteSource: (id: number) => Promise<void>;
   listArticles: (opts: ListArticlesOptions) => Promise<ArticleDTO[]>;
+  listInbox: (limit: number) => Promise<ArticleDTO[]>;
   getArticle: (id: number) => Promise<ArticleDTO>;
   getArticleContent: (id: number) => Promise<ArticleDTO>;
   setArticleStatus: (id: number, status: string) => Promise<void>;
@@ -133,6 +134,8 @@ const realApi: APIShape = {
 
   listArticles: (opts: ListArticlesOptions) =>
     call("ListArticles", toSnakeArgs(opts)).then((v) => arr<ArticleDTO>(v)),
+  listInbox: (limit: number) =>
+    call("ListInbox", limit).then((v) => arr<ArticleDTO>(v)),
   getArticle: (id: number) =>
     call("GetArticle", id).then((v) => normalize<ArticleDTO>(v)),
   getArticleContent: (id: number) =>

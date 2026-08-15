@@ -36,6 +36,9 @@ func (a *App) DeleteSource(id int64) error {
 func (a *App) ListArticles(opts gizdesktop.ListArticlesOptions) ([]*gizdesktop.ArticleDTO, error) {
 	return a.api.ListArticles(bg(), opts)
 }
+func (a *App) ListInbox(limit int) ([]*gizdesktop.ArticleDTO, error) {
+	return a.api.ListInbox(bg(), limit)
+}
 func (a *App) GetArticle(id int64) (*gizdesktop.ArticleDTO, error) {
 	return a.api.GetArticle(bg(), id)
 }

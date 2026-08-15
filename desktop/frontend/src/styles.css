@@ -553,6 +553,32 @@ kbd {
 .pl-status.error { color: var(--bad); }
 .pl-status.pending { color: var(--border); }
 
+/* ---- vault panel (zettelkasten flow) ---- */
+.vault-panel { width: 760px; max-width: 94vw; }
+.vault-tabs { display: flex; gap: 4px; padding: 4px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.vault-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid transparent; background: transparent; color: var(--fg-dim);
+}
+.vault-tab.active { color: var(--fg); background: var(--bg-elev); border-color: var(--border); }
+.vault-count { font-size: 11px; color: var(--fg-dim); background: var(--bg-elev); border-radius: 999px; padding: 0 6px; }
+.vault-body { display: grid; grid-template-columns: 1fr 1fr; min-height: 320px; max-height: 56vh; }
+.vault-list { overflow-y: auto; border-right: 1px solid var(--border); padding: 4px 8px; }
+.vault-detail { overflow-y: auto; padding: 12px 14px; }
+.vd-head { display: flex; align-items: center; gap: 8px; }
+.vd-head h2 { margin: 0; font-size: 14px; }
+.vd-summary { font-size: 12.5px; color: var(--fg); margin: 8px 0; line-height: 1.5; }
+.vd-flow { font-size: 11px; color: var(--accent); margin: 4px 0 10px; font-family: var(--font-mono); }
+.vd-section { margin: 8px 0 6px; }
+.vd-link { display: flex; align-items: center; gap: 7px; padding: 4px 0; cursor: pointer; font-size: 12.5px; }
+.vd-link:hover .vd-link-title { color: var(--accent); }
+.vd-dir { color: var(--fg-dim); width: 12px; text-align: center; }
+.vd-link-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.links-picker { width: 440px; max-width: 94vw; }
+.links-picker .search-box { padding: 8px 14px; }
+
 /* ---- status modal ---- */
 .status-modal { width: 340px; max-width: 94vw; }
 .status-body { padding: 6px 16px 10px; display: flex; flex-direction: column; gap: 2px; }

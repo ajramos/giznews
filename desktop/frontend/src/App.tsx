@@ -28,6 +28,7 @@ import { NotesPicker } from "./components/NotesPicker";
 import { PipelineModal, type PipelineStep } from "./components/PipelineModal";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
+import { VaultPanel } from "./components/VaultPanel";
 import { CircleHelp, Command, RefreshCw, Tag, Network, Search } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
@@ -62,6 +63,7 @@ export default function App() {
   const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
   const [synthPrompt, setSynthPrompt] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [vaultOpen, setVaultOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
   const [welcome, setWelcome] = useState(() => {
@@ -308,12 +310,20 @@ export default function App() {
 
   // ---- lazy loading: the selected article loads automatically (debounced),
   // and the adjacent ones are prefetched so navigation is instant. ----
+  // Paused while a modal/panel is open so an in-flight article load can't
+  // clobber a note the user just opened (e.g. from the vault or graph).
+  const modalOpen =
+    paletteOpen || helpOpen || notesPickerOpen || sourcePickerOpen || themeModalOpen ||
+    pipelineOpen || sourceForm != null || deleteSource != null || vaultOpen ||
+    digestOpen || panel !== "none" || synthPrompt || statusOpen;
+
   useEffect(() => {
+    if (modalOpen) return;
     const art = articlesRef.current[selectedIndex];
     if (!art) return;
     const t = window.setTimeout(() => void openArticle(art.id), 120);
     return () => window.clearTimeout(t);
-  }, [selectedIndex, articles.length, openArticle]);
+  }, [selectedIndex, articles.length, openArticle, modalOpen]);
 
   useEffect(() => {
     const next = articlesRef.current[selectedIndex + 1];
@@ -459,6 +469,7 @@ export default function App() {
     { name: "auto-refresh", hint: autoRefresh ? "Desactivar refresco automático" : "Activar refresco cada 15 min", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Gestionar fuentes (picker)", run: () => setSourcePickerOpen(true) },
     { name: "notes", hint: "Ver notas del knowledge graph", run: () => setNotesPickerOpen(true) },
+    { name: "vault", hint: "Flujo del vault (inbox → electrons → atoms → molecules)", run: () => setVaultOpen(true) },
     { name: "status", hint: "Resumen del estado (artículos, notas, LLM)", run: () => setStatusOpen(true) },
     { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
     { name: "theme", hint: "Elegir tema (picker)", run: () => setThemeModalOpen(true) },
@@ -488,6 +499,7 @@ export default function App() {
         if (pipelineOpen) { setPipelineOpen(false); return; }
         if (synthPrompt) { setSynthPrompt(false); return; }
         if (statusOpen) { setStatusOpen(false); return; }
+        if (vaultOpen) { setVaultOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
         if (deleteSource) { setDeleteSource(null); return; }
         if (panel !== "none") { setPanel("none"); return; }
@@ -496,7 +508,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen || synthPrompt || statusOpen) return;
+      if (paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen || synthPrompt || statusOpen || vaultOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -597,6 +609,7 @@ export default function App() {
         return;
       }
       if (k === "n") { setNotesPickerOpen(true); return; }
+      if (k === "f") { setVaultOpen(true); return; }
       if (k === "d") { void generateDigest(); return; }
       if (k === ":") { setPaletteOpen(true); return; }
       if (k === "?") { setHelpOpen(true); return; }
@@ -607,7 +620,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, panel, digestOpen, noteReader, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -812,6 +825,14 @@ export default function App() {
         />
       )}
       {statusOpen && <StatusModal onClose={() => setStatusOpen(false)} />}
+      {vaultOpen && (
+        <VaultPanel
+          onOpenNote={(id) => { setVaultOpen(false); void openNote(id); }}
+          onOpenArticle={(id) => { setVaultOpen(false); void openArticle(id); }}
+          onClose={() => setVaultOpen(false)}
+          notify={notify}
+        />
+      )}
       {welcome && (
         <WelcomeOverlay
           onDone={() => {

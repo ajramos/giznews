@@ -38,6 +38,8 @@ export const HELP: HelpCategory[] = [
     rows: [
       { keys: "s", label: "Búsqueda semántica" },
       { keys: "g", label: "Grafo de conocimiento" },
+      { keys: "f", label: "Flujo del vault (inbox → electrons → atoms → molecules)" },
+      { keys: "n", label: "Notas del knowledge graph" },
       { keys: "d", label: "Digest diario" },
       { keys: ":", label: "Command palette" },
       { keys: "Esc", label: "Cerrar panel / volver" },
@@ -62,7 +64,8 @@ export const HELP: HelpCategory[] = [
   {
     title: "App",
     rows: [
-      { keys: ":procesar", label: "Pipeline completo (fetch → clasificar → kb)" },
+      { keys: ":procesar", label: "Pipeline completo (fetch → clasificar → kb → indexar)" },
+      { keys: "f", label: "Flujo del vault: h/l etapa · j/k ítems · L enlaces · Enter abrir" },
       { keys: "q", label: "Salir de GizNews" },
     ],
   },
