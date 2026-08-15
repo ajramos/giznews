@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/ajramos/giznews/internal/db"
 	"github.com/ajramos/giznews/internal/llm"
@@ -13,9 +15,12 @@ import (
 type Options struct {
 	Limit     int // max articles per run (0 = config default)
 	BatchSize int // articles per LLM call (0 = config default)
+	Concurrency int // parallel LLM batches (0 = sequential)
 	AgeDays   int // only articles fetched within this window
 	UseLLM    bool
 	Model     string
+	// OnProgress, when set, reports phase progress ("rules" or "llm").
+	OnProgress func(phase string, done, total int)
 }
 
 // Service classifies unread articles: rules first, then LLM batches.
@@ -70,14 +75,15 @@ func (s *Service) ClassifyAll(ctx context.Context) (*Result, error) {
 		llmBatch = append(llmBatch, a)
 	}
 
+	s.progress("rules", len(articles), len(articles))
+
 	// Phase 2: LLM.
 	if s.opts.UseLLM && s.prov != nil && len(llmBatch) > 0 {
 		classified, batchErrs := s.runBatches(ctx, llmBatch)
 		res.Errors = append(res.Errors, batchErrs...)
 		res.ByLLM = classified
 		res.Classified += classified
-	} else if len(llmBatch) > 0 {
-		// No LLM available: mark them with a deterministic default so they are
+	} else if len(llmBatch) > 0 {		// No LLM available: mark them with a deterministic default so they are
 		// not re-picked next run, but still get a baseline importance.
 		for _, a := range llmBatch {
 			imp := defaultImportance(a)
@@ -93,45 +99,109 @@ func (s *Service) ClassifyAll(ctx context.Context) (*Result, error) {
 	return res, nil
 }
 
-// runBatches classifies articles in LLM batches. It returns the number
-// successfully classified and a list of per-batch errors; a mid-run failure
-// does not discard the work already persisted.
+// runBatches classifies articles in LLM batches (optionally in parallel). It
+// returns the number successfully classified and a list of per-batch errors.
+// A mid-run batch failure is logged and skipped — it never discards the work
+// already persisted nor aborts the remaining batches.
 func (s *Service) runBatches(ctx context.Context, articles []*db.Article) (int, []string) {
-	classified := 0
 	repo := db.NewArticleRepo(s.db)
-	var errs []string
+	totalBatches := (len(articles) + s.opts.BatchSize - 1) / s.opts.BatchSize
+	if totalBatches <= 0 {
+		return 0, nil
+	}
 
+	type batchJob struct {
+		idx  int // 0-based
+		from int
+		to   int
+	}
+	jobs := make([]batchJob, 0, totalBatches)
 	for start := 0; start < len(articles); start += s.opts.BatchSize {
-		if ctx.Err() != nil {
-			errs = append(errs, ctx.Err().Error())
-			break
-		}
 		end := start + s.opts.BatchSize
 		if end > len(articles) {
 			end = len(articles)
 		}
-		batch := articles[start:end]
-
-		s.logger.Printf("classifying batch %d/%d (%d articles)", start/s.opts.BatchSize+1, (len(articles)+s.opts.BatchSize-1)/s.opts.BatchSize, len(batch))
-		results, err := BatchClassify(ctx, s.prov, s.opts.Model, batch)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("LLM batch %d: %v", start/s.opts.BatchSize+1, err))
-			// Stop: later batches would almost certainly fail too.
-			break
-		}
-		for _, a := range batch {
-			c := results[a.ID]
-			if c == nil {
-				continue
-			}
-			if err := repo.ApplyClassification(ctx, a.ID, c.Category, c.Summary, c.Tags, c.Entities, c.Importance); err != nil {
-				errs = append(errs, fmt.Sprintf("#%d: %v", a.ID, err))
-				continue
-			}
-			classified++
-		}
+		jobs = append(jobs, batchJob{idx: len(jobs), from: start, to: end})
 	}
+
+	workers := s.opts.Concurrency
+	if workers <= 0 {
+		workers = 1
+	}
+	if workers > len(jobs) {
+		workers = len(jobs)
+	}
+
+	var (
+		mu           sync.Mutex
+		classified   int
+		articlesDone int
+		errs         []string
+	)
+
+	ch := make(chan batchJob)
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for w := 0; w < workers; w++ {
+		go func() {
+			defer wg.Done()
+			for j := range ch {
+				if ctx.Err() != nil {
+					continue
+				}
+				batch := articles[j.from:j.to]
+				start := time.Now()
+				s.logger.Printf("classifying batch %d/%d (%d articles)", j.idx+1, totalBatches, len(batch))
+
+				results, err := BatchClassify(ctx, s.prov, s.opts.Model, batch)
+				if err != nil {
+					mu.Lock()
+					errs = append(errs, fmt.Sprintf("LLM batch %d: %v", j.idx+1, err))
+					mu.Unlock()
+					s.logger.Printf("batch %d/%d failed: %v", j.idx+1, totalBatches, err)
+				} else {
+					n := 0
+					for _, a := range batch {
+						c := results[a.ID]
+						if c == nil {
+							continue
+						}
+						if err := repo.ApplyClassification(ctx, a.ID, c.Category, c.Summary, c.Tags, c.Entities, c.Importance); err != nil {
+							mu.Lock()
+							errs = append(errs, fmt.Sprintf("#%d: %v", a.ID, err))
+							mu.Unlock()
+							continue
+						}
+						n++
+					}
+					mu.Lock()
+					classified += n
+					mu.Unlock()
+					s.logger.Printf("batch %d/%d: %d classified in %v", j.idx+1, totalBatches, n, time.Since(start).Round(time.Millisecond))
+				}
+
+				mu.Lock()
+				articlesDone += len(batch)
+				done := articlesDone
+				mu.Unlock()
+				s.progress("llm", done, len(articles))
+			}
+		}()
+	}
+	for _, j := range jobs {
+		ch <- j
+	}
+	close(ch)
+	wg.Wait()
+
 	return classified, errs
+}
+
+// progress forwards a phase update to the optional callback.
+func (s *Service) progress(phase string, done, total int) {
+	if s.opts.OnProgress != nil {
+		s.opts.OnProgress(phase, done, total)
+	}
 }
 
 // apply persists rule-based classification for one article.

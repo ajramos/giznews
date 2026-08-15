@@ -94,6 +94,25 @@ export interface IndexResult {
   embeddingsFailed: number;
 }
 
+export interface JobDTO {
+  id: number;
+  name: string;
+  type: string;
+  status: "running" | "done" | "error" | "canceled";
+  phase: string;
+  done: number;
+  total: number;
+  message?: string;
+  errMsg?: string;
+  createdAt: string;
+  finishedAt?: string;
+}
+
+export interface BulkResult {
+  updated: number;
+  total: number;
+}
+
 export interface StatusDTO {
   dbPath: string;
   vaultPath: string;
@@ -104,6 +123,7 @@ export interface StatusDTO {
   unreadArticles: number;
   totalArticles: number;
   totalNotes: number;
+  pendingClassify: number;
 }
 
 export interface ListArticlesOptions {

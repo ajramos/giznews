@@ -5,31 +5,31 @@ export function WelcomeOverlay({ onDone }: { onDone: () => void }) {
     <div className="overlay">
       <div className="palette welcome" onClick={(e) => e.stopPropagation()}>
         <div className="palette-head">
-          <Keyboard size={15} /> Bienvenido a GizNews
+          <Keyboard size={15} /> Welcome to GizNews
         </div>
         <div className="welcome-body">
           <p>
-            Un lector de noticias de IA que se maneja con <strong>vim</strong> y construye tu
-            <strong> knowledge graph</strong> sobre la marcha.
+            An AI news reader driven by <strong>vim</strong> keys that builds your
+            <strong> knowledge graph</strong> as you go.
           </p>
           <div className="welcome-tip">
-            <kbd>j</kbd>/<kbd>k</kbd> navegar · <kbd>Enter</kbd> leer · <kbd>y</kbd> resumen IA
+            <kbd>j</kbd>/<kbd>k</kbd> navigate · <kbd>Enter</kbd> read · <kbd>y</kbd> AI summary
           </div>
           <div className="welcome-tip">
-            <kbd>a</kbd> archivar (con deshacer) · <kbd>m</kbd> destacar · <kbd>t</kbd> leído
+            <kbd>a</kbd> archive (with undo) · <kbd>m</kbd> star · <kbd>t</kbd> read
           </div>
           <div className="welcome-tip">
-            <kbd>s</kbd> búsqueda · <kbd>g</kbd> grafo · <kbd>d</kbd> digest · <kbd>:</kbd> comandos · <kbd>?</kbd> ayuda
+            <kbd>s</kbd> search · <kbd>g</kbd> graph · <kbd>d</kbd> digest · <kbd>:</kbd> commands · <kbd>?</kbd> help
           </div>
           <div className="welcome-tip">
-            <kbd>v</kbd> selección múltiple · <kbd>5j</kbd> saltar 5 · <kbd>3a</kbd> archivar 3
+            <kbd>v</kbd> bulk selection · <kbd>5j</kbd> jump 5 · <kbd>3a</kbd> archive 3
           </div>
           <p className="muted" style={{ fontSize: 12 }}>
-            Nada se borra nunca: archivar es lógico y todo es recuperable.
+            Nothing is ever deleted: archiving is logical and everything is recoverable.
           </p>
         </div>
         <div className="palette-head" style={{ borderTop: "1px solid var(--border)", borderBottom: "none", justifyContent: "flex-end" }}>
-          <button onClick={onDone}>Empezar</button>
+          <button onClick={onDone}>Get started</button>
         </div>
       </div>
     </div>

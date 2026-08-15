@@ -8,6 +8,7 @@ const (
 	SourceHackerNews SourceType = "hackernews"
 	SourceArxiv      SourceType = "arxiv"
 	SourceGmail      SourceType = "gmail"
+	SourceManual     SourceType = "manual"
 )
 
 // Source is a news feed tracked by giznews.

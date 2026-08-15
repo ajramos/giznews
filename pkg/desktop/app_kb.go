@@ -20,7 +20,7 @@ func (a *App) kbService() (*kb.Service, error) {
 		ImportanceThreshold: a.cfg.Classify.ImportanceThreshold,
 		Model:               a.cfg.LLM.Model,
 		UseLLM:              a.cfg.LLM.Enabled && prov != nil,
-	}, prov, discardLogger())
+	}, prov, a.logger())
 }
 
 // KBResult is the desktop DTO for a kb build run.
@@ -34,34 +34,51 @@ type KBResult struct {
 
 // KBuild ingests pending articles into the knowledge graph.
 func (a *App) KBuild(ctx context.Context) (*KBResult, error) {
-	svc, err := a.kbService()
+	var result *KBResult
+	err := a.trackJob(ctx, "Build knowledge graph", "kb", func(jctx context.Context, p *jobProgress) error {
+		svc, err := a.kbService()
+		if err != nil {
+			return err
+		}
+		res, err := svc.Build(jctx)
+		if err != nil {
+			return err
+		}
+		result = &KBResult{
+			AtomsCreated:     res.AtomsCreated,
+			ElectronsCreated: res.ElectronsCreated,
+			ElectronsUpdated: res.ElectronsUpdated,
+			MoleculesCreated: res.MoleculesCreated,
+			ArticlesSkipped:  res.ArticlesSkipped,
+		}
+		p.Message(fmt.Sprintf("%d atoms · %d electrons", res.AtomsCreated, res.ElectronsCreated))
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	res, err := svc.Build(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &KBResult{
-		AtomsCreated:     res.AtomsCreated,
-		ElectronsCreated: res.ElectronsCreated,
-		ElectronsUpdated: res.ElectronsUpdated,
-		MoleculesCreated: res.MoleculesCreated,
-		ArticlesSkipped:  res.ArticlesSkipped,
-	}, nil
+	return result, nil
 }
 
 // KSynthesize creates a molecule summarizing a category.
 func (a *App) KSynthesize(ctx context.Context, category string) (*KBResult, error) {
-	svc, err := a.kbService()
+	var result *KBResult
+	err := a.trackJob(ctx, fmt.Sprintf("Synthesize %s", category), "kb", func(jctx context.Context, p *jobProgress) error {
+		svc, err := a.kbService()
+		if err != nil {
+			return err
+		}
+		res, err := svc.Synthesize(jctx, category)
+		if err != nil {
+			return err
+		}
+		result = &KBResult{MoleculesCreated: res.MoleculesCreated}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	res, err := svc.Synthesize(ctx, category)
-	if err != nil {
-		return nil, err
-	}
-	return &KBResult{MoleculesCreated: res.MoleculesCreated}, nil
+	return result, nil
 }
 
 // EnsureArticleNote creates (if missing) a knowledge-graph note for a single

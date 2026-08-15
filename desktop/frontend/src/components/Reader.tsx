@@ -34,7 +34,7 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
     return (
       <div className="empty with-icon reader-hint">
         <Sparkles size={34} />
-        <span>Navega con <kbd>j</kbd>/<kbd>k</kbd> — el artículo se carga automáticamente</span>
+        <span>Navigate with <kbd>j</kbd>/<kbd>k</kbd> — the article loads automatically</span>
       </div>
     );
   }
@@ -47,23 +47,23 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
         <div className="reader-meta">
           {article.sourceName && <span className="src">{article.sourceName}</span>}
           {article.author && <span>{article.author}</span>}
-          <span title={`Importancia: ${article.importance}/3`}>{stars(article.importance)}</span>
+          <span title={`Importance: ${article.importance}/3`}>{stars(article.importance)}</span>
           {article.category && <span className={`cat-chip ${catClass(article.category)}`}>{article.category}</span>}
           {(article.tags?.length ?? 0) > 0 && (
             <span className="tags">{(article.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}</span>
           )}
         </div>
         <div className="reader-actions">
-          <button onClick={onSummarize} disabled={summarizing || !llmAvailable} title={llmAvailable ? "Resumen IA (y)" : "LLM no disponible"}>
+          <button onClick={onSummarize} disabled={summarizing || !llmAvailable} title={llmAvailable ? "AI summary (y)" : "LLM unavailable"}>
             {summarizing ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
           </button>
-          <button onClick={onArchive} title="Archivar (a) — reversible">
+          <button onClick={onArchive} title="Archive (a) — reversible">
             <Archive size={16} />
           </button>
-          <button onClick={onStar} title="Destacar (m)">
+          <button onClick={onStar} title="Star (m)">
             <Star size={16} />
           </button>
-          <button onClick={onOpenLink} title="Abrir en el navegador (O)">
+          <button onClick={onOpenLink} title="Open in browser (O)">
             <ExternalLink size={16} />
           </button>
         </div>
@@ -71,7 +71,7 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
 
       {article.summary && (
         <div className="ai-summary">
-          <span className="ai-label"><Sparkles size={13} /> Resumen IA</span>
+          <span className="ai-label"><Sparkles size={13} /> AI summary</span>
           {article.summary}
         </div>
       )}
@@ -79,15 +79,15 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
       <div className="reader-scroll" onScroll={onScroll}>
         {contentLoading && !article.contentMD ? (
           <div className="empty with-icon">
-            <Loader2 size={24} className="spin" /> Extrayendo el artículo…
+            <Loader2 size={24} className="spin" /> Extracting the article…
           </div>
         ) : article.contentMD ? (
           <Markdown content={article.contentMD} />
         ) : (
           <div className="empty with-icon">
             <ExternalLink size={26} />
-            <span>No se pudo extraer el contenido de esta fuente (puede ser JavaScript o estar bloqueada).</span>
-            <button onClick={onOpenLink}>Abrir en el navegador (O)</button>
+            <span>Could not extract content from this source (may be JavaScript or blocked).</span>
+            <button onClick={onOpenLink}>Open in browser (O)</button>
           </div>
         )}
       </div>

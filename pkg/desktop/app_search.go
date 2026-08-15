@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ajramos/giznews/internal/search"
 )
@@ -15,7 +16,7 @@ func (a *App) searchService() (*search.Service, error) {
 	}
 	return search.NewService(a.db, prov, search.Options{
 		Model: a.cfg.LLM.EmbeddingModel,
-	}, discardLogger())
+	}, a.logger())
 }
 
 // IndexResultDTO is the desktop view of a search-index run.
@@ -29,21 +30,30 @@ type IndexResultDTO struct {
 
 // SearchIndex rebuilds the FTS index and computes missing embeddings.
 func (a *App) SearchIndex(ctx context.Context) (*IndexResultDTO, error) {
-	svc, err := a.searchService()
+	var result *IndexResultDTO
+	err := a.trackJob(ctx, "Index search", "index", func(jctx context.Context, p *jobProgress) error {
+		svc, err := a.searchService()
+		if err != nil {
+			return err
+		}
+		res, err := svc.Index(jctx)
+		if err != nil {
+			return err
+		}
+		result = &IndexResultDTO{
+			NotesEmbedded:    res.NotesEmbedded,
+			ArticlesEmbedded: res.ArticlesEmbedded,
+			FTSNotes:         res.FTSNotes,
+			FTSArticles:      res.FTSArticles,
+			EmbeddingsFailed: res.EmbeddingsFailed,
+		}
+		p.Message(fmt.Sprintf("%d notes · %d articles embedded", res.NotesEmbedded, res.ArticlesEmbedded))
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	res, err := svc.Index(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &IndexResultDTO{
-		NotesEmbedded:    res.NotesEmbedded,
-		ArticlesEmbedded: res.ArticlesEmbedded,
-		FTSNotes:         res.FTSNotes,
-		FTSArticles:      res.FTSArticles,
-		EmbeddingsFailed: res.EmbeddingsFailed,
-	}, nil
+	return result, nil
 }
 
 // Search runs hybrid retrieval over notes and articles.

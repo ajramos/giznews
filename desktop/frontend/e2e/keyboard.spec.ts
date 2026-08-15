@@ -46,7 +46,7 @@ test.describe("vim keyboard grammar", () => {
     const before = await page.locator(".article-row").count();
     await press(page, "a");
     await expect(page.locator(".article-row")).toHaveCount(before - 1);
-    await expect(page.locator(".toast")).toContainText("archivado");
+    await expect(page.locator(".toast")).toContainText("archived");
     await shot(page, "04-archive-undo");
     // Undo restores the archived article (it was read by auto-load, so it
     // returns to the read view, not the unread list).
@@ -88,24 +88,24 @@ test.describe("vim keyboard grammar", () => {
     await gotoApp(page);
     // mock: article 7 is read
     await press(page, "r");
-    await expect(page.locator(".view-tab.active")).toContainText("Leídos");
+    await expect(page.locator(".view-tab.active")).toContainText("Read");
     await expect(page.locator(".article-row")).toHaveCount(1);
 
     await press(page, "u");
-    await expect(page.locator(".view-tab.active")).toContainText("No leídos");
+    await expect(page.locator(".view-tab.active")).toContainText("Unread");
     await expect(page.locator(".article-row")).toHaveCount(7);
 
     // archive one then view archived
     await press(page, "a");
     await press(page, "x");
-    await expect(page.locator(".view-tab.active")).toContainText("Archivados");
+    await expect(page.locator(".view-tab.active")).toContainText("Archived");
     await expect(page.locator(".article-row")).toHaveCount(1);
 
     // star one and view starred
     await press(page, "u");
     await press(page, "m");
     await press(page, "*");
-    await expect(page.locator(".view-tab.active")).toContainText("Destacados");
+    await expect(page.locator(".view-tab.active")).toContainText("Starred");
     await expect(page.locator(".article-row")).toHaveCount(1);
   });
 
@@ -173,7 +173,7 @@ test.describe("vim keyboard grammar", () => {
     await gotoApp(page);
     await press(page, "?");
     await expect(page.locator(".help-list")).toBeVisible();
-    await expect(page.locator(".help-note")).toContainText("Archivar es lógico");
+    await expect(page.locator(".help-note")).toContainText("Archiving is logical");
     await press(page, "Escape");
     await expect(page.locator(".help-list")).toHaveCount(0);
   });

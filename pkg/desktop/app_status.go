@@ -22,6 +22,12 @@ func (a *App) Status(ctx context.Context) (*StatusDTO, error) {
 		return nil, err
 	}
 
+	var pending int
+	if err := a.db.SQL().QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM articles WHERE status != 'archived' AND classified = 0").Scan(&pending); err != nil {
+		return nil, err
+	}
+
 	reachable := false
 	if a.cfg.LLM.Enabled {
 		prov, err := a.provider()
@@ -42,5 +48,6 @@ func (a *App) Status(ctx context.Context) (*StatusDTO, error) {
 		UnreadArticles:  unread,
 		TotalArticles:   total,
 		TotalNotes:      notes,
+		PendingClassify: pending,
 	}, nil
 }

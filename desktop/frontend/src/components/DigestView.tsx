@@ -34,33 +34,33 @@ export function DigestView({ digest, loading, unreadCount, focusId, onGenerate, 
   return (
     <div className="digest-view">
       <div className="digest-head">
-        <h1><Newspaper size={19} /> Digest de IA</h1>
+        <h1><Newspaper size={19} /> AI digest</h1>
         {digest && <span className="muted">{digest.date}</span>}
-        <span className="pill">{unreadCount} no leídos</span>
+        <span className="pill">{unreadCount} unread</span>
         <button onClick={onGenerate} disabled={loading}>
           {loading ? <Loader2 size={13} className="spin" /> : <Newspaper size={13} />}
-          {loading ? "Generando…" : "Generar (d)"}
+          {loading ? "Generating…" : "Generate (d)"}
         </button>
       </div>
 
       {!digest && !loading && (
         <div className="empty with-icon">
           <Newspaper size={32} />
-          <span>Pulsa para generar el digest diario con la IA.</span>
-          <button onClick={onGenerate}>Generar digest</button>
+          <span>Press to generate the daily digest with AI.</span>
+          <button onClick={onGenerate}>Generate digest</button>
         </div>
       )}
-      {loading && <div className="empty with-icon"><Loader2 size={28} className="spin" /> Resumiendo con IA…</div>}
+      {loading && <div className="empty with-icon"><Loader2 size={28} className="spin" /> Summarizing with AI…</div>}
 
       {digest && (
         <>
           {digest.themes.length > 0 && digest.themes.every((t) => t.theme === "general") && (
             <div className="digest-warn">
-              Estos artículos aún no están clasificados. Ejecuta <code>:procesar</code> para categorizarlos y agrupar el digest por temas.
+              These articles are not classified yet. Run <code>:process</code> to categorize them and group the digest by theme.
             </div>
           )}
           {digest.overview && <div className="digest-overview">{digest.overview}</div>}
-          {digest.themes.length === 0 && <div className="empty">No hay temas todavía. Ejecuta <code>:fetch</code> + <code>:classify</code>.</div>}
+          {digest.themes.length === 0 && <div className="empty">No themes yet. Run <code>:fetch</code> + <code>:classify</code>.</div>}
           {digest.themes.map((th) => (
             <section key={th.theme} className="digest-theme">
               <div className="digest-theme-header">

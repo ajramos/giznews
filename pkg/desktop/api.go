@@ -2,6 +2,8 @@ package desktop
 
 import (
 	"context"
+	"log"
+	"sync"
 
 	"github.com/ajramos/giznews/internal/config"
 	"github.com/ajramos/giznews/internal/db"
@@ -45,6 +47,16 @@ type API interface {
 	SearchIndex(ctx context.Context) (*IndexResultDTO, error)
 	Search(ctx context.Context, query string, limit int) ([]*SearchResultDTO, error)
 
+	// Jobs (background operations)
+	ListJobs(ctx context.Context) ([]*JobDTO, error)
+	RemoveJob(ctx context.Context, id int64) error
+	ClearFinishedJobs(ctx context.Context) error
+	CancelJob(ctx context.Context, id int64) error
+	BulkSetStatus(ctx context.Context, ids []int64, status string) (*BulkResult, error)
+
+	// Ingest a single article by URL
+	IngestURL(ctx context.Context, url string) (*ArticleDTO, error)
+
 	// Meta
 	Status(ctx context.Context) (*StatusDTO, error)
 }
@@ -70,6 +82,7 @@ type StatusDTO struct {
 	UnreadArticles  int    `json:"unread_articles"`
 	TotalArticles   int    `json:"total_articles"`
 	TotalNotes      int    `json:"total_notes"`
+	PendingClassify int    `json:"pending_classify"`
 }
 
 // App implements API over the internal services and DB. The Wails layer holds
@@ -78,11 +91,15 @@ type App struct {
 	cfg  *config.Config
 	db   *db.DB
 	prov llm.Provider // optional override (tests); lazily built from config
+	jobs *JobManager
+
+	logOnce sync.Once
+	loggerL *log.Logger
 }
 
 // NewApp builds the desktop API backend.
 func NewApp(cfg *config.Config, database *db.DB) *App {
-	return &App{cfg: cfg, db: database}
+	return &App{cfg: cfg, db: database, jobs: NewJobManager()}
 }
 
 // SetProvider overrides the LLM provider (used by tests).

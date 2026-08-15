@@ -4,7 +4,7 @@ import rehypeRaw from "rehype-raw";
 import { api } from "../api";
 
 export function Markdown({ content }: { content: string }) {
-  if (!content) return <div className="empty">Sin contenido</div>;
+  if (!content) return <div className="empty">No content</div>;
   return (
     <div className="markdown">
       <ReactMarkdown

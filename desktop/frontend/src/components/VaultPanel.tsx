@@ -21,10 +21,10 @@ const TYPE_ICON: Record<string, LucideIcon> = {
 };
 
 const FLOW_HINT: Record<string, string> = {
-  inbox: "Inbox → procesar → Atom",
-  atom: "Atom → conceptos → Electrons",
-  electron: "Electron ← definido por Atoms",
-  molecule: "Molecule ← sintetiza Atoms",
+  inbox: "Inbox → process → Atom",
+  atom: "Atom → concepts → Electrons",
+  electron: "Electron ← defined by Atoms",
+  molecule: "Molecule ← synthesizes Atoms",
 };
 
 interface Item {
@@ -146,7 +146,7 @@ export function VaultPanel({ onOpenNote, onOpenArticle, onClose, notify }: Props
   if (notes === null) {
     return (
       <div className="overlay" onClick={onClose}>
-        <div className="palette vault-panel"><div className="empty with-icon"><Loader2 size={22} className="spin" /> Cargando vault…</div></div>
+        <div className="palette vault-panel"><div className="empty with-icon"><Loader2 size={22} className="spin" /> Loading vault…</div></div>
       </div>
     );
   }
@@ -154,7 +154,7 @@ export function VaultPanel({ onOpenNote, onOpenArticle, onClose, notify }: Props
   return (
     <div className="overlay" onClick={onClose}>
       <div className="palette vault-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="palette-head">🔀 Flujo del vault</div>
+        <div className="palette-head">🔀 Vault flow</div>
 
         <div className="vault-tabs">
           {STAGES.map((s) => {
@@ -173,7 +173,7 @@ export function VaultPanel({ onOpenNote, onOpenArticle, onClose, notify }: Props
 
         <div className="vault-body">
           <div className="vault-list">
-            {items.length === 0 && <div className="palette-empty">Sin ítems en esta etapa.</div>}
+            {items.length === 0 && <div className="palette-empty">No items in this stage.</div>}
             {items.map((it, i) => {
               const Icon = TYPE_ICON[it.type] ?? FileText;
               return (
@@ -210,11 +210,11 @@ export function VaultPanel({ onOpenNote, onOpenArticle, onClose, notify }: Props
                 {selected.kind === "note" && (
                   <>
                     <div className="vd-section">
-                      <button className="icon-btn" onClick={() => setLinksOpen(true)} title="Abrir picker de enlaces (L)">
-                        <Link2 size={13} /> Enlaces ({links.length})
+                      <button className="icon-btn" onClick={() => setLinksOpen(true)} title="Open links picker (L)">
+                        <Link2 size={13} /> Links ({links.length})
                       </button>
                     </div>
-                    {links.length === 0 && <div className="muted" style={{ fontSize: 12 }}>Sin conexiones todavía.</div>}
+                    {links.length === 0 && <div className="muted" style={{ fontSize: 12 }}>No connections yet.</div>}
                     {links.map((l) => {
                       const Icon = TYPE_ICON[l.type] ?? FileText;
                       return (
@@ -229,22 +229,22 @@ export function VaultPanel({ onOpenNote, onOpenArticle, onClose, notify }: Props
                 )}
                 {selected.kind === "article" && (
                   <div className="muted" style={{ fontSize: 12 }}>
-                    Procesa este artículo (<code>:procesar</code>) para convertirlo en una nota Atom.
+                    Process this article (<code>:process</code>) to turn it into an Atom note.
                   </div>
                 )}
               </>
             ) : (
-              <div className="palette-empty">Selecciona un ítem.</div>
+              <div className="palette-empty">Select an item.</div>
             )}
           </div>
         </div>
 
         <div className="palette-head" style={{ borderTop: "1px solid var(--border)", borderBottom: "none", flexWrap: "wrap", gap: "4px 12px" }}>
-          <span><kbd>h/l</kbd> etapa</span>
-          <span><kbd>j/k</kbd> ítems</span>
-          <span><kbd>Enter</kbd> abrir</span>
-          <span><kbd>L</kbd> enlaces</span>
-          <span><kbd>f/Esc</kbd> cerrar</span>
+          <span><kbd>h/l</kbd> stage</span>
+          <span><kbd>j/k</kbd> items</span>
+          <span><kbd>Enter</kbd> open</span>
+          <span><kbd>L</kbd> links</span>
+          <span><kbd>f/Esc</kbd> close</span>
         </div>
       </div>
 

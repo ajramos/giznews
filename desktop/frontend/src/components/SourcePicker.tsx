@@ -48,9 +48,9 @@ export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onFil
   return (
     <div className="overlay" onClick={onClose}>
       <div className="palette source-picker" onClick={(e) => e.stopPropagation()}>
-        <div className="palette-head"><List size={14} /> Fuentes ({sources.length})</div>
+        <div className="palette-head"><List size={14} /> Sources ({sources.length})</div>
         <div className="source-picker-list">
-          {sources.length === 0 && <div className="palette-empty">Sin fuentes — pulsa <kbd>a</kbd> para añadir.</div>}
+          {sources.length === 0 && <div className="palette-empty">No sources — press <kbd>a</kbd> to add.</div>}
           {sources.map((s, i) => {
             const Icon = TYPE_ICON[s.type] ?? Rss;
             return (
@@ -70,13 +70,13 @@ export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onFil
           })}
         </div>
         <div className="palette-head" style={{ borderTop: "1px solid var(--border)", borderBottom: "none", flexWrap: "wrap", gap: "4px 14px" }}>
-          <span><kbd>j/k</kbd> navegar</span>
-          <span><kbd>Enter</kbd> activar/desactivar</span>
-          <span><kbd>a</kbd> añadir</span>
-          <span><kbd>e</kbd> editar</span>
-          <span><kbd>d</kbd> eliminar</span>
-          <span><kbd>f</kbd> filtrar</span>
-          <span><kbd>Esc</kbd> cerrar</span>
+          <span><kbd>j/k</kbd> navigate</span>
+          <span><kbd>Enter</kbd> toggle</span>
+          <span><kbd>a</kbd> add</span>
+          <span><kbd>e</kbd> edit</span>
+          <span><kbd>d</kbd> delete</span>
+          <span><kbd>f</kbd> filter</span>
+          <span><kbd>Esc</kbd> close</span>
         </div>
       </div>
     </div>

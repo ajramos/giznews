@@ -44,7 +44,7 @@ export function CommandPalette({ commands, onClose }: Props) {
           placeholder="fetch · classify · kb build · search index · digest · theme…"
         />
         <div className="palette-list">
-          {filtered.length === 0 && <div className="palette-empty">Sin comandos</div>}
+          {filtered.length === 0 && <div className="palette-empty">No commands</div>}
           {filtered.map((c, i) => (
             <div key={c.name} className={`palette-item ${i === sel ? "selected" : ""}`} onMouseEnter={() => setSel(i)} onClick={() => run(i)}>
               <span className="cmd-left">
@@ -56,7 +56,7 @@ export function CommandPalette({ commands, onClose }: Props) {
           ))}
         </div>
         <div className="palette-head" style={{ borderTop: "1px solid var(--border)", borderBottom: "none" }}>
-          <CornerDownLeft size={12} /> Enter para ejecutar · Esc para cerrar
+          <CornerDownLeft size={12} /> Enter to run · Esc to close
         </div>
       </div>
     </div>

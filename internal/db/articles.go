@@ -225,7 +225,9 @@ func (r *ArticleRepo) Count(ctx context.Context, status ArticleStatus) (int, err
 }
 
 // ListUnclassified returns unread articles that have not been classified yet,
-// limited to the last ageDays days.
+// limited to the last ageDays days. Both the fetch time and the publication
+// date must be within the window (items with no publication date are kept), so
+// archive dumps (a feed exposing its whole history) never flood the queue.
 func (r *ArticleRepo) ListUnclassified(ctx context.Context, limit, ageDays int) ([]*Article, error) {
 	if limit <= 0 {
 		limit = 100
@@ -237,8 +239,9 @@ func (r *ArticleRepo) ListUnclassified(ctx context.Context, limit, ageDays int) 
 	rows, err := r.db.sql.QueryContext(ctx, `
 		SELECT `+articleColumns+articleFrom+`
 		WHERE a.status != 'archived' AND a.classified = 0 AND a.fetched_at >= ?
+		  AND (a.published IS NULL OR a.published = '' OR a.published >= ?)
 		ORDER BY a.published IS NULL, a.published DESC
-		LIMIT ?`, cutoff, limit)
+		LIMIT ?`, cutoff, cutoff, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list unclassified: %w", err)
 	}

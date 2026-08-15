@@ -82,6 +82,9 @@ type Config struct {
 	// Classify configures article classification.
 	Classify ClassifyConfig `json:"classify"`
 
+	// Fetch configures article ingestion from sources.
+	Fetch FetchConfig `json:"fetch"`
+
 	// Extract configures full-article content extraction (readability) during
 	// fetch, so bodies are ready before you open them.
 	Extract ExtractConfig `json:"extract"`
@@ -139,8 +142,18 @@ type ClassifyConfig struct {
 	UseLLM bool `json:"use_llm"`
 	// BatchSize is how many articles go in one LLM call.
 	BatchSize int `json:"batch_size"`
+	// Concurrency is how many LLM batches run in parallel.
+	Concurrency int `json:"concurrency"`
 	// ImportanceThreshold: articles at/above this importance surface in the UI.
 	ImportanceThreshold int `json:"importance_threshold"`
+}
+
+// FetchConfig configures article ingestion from sources.
+type FetchConfig struct {
+	// MaxAgeDays drops feed items published more than N days ago, so archive
+	// dumps (e.g. a blog RSS exposing its whole history) don't flood the queue.
+	// 0 keeps everything.
+	MaxAgeDays int `json:"max_age_days"`
 }
 
 // ExtractConfig configures full-content extraction during fetch.
@@ -191,7 +204,11 @@ func DefaultConfig() *Config {
 		Classify: ClassifyConfig{
 			UseLLM:              true,
 			BatchSize:           20,
+			Concurrency:         2,
 			ImportanceThreshold: 2,
+		},
+		Fetch: FetchConfig{
+			MaxAgeDays: 30,
 		},
 		Extract: ExtractConfig{
 			OnFetch:     true,

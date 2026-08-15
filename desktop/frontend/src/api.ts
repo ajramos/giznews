@@ -8,10 +8,12 @@
 import { mockBackend } from "./apiMock";
 import type {
   ArticleDTO,
+  BulkResult,
   ClassifyResult,
   DigestDTO,
   FetchResult,
   IndexResult,
+  JobDTO,
   KBResult,
   ListArticlesOptions,
   NoteDTO,
@@ -118,6 +120,12 @@ export interface APIShape {
   graphNeighbors: (id: number) => Promise<NoteDTO[]>;
   searchIndex: () => Promise<IndexResult>;
   search: (query: string, limit: number) => Promise<SearchResultDTO[]>;
+  listJobs: () => Promise<JobDTO[]>;
+  removeJob: (id: number) => Promise<void>;
+  clearFinishedJobs: () => Promise<void>;
+  cancelJob: (id: number) => Promise<void>;
+  bulkSetStatus: (ids: number[], status: string) => Promise<BulkResult>;
+  ingestURL: (url: string) => Promise<ArticleDTO>;
   status: () => Promise<StatusDTO>;
   openURL: (url: string) => Promise<void>;
   openVault: () => Promise<void>;
@@ -165,6 +173,15 @@ const realApi: APIShape = {
   searchIndex: () => call<IndexResult>("SearchIndex"),
   search: (query: string, limit: number) =>
     call("Search", query, limit).then((v) => arr<SearchResultDTO>(v)),
+
+  listJobs: () => call("ListJobs").then((v) => arr<JobDTO>(v)),
+  removeJob: (id: number) => call("RemoveJob", id).then(() => undefined),
+  clearFinishedJobs: () => call("ClearFinishedJobs").then(() => undefined),
+  cancelJob: (id: number) => call("CancelJob", id).then(() => undefined),
+  bulkSetStatus: (ids: number[], status: string) =>
+    call("BulkSetStatus", ids, status).then((v) => normalize<BulkResult>(v)),
+  ingestURL: (url: string) =>
+    call("IngestURL", url).then((v) => normalize<ArticleDTO>(v)),
 
   status: () => call("Status").then((v) => normalize<StatusDTO>(v)),
 

@@ -21,7 +21,7 @@ export function SourceForm({ initial, onSave, onCancel }: Props) {
 
   const submit = () => {
     if (!valid) {
-      setError("Nombre y URL son obligatorios.");
+      setError("Name and URL are required.");
       return;
     }
     onSave({ name: name.trim(), type, url: url.trim(), group: group.trim() || "general" });
@@ -31,16 +31,16 @@ export function SourceForm({ initial, onSave, onCancel }: Props) {
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>{initial ? <><Pencil size={15} /> Editar fuente</> : <><Plus size={15} /> Añadir fuente</>}</h2>
+          <h2>{initial ? <><Pencil size={15} /> Edit source</> : <><Plus size={15} /> Add source</>}</h2>
           <button className="icon-btn" onClick={onCancel}><X size={15} /></button>
         </div>
         <div className="modal-body">
           <div className="field">
-            <label>Nombre</label>
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="p. ej. DeepMind Blog" />
+            <label>Name</label>
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. DeepMind Blog" />
           </div>
           <div className="field">
-            <label>Tipo</label>
+            <label>Type</label>
             <div className="type-seg">
               {TYPES.map((t) => (
                 <button key={t} className={type === t ? "active" : ""} onClick={() => setType(t)}>{t}</button>
@@ -48,19 +48,19 @@ export function SourceForm({ initial, onSave, onCancel }: Props) {
             </div>
           </div>
           <div className="field">
-            <label>URL del feed</label>
-            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={type === "gmail" ? 'query gmail (opcional) o deja el query global' : "https://…/rss.xml"} />
+            <label>Feed URL</label>
+            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={type === "gmail" ? "gmail query (optional) or leave the global query" : "https://…/rss.xml"} />
           </div>
           <div className="field">
-            <label>Grupo</label>
+            <label>Group</label>
             <input value={group} onChange={(e) => setGroup(e.target.value)} placeholder="general" />
           </div>
           {error && <div className="muted" style={{ color: "var(--bad)" }}>{error}</div>}
         </div>
         <div className="modal-foot">
-          <button onClick={onCancel}>Cancelar</button>
+          <button onClick={onCancel}>Cancel</button>
           <button disabled={!valid} onClick={submit} style={{ background: "var(--accent-dim)", borderColor: "var(--accent-dim)", color: "#fff" }}>
-            {initial ? "Guardar" : "Añadir"}
+            {initial ? "Save" : "Add"}
           </button>
         </div>
       </div>

@@ -226,18 +226,18 @@ export function GraphPanel({ focusNoteId, refresh, onOpenNote, onBuild, notify }
   }, [nodes]);
 
   if (notes === null) {
-    return <div className="panel"><div className="empty with-icon"><Loader2 size={24} className="spin" /> Cargando grafo…</div></div>;
+    return <div className="panel"><div className="empty with-icon"><Loader2 size={24} className="spin" /> Loading graph…</div></div>;
   }
 
   if (notes.length === 0) {
     return (
       <div className="panel graph-panel">
-        <div className="panel-title"><Network size={13} /> Grafo de conocimiento</div>
+        <div className="panel-title"><Network size={13} /> Knowledge graph</div>
         <div className="empty with-icon">
           <Network size={32} />
-          <span>Aún no hay notas en el knowledge graph.</span>
-          <button onClick={onBuild}>Generar nota de este artículo</button>
-          <span className="muted">Para todo el grafo ejecuta <code>:procesar</code> (o <code>:kb build</code>)</span>
+          <span>No notes in the knowledge graph yet.</span>
+          <button onClick={onBuild}>Generate note for this article</button>
+          <span className="muted">For the full graph run <code>:process</code> (or <code>:kb build</code>)</span>
         </div>
       </div>
     );
@@ -246,11 +246,11 @@ export function GraphPanel({ focusNoteId, refresh, onOpenNote, onBuild, notify }
   return (
     <div className="panel graph-panel">
       <div className="panel-title">
-        <Network size={13} /> Grafo de conocimiento
-        <span className="muted" style={{ fontSize: 12 }}>{nodes.length} notas · {links.length} conexiones</span>
+        <Network size={13} /> Knowledge graph
+        <span className="muted" style={{ fontSize: 12 }}>{nodes.length} notes · {links.length} connections</span>
         <span style={{ flex: 1 }} />
-        <button className="icon-btn" onClick={load} title="Recargar"><RefreshCw size={13} /></button>
-        <button className="icon-btn" onClick={() => void api.openVault()} title="Abrir vault en Obsidian"><FolderOpen size={13} /> Vault</button>
+        <button className="icon-btn" onClick={load} title="Reload"><RefreshCw size={13} /></button>
+        <button className="icon-btn" onClick={() => void api.openVault()} title="Open vault in Obsidian"><FolderOpen size={13} /> Vault</button>
       </div>
 
       <svg ref={svgRef} className="graph-canvas" viewBox="0 0 800 560" width="100%" height="100%" />
@@ -262,7 +262,7 @@ export function GraphPanel({ focusNoteId, refresh, onOpenNote, onBuild, notify }
             {type} ({count})
           </span>
         ))}
-        <span className="muted">· clic = abrir nota · arrastra = mover · scroll = zoom</span>
+        <span className="muted">· click = open note · drag = move · scroll = zoom</span>
       </div>
     </div>
   );

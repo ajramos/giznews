@@ -28,7 +28,7 @@ export function ThemeModal({ value, onChange, onClose }: Props) {
   return (
     <div className="overlay" onClick={onClose}>
       <div className="palette theme-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="palette-head"><Palette size={14} /> Elegir tema</div>
+        <div className="palette-head"><Palette size={14} /> Choose theme</div>
         <div className="theme-options">
           {THEMES.map((t, i) => (
             <button
@@ -44,7 +44,7 @@ export function ThemeModal({ value, onChange, onClose }: Props) {
           ))}
         </div>
         <div className="palette-head" style={{ borderTop: "1px solid var(--border)", borderBottom: "none" }}>
-          <span className="muted" style={{ fontSize: 12 }}>↑/↓ navegar · Enter elegir · Esc cerrar</span>
+          <span className="muted" style={{ fontSize: 12 }}>↑/↓ navigate · Enter choose · Esc close</span>
         </div>
       </div>
     </div>

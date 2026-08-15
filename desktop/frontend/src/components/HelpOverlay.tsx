@@ -5,7 +5,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
   return (
     <div className="overlay" onClick={onClose}>
       <div className="palette help" onClick={(e) => e.stopPropagation()}>
-        <div className="palette-head"><CircleHelp size={14} /> Atajos de teclado</div>
+        <div className="palette-head"><CircleHelp size={14} /> Keyboard shortcuts</div>
         <div className="help-list">
           {HELP.map((cat) => (
             <div key={cat.title}>
@@ -20,8 +20,8 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <div className="help-note">
-          <strong>Leyenda:</strong> ★ = importancia (0-3, ★★☆/★★★ = relevante o clave) · ● = no leído · <span className="star-badge">★</span> = destacado · 🗄/tachado = archivado.
-          <br /><strong>Archivar es lógico:</strong> los artículos nunca se borran físicamente; todo es recuperable desde la vista de archivados o con el toast de deshacer.
+          <strong>Legend:</strong> ★ = importance (0-3, ★★☆/★★★ = relevant or key) · ● = unread · <span className="star-badge">★</span> = starred · 🗄/strikethrough = archived.
+          <br /><strong>Archiving is logical:</strong> articles are never physically deleted; everything is recoverable from the archived view or the undo toast.
         </div>
       </div>
     </div>

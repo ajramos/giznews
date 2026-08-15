@@ -25,13 +25,13 @@ import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
 import { NotesPicker } from "./components/NotesPicker";
-import { PipelineModal, type PipelineStep } from "./components/PipelineModal";
+import { JobsPanel } from "./components/JobsPanel";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
 import { VaultPanel } from "./components/VaultPanel";
 import { LinksPicker, type LinkItem } from "./components/LinksPicker";
 import { buildNoteLinks, buildArticleLinks } from "./noteLinks";
-import { CircleHelp, Command, RefreshCw, Tag, Network, Search } from "lucide-react";
+import { CircleHelp, Command, RefreshCw } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
 
@@ -61,9 +61,9 @@ export default function App() {
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [notesPickerOpen, setNotesPickerOpen] = useState(false);
-  const [pipelineOpen, setPipelineOpen] = useState(false);
-  const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
+  const [jobsOpen, setJobsOpen] = useState(false);
   const [synthPrompt, setSynthPrompt] = useState(false);
+  const [urlPrompt, setUrlPrompt] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
@@ -94,6 +94,7 @@ export default function App() {
   const [bulk, setBulk] = useState(false);
   const [bulkSel, setBulkSel] = useState<Set<number>>(new Set());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [runningJobs, setRunningJobs] = useState(0);
 
   const bulkIds = useMemo(() => [...bulkSel], [bulkSel]);
 
@@ -147,13 +148,24 @@ export default function App() {
   }, []);
   useEffect(() => { void loadArticles(); }, [view, loadArticles]);
 
+  // Poll the jobs registry to drive the topbar "running" indicator.
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.listJobs().then((j) => {
+      if (alive) setRunningJobs(j.filter((x) => x.status === "running").length);
+    }).catch(() => {});
+    load();
+    const iv = window.setInterval(load, 2500);
+    return () => { alive = false; window.clearInterval(iv); };
+  }, []);
+
   // auto-refresh: quietly fetch new articles every 15 minutes.
   useEffect(() => {
     if (!autoRefresh) return;
     const iv = window.setInterval(async () => {
       try {
         const r = await api.fetch();
-        if (r.newArticles > 0) notify(`${r.newArticles} nuevos artículos`);
+        if (r.newArticles > 0) notify(`${r.newArticles} new articles`);
         void loadArticles();
         void loadStatus();
       } catch { /* network hiccup */ }
@@ -258,17 +270,20 @@ export default function App() {
     const restoring = batch[0].status === "archived";
     const undo: Record<number, string> = {};
     for (const a of batch) undo[a.id] = a.status;
-    void applyToIds(ids, async (a) => {
-      await api.setArticleStatus(a.id, restoring ? "unread" : "archived");
-    }, () => {
-      setArticles((prev) => prev.filter((a) => !batch.some((b) => b.id === a.id)));
-      setSelectedIndex((i) => Math.max(0, i - 1));
-      notify(restoring ? `${batch.length} restaurado(s)` : `${batch.length} archivado(s)`, () => {
-        void Promise.all(batch.map((a) => api.setArticleStatus(a.id, undo[a.id])));
-        void loadArticles();
-      });
-    });
-  }, [articles, applyToIds, notify, loadArticles]);
+    const target = restoring ? "unread" : "archived";
+    void (async () => {
+      try {
+        await api.bulkSetStatus(batch.map((a) => a.id), target);
+        setArticles((prev) => restoring ? prev : prev.filter((a) => !batch.some((b) => b.id === a.id)));
+        if (!restoring) setSelectedIndex((i) => Math.max(0, i - 1));
+        void loadStatus();
+        notify(`${batch.length} archived`, () => {
+          void Promise.all(batch.map((a) => api.setArticleStatus(a.id, undo[a.id])));
+          void loadArticles();
+        });
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [articles, notify, loadArticles, loadStatus]);
 
   const archiveRange = useCallback((count: number) => {
     archiveIds(articles.slice(selectedIndex, selectedIndex + Math.max(1, count)).map((a) => a.id));
@@ -308,7 +323,7 @@ export default function App() {
     const next = selected.status === "starred" ? "unread" : "starred";
     await api.setArticleStatus(selected.id, next);
     setArticles((prev) => prev.map((a) => (a.id === selected.id ? { ...a, status: next } : a)));
-    notify(next === "starred" ? "Destacado" : "Quitado de destacados");
+    notify(next === "starred" ? "Starred" : "Unstarred");
   }, [selected, notify]);
 
   const summarize = useCallback(async () => {
@@ -318,7 +333,7 @@ export default function App() {
       const updated = await api.summarizeArticle(selected.id);
       setReader(updated);
       setArticles((prev) => prev.map((a) => (a.id === updated.id ? { ...a, summary: updated.summary } : a)));
-      notify("Resumen generado");
+      notify("Summary generated");
     } catch (e) { notify(String(e)); }
     finally { busyRef.current = false; setSummarizing(false); }
   }, [selected, notify]);
@@ -344,8 +359,8 @@ export default function App() {
   // closing a modal does NOT re-trigger a load that would clobber a note).
   const modalOpen =
     paletteOpen || helpOpen || notesPickerOpen || sourcePickerOpen || themeModalOpen ||
-    pipelineOpen || sourceForm != null || deleteSource != null || vaultOpen ||
-    digestOpen || panel !== "none" || synthPrompt || statusOpen || noteLinks != null;
+    jobsOpen || sourceForm != null || deleteSource != null || vaultOpen ||
+    digestOpen || panel !== "none" || synthPrompt || urlPrompt || statusOpen || noteLinks != null;
   const modalOpenRef = useRef(modalOpen);
   modalOpenRef.current = modalOpen;
   const noteReaderRef = useRef<NoteDTO | null>(null);
@@ -426,7 +441,7 @@ export default function App() {
     if (id == null) return;
     try {
       await api.ensureArticleNote(id);
-      notify("Nota generada para este artículo");
+      notify("Note generated for this article");
       setGraphRefresh((r) => r + 1);
       await openGraph();
     } catch (e) { notify(String(e)); }
@@ -442,78 +457,79 @@ export default function App() {
   }, [notify]);
 
   // ---- commands ----
-  const runCmd = useCallback(async (fn: () => Promise<unknown>, msg: string) => {
-    try { await fn(); notify(msg); } catch (e) { notify(String(e)); }
+  const runCmd = useCallback(async (fn: () => Promise<unknown>) => {
+    try { await fn(); } catch (e) { notify(String(e)); }
   }, [notify]);
 
-  const runPipeline = useCallback(async () => {
-    setPipelineOpen(true);
-    const steps: PipelineStep[] = [
-      { key: "fetch", label: "Traer artículos", icon: <RefreshCw size={14} />, status: "pending" },
-      { key: "classify", label: "Clasificar (reglas + LLM)", icon: <Tag size={14} />, status: "pending" },
-      { key: "kb", label: "Construir knowledge graph", icon: <Network size={14} />, status: "pending" },
-      { key: "index", label: "Indexar búsqueda semántica", icon: <Search size={14} />, status: "pending" },
-    ];
-    const update = (key: string, patch: Partial<PipelineStep>) =>
-      setPipelineSteps((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)));
-    setPipelineSteps(steps);
-
+  // Run the full pipeline (fetch → classify → kb → index) as sequential
+  // background jobs; the jobs panel stays open so progress is visible.
+  const runProcess = useCallback(async () => {
+    setJobsOpen(true);
     try {
-      update("fetch", { status: "running" });
-      const f = await api.fetch();
-      update("fetch", { status: "done", summary: `${f.newArticles} nuevos · ${f.extracted} extraídos` });
+      await api.fetch();
+      await reloadAll();
+      await api.classify(500);
       await loadArticles();
-      await loadSources();
+      await api.kbuild();
       await loadStatus();
+      await api.searchIndex();
+      notify("Process completed");
+    } catch (e) { notify(String(e)); }
+  }, [reloadAll, loadArticles, loadStatus, notify]);
 
-      update("classify", { status: "running" });
-      const c = await api.classify(500);
-      update("classify", { status: "done", summary: `${c.classified} clasificados (⚡ ${c.byRules} · ${c.byLLM} LLM)` });
-      await loadArticles();
-
-      update("kb", { status: "running" });
-      const k = await api.kbuild();
-      update("kb", { status: "done", summary: `${k.atomsCreated} atoms · ${k.electronsCreated} electrons` });
-      await loadStatus();
-
-      update("index", { status: "running" });
-      const idx = await api.searchIndex();
-      update("index", { status: "done", summary: `${idx.notesEmbedded} notas · ${idx.articlesEmbedded} artículos` });
-
-      notify("Procesado completado");
-    } catch (e) {
-      setPipelineSteps((prev) => prev.map((s) => (s.status === "running" ? { ...s, status: "error", summary: String(e) } : s)));
-    }
-  }, [loadArticles, loadSources, loadStatus, notify]);
+  const addByURL = useCallback(async (url: string) => {
+    try {
+      const art = await api.ingestURL(url);
+      notify(`Added: ${art.title}`);
+      await reloadAll();
+      if (art.id) void openArticle(art.id);
+    } catch (e) { notify(String(e)); }
+  }, [reloadAll, openArticle, notify]);
 
   const commands = useMemo<PaletteCommand[]>(() => [
-    { name: "procesar", hint: "Pipeline completo: fetch → clasificar → kb", run: () => void runPipeline() },
-    { name: "fetch", hint: "Traer nuevos artículos (+ extraer cuerpos)", run: () => void runCmd(async () => {
-      const r = await api.fetch(); await reloadAll();
-      notify(`${r.newArticles} nuevos${r.extracted ? ` · ${r.extracted} extraídos` : ""}`);
-    }, "fetch") },
-    { name: "classify", hint: "Clasificar (reglas + LLM)", run: () => void runCmd(async () => {
-      const c = await api.classify(200);
-      notify(`${c.classified} clasificados (⚡ ${c.byRules} reglas · ${c.byLLM} LLM)`);
-    }, "clasificación") },
-    { name: "kb build", hint: "Generar atoms/electrons", run: () => void runCmd(async () => {
-      const k = await api.kbuild();
-      notify(`${k.atomsCreated} atoms · ${k.electronsCreated} electrons`);
-      await loadStatus();
-    }, "kb build") },
-    { name: "kb synth <categoría>", hint: "Molecule de una categoría", run: () => setSynthPrompt(true) },
-    { name: "search index", hint: "Indexar embeddings", run: () => void runCmd(api.searchIndex, "índice actualizado") },
-    { name: "digest", hint: "Digest diario", run: () => void generateDigest() },
-    { name: "auto-refresh", hint: autoRefresh ? "Desactivar refresco automático" : "Activar refresco cada 15 min", run: () => setAutoRefresh((v) => !v) },
-    { name: "sources", hint: "Gestionar fuentes (picker)", run: () => setSourcePickerOpen(true) },
-    { name: "notes", hint: "Ver notas del knowledge graph", run: () => setNotesPickerOpen(true) },
-    { name: "vault", hint: "Flujo del vault (inbox → electrons → atoms → molecules)", run: () => setVaultOpen(true) },
-    { name: "status", hint: "Resumen del estado (artículos, notas, LLM)", run: () => setStatusOpen(true) },
-    { name: "add-source", hint: "Añadir una fuente RSS/HN/arXiv/gmail", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
-    { name: "theme", hint: "Elegir tema (picker)", run: () => setThemeModalOpen(true) },
-    { name: "open vault", hint: "Abrir vault en Obsidian", run: () => void api.openVault() },
-    { name: "quit", hint: "Salir", run: () => void api.quit() },
-  ], [runCmd, generateDigest, reloadAll, theme, autoRefresh, runPipeline]);
+    { name: "process", hint: "Full pipeline: fetch → classify → kb → index", run: () => void runProcess() },
+    { name: "fetch", hint: "Fetch new articles (+ extract bodies)", run: () => {
+      setJobsOpen(true);
+      void runCmd(async () => {
+        const r = await api.fetch();
+        await reloadAll();
+        notify(`${r.newArticles} new${r.extracted ? ` · ${r.extracted} extracted` : ""}`);
+      });
+    } },
+    { name: "classify", hint: "Classify (rules + LLM)", run: () => {
+      setJobsOpen(true);
+      void runCmd(async () => {
+        const c = await api.classify(200);
+        await loadArticles();
+        notify(`${c.classified} classified (${c.byRules} rules · ${c.byLLM} LLM)`);
+      });
+    } },
+    { name: "kb build", hint: "Generate atoms/electrons", run: () => {
+      setJobsOpen(true);
+      void runCmd(async () => {
+        const k = await api.kbuild();
+        await loadStatus();
+        notify(`${k.atomsCreated} atoms · ${k.electronsCreated} electrons`);
+      });
+    } },
+    { name: "kb synth <category>", hint: "Synthesize a category into a molecule", run: () => setSynthPrompt(true) },
+    { name: "search index", hint: "Rebuild search index + embeddings", run: () => {
+      setJobsOpen(true);
+      void runCmd(async () => { await api.searchIndex(); notify("Search index updated"); });
+    } },
+    { name: "digest", hint: "Daily digest", run: () => void generateDigest() },
+    { name: "url", hint: "Add an article by URL", run: () => setUrlPrompt(true) },
+    { name: "jobs", hint: "Background jobs", run: () => setJobsOpen(true) },
+    { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
+    { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
+    { name: "notes", hint: "Browse knowledge-graph notes", run: () => setNotesPickerOpen(true) },
+    { name: "vault", hint: "Vault flow (inbox → electrons → atoms → molecules)", run: () => setVaultOpen(true) },
+    { name: "status", hint: "Status (articles, notes, LLM)", run: () => setStatusOpen(true) },
+    { name: "add-source", hint: "Add a source (RSS/HN/arXiv/gmail)", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
+    { name: "theme", hint: "Choose theme", run: () => setThemeModalOpen(true) },
+    { name: "open vault", hint: "Open vault in Obsidian", run: () => void api.openVault() },
+    { name: "quit", hint: "Quit GizNews", run: () => void api.quit() },
+  ], [runCmd, runProcess, generateDigest, reloadAll, loadArticles, loadStatus, theme, autoRefresh]);
 
   // ---- keyboard (vim grammar) ----
   useEffect(() => {
@@ -535,8 +551,9 @@ export default function App() {
         if (themeModalOpen) { setThemeModalOpen(false); return; }
         if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
         if (notesPickerOpen) { setNotesPickerOpen(false); return; }
-        if (pipelineOpen) { setPipelineOpen(false); return; }
+        if (jobsOpen) { setJobsOpen(false); return; }
         if (synthPrompt) { setSynthPrompt(false); return; }
+        if (urlPrompt) { setUrlPrompt(false); return; }
         if (statusOpen) { setStatusOpen(false); return; }
         if (vaultOpen) { setVaultOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
@@ -548,7 +565,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || pipelineOpen || synthPrompt || statusOpen || vaultOpen) return;
+      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || jobsOpen || synthPrompt || urlPrompt || statusOpen || vaultOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -666,6 +683,7 @@ export default function App() {
       }
       if (k === "n") { setNotesPickerOpen(true); return; }
       if (k === "f") { setVaultOpen(true); return; }
+      if (k === "z") { setJobsOpen(true); return; }
       if (k === "d") { void generateDigest(); return; }
       if (k === ":") { setPaletteOpen(true); return; }
       if (k === "?") { setHelpOpen(true); return; }
@@ -676,7 +694,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, pipelineOpen, synthPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, jobsOpen, synthPrompt, urlPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -690,7 +708,7 @@ export default function App() {
       await api.addSource(data.name, data.type, data.url, data.group);
       setSourceForm(null);
       await loadSources();
-      notify(`Fuente añadida: ${data.name}`);
+      notify(`Source added: ${data.name}`);
     } catch (e) { notify(String(e)); }
   }, [loadSources, notify]);
 
@@ -702,7 +720,7 @@ export default function App() {
       await api.deleteSource(deleteSource.id);
       if (filterSource === deleteSource.id) await selectSource(null);
       await loadSources();
-      notify(`Fuente eliminada de la lista (artículos conservados)`);
+      notify(`Source removed (articles kept)`);
     } catch (e) { notify(String(e)); }
     finally { setDeleteSource(null); }
   }, [deleteSource, filterSource, selectSource, loadSources, notify]);
@@ -714,14 +732,14 @@ export default function App() {
     : reader ? "reader"
     : "list";
 
-  const modeLabel = panel === "search" ? "BUSCAR"
-    : panel === "graph" ? "GRAFO"
+  const modeLabel = panel === "search" ? "SEARCH"
+    : panel === "graph" ? "GRAPH"
     : digestOpen ? "DIGEST"
-    : reader ? "LECTOR"
-    : "LISTA";
+    : reader ? "READER"
+    : "LIST";
 
   const filterLabel = filterSource
-    ? `fuente: ${sources.find((s) => s.id === filterSource)?.name ?? "?"}`
+    ? `source: ${sources.find((s) => s.id === filterSource)?.name ?? "?"}`
     : undefined;
 
   return (
@@ -733,8 +751,13 @@ export default function App() {
         </div>
         {status && (
           <div className="status">
-            <span className="pill" title="Artículos sin leer">{status.unreadArticles} no leídos</span>
-            <span className="pill" title="Notas del knowledge graph en Obsidian (atoms + electrons + molecules)">🧠 {status.totalNotes} notas</span>
+            <span className="pill" title="Unread articles">{status.unreadArticles} unread</span>
+            <span className="pill" title="Knowledge-graph notes in Obsidian (atoms + electrons + molecules)">🧠 {status.totalNotes} notes</span>
+            {runningJobs > 0 && (
+              <button className="pill jobs" onClick={() => setJobsOpen(true)} title="Background jobs">
+                ⏳ {runningJobs} running
+              </button>
+            )}
             {filterSource && (
               <button className="pill filter" onClick={() => void selectSource(null)}>
                 ✕ {filterLabel}
@@ -744,9 +767,9 @@ export default function App() {
         )}
         <div className="topbar-actions">
           <ThemePicker value={theme} onChange={(t) => { applyTheme(t); setTheme(t); }} />
-          <button className="icon-btn" onClick={() => void reloadAll()} title="Recargar"><RefreshCw size={15} /></button>
-          <button className="icon-btn" onClick={() => setHelpOpen(true)} title="Ayuda (?)"><CircleHelp size={15} /></button>
-          <button className="icon-btn" onClick={() => setPaletteOpen(true)} title="Comandos (:)"><Command size={15} /></button>
+          <button className="icon-btn" onClick={() => void reloadAll()} title="Reload"><RefreshCw size={15} /></button>
+          <button className="icon-btn" onClick={() => setHelpOpen(true)} title="Help (?)"><CircleHelp size={15} /></button>
+          <button className="icon-btn" onClick={() => setPaletteOpen(true)} title="Commands (:)"><Command size={15} /></button>
         </div>
       </header>
 
@@ -871,15 +894,23 @@ export default function App() {
           notify={notify}
         />
       )}
-      {pipelineOpen && <PipelineModal steps={pipelineSteps} onClose={() => setPipelineOpen(false)} />}
       {synthPrompt && (
         <PromptModal
-          title="Categoría para la síntesis"
+          title="Category to synthesize"
           placeholder="models, research, industry…"
-          onSubmit={(cat) => { setSynthPrompt(false); void runCmd(() => api.ksynthesize(cat), `molecule de ${cat}`); }}
+          onSubmit={(cat) => { setSynthPrompt(false); void runCmd(async () => { const k = await api.ksynthesize(cat); notify(`Molecule: ${k.moleculesCreated}`); }); }}
           onClose={() => setSynthPrompt(false)}
         />
       )}
+      {urlPrompt && (
+        <PromptModal
+          title="Add article by URL"
+          placeholder="https://example.com/blog/post"
+          onSubmit={(url) => { setUrlPrompt(false); void addByURL(url); }}
+          onClose={() => setUrlPrompt(false)}
+        />
+      )}
+      {jobsOpen && <JobsPanel onClose={() => setJobsOpen(false)} notify={notify} />}
       {statusOpen && <StatusModal onClose={() => setStatusOpen(false)} />}
       {vaultOpen && (
         <VaultPanel
@@ -914,16 +945,16 @@ export default function App() {
       {deleteSource && (
         <div className="modal-overlay" onClick={() => setDeleteSource(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><h2>Eliminar fuente</h2></div>
+            <div className="modal-head"><h2>Delete source</h2></div>
             <div className="modal-body">
               <p style={{ margin: 0 }}>
-                ¿Eliminar <strong>{deleteSource.name}</strong> de la lista?
-                <br /><span className="muted">Los artículos ya guardados se conservan. Es reversible: puedes volver a añadirla.</span>
+                Delete <strong>{deleteSource.name}</strong> from the list?
+                <br /><span className="muted">Saved articles are kept. Reversible: you can re-add it.</span>
               </p>
             </div>
             <div className="modal-foot">
-              <button onClick={() => setDeleteSource(null)}>Cancelar</button>
-              <button onClick={() => void confirmDeleteSource()} style={{ background: "var(--accent-dim)", color: "#fff" }}>Eliminar</button>
+              <button onClick={() => setDeleteSource(null)}>Cancel</button>
+              <button onClick={() => void confirmDeleteSource()} style={{ background: "var(--accent-dim)", color: "#fff" }}>Delete</button>
             </div>
           </div>
         </div>
@@ -931,7 +962,7 @@ export default function App() {
       {toast && (
         <div className="toast">
           <span>{toast.msg}</span>
-          {toast.undo && <button className="toast-undo" onClick={() => { toast.undo?.(); setToast(null); }}>Deshacer</button>}
+          {toast.undo && <button className="toast-undo" onClick={() => { toast.undo?.(); setToast(null); }}>Undo</button>}
         </div>
       )}
     </div>

@@ -96,7 +96,7 @@ test.describe("sources", () => {
     await expect(page.locator(".modal")).toBeVisible();
     await page.locator(".modal input").nth(0).fill("MIT Tech Review");
     await page.locator(".modal input").nth(1).fill("https://www.technologyreview.com/feed/");
-    await page.locator(".modal").getByRole("button", { name: "Añadir" }).click();
+    await page.locator(".modal").getByRole("button", { name: "Add" }).click();
     await expect(page.locator(".modal")).toHaveCount(0); // wait for save
     // back to the picker to confirm the new source
     await page.keyboard.press(":");
@@ -114,8 +114,8 @@ test.describe("sources", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator(".source-picker-item")).toHaveCount(4);
     await page.keyboard.press("d"); // delete focused (first)
-    await expect(page.locator(".modal")).toContainText("¿Eliminar");
-    await page.locator(".modal").getByRole("button", { name: "Eliminar" }).click();
+    await expect(page.locator(".modal")).toContainText("Delete");
+    await page.locator(".modal").getByRole("button", { name: "Delete" }).click();
     await expect(page.locator(".modal")).toHaveCount(0); // wait for confirm
     await page.keyboard.press(":");
     await page.locator(".palette input").fill("sources");
@@ -191,18 +191,27 @@ test.describe("workflows", () => {
     await expect(pill).toContainText("auto 15m");
   });
 
-  test(":procesar runs the pipeline and shows per-step results", async ({ page }) => {
+  test(":process runs the pipeline as background jobs", async ({ page }) => {
     await gotoApp(page);
     await page.keyboard.press(":");
-    await page.locator(".palette input").fill("procesar");
+    await page.locator(".palette input").fill("process");
     await page.keyboard.press("Enter");
-    await expect(page.locator(".pipeline-modal")).toBeVisible();
-    await expect(page.locator(".pipeline-step")).toHaveCount(4);
-    // all steps finish (mock is fast)
-    await expect(page.locator(".pipeline-step .pl-status.done")).toHaveCount(4, { timeout: 10000 });
-    await expect(page.locator(".pipeline-step").nth(0)).toContainText("nuevos");
-    await page.locator(".pipeline-modal").getByRole("button", { name: "Cerrar" }).click();
-    await expect(page.locator(".pipeline-modal")).toHaveCount(0);
+    await expect(page.locator(".jobs-picker")).toBeVisible();
+    await expect(page.locator(".job-item")).toHaveCount(4, { timeout: 10000 });
+    await expect(page.locator(".job-status.done")).toHaveCount(4, { timeout: 10000 });
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".jobs-picker")).toHaveCount(0);
+  });
+
+  test(":classify runs in the background and shows progress in the jobs panel", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("classify");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".jobs-picker")).toBeVisible();
+    await expect(page.locator(".job-item", { hasText: "Classify articles" })).toHaveCount(1, { timeout: 10000 });
+    await expect(page.locator(".job-status.done")).toHaveCount(1, { timeout: 10000 });
+    await page.keyboard.press("Escape");
   });
 
   test(":status opens the status modal", async ({ page }) => {
@@ -211,10 +220,32 @@ test.describe("workflows", () => {
     await page.locator(".palette input").fill("status");
     await page.keyboard.press("Enter");
     await expect(page.locator(".status-modal")).toBeVisible();
-    await expect(page.locator(".status-modal")).toContainText("Artículos");
+    await expect(page.locator(".status-modal")).toContainText("Articles");
     await expect(page.locator(".status-modal")).toContainText("Atoms");
     await page.keyboard.press("Escape");
     await expect(page.locator(".status-modal")).toHaveCount(0);
+  });
+
+  test(":url adds an article by URL and opens it", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("url");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".prompt-modal")).toBeVisible();
+    await page.locator(".prompt-modal input").fill("https://example.com/blog/ingested");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".toast")).toContainText("Added", { timeout: 6000 });
+    await expect(page.locator(".reader-head h1")).toContainText("example.com", { timeout: 6000 });
+  });
+
+  test("archive runs as a bulk background job", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press("5"); // count prefix
+    await page.keyboard.press("a"); // archive 5
+    await page.keyboard.press("z"); // open jobs panel
+    await expect(page.locator(".jobs-picker")).toBeVisible();
+    await expect(page.locator(".job-item", { hasText: "Mark 5 archived" })).toHaveCount(1, { timeout: 6000 });
+    await page.keyboard.press("Escape");
   });
 
   test(":kb synth opens a prompt modal", async ({ page }) => {

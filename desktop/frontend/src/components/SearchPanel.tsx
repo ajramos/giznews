@@ -15,7 +15,7 @@ interface Props {
 export function SearchPanel({ query, onQuery, searching, results, focus, onFocus, onOpen, onClose }: Props) {
   return (
     <div className="panel search-panel">
-      <div className="panel-title"><Search size={13} /> Búsqueda semántica</div>
+      <div className="panel-title"><Search size={13} /> Semantic search</div>
       <div className="search-box">
         <Search size={15} />
         <input
@@ -28,16 +28,16 @@ export function SearchPanel({ query, onQuery, searching, results, focus, onFocus
             else if (e.key === "Enter") { if (results[focus]) onOpen(results[focus]); }
             else if (e.key === "Escape") onClose();
           }}
-          placeholder="p. ej. watermarking, agentic workflows, LoRA…"
+          placeholder="e.g. watermarking, agentic workflows, LoRA…"
         />
         {query && (
-          <button className="search-clear" title="Limpiar" onClick={() => onQuery("")}>
+          <button className="search-clear" title="Clear" onClick={() => onQuery("")}>
             <X size={14} />
           </button>
         )}
       </div>
-      {searching && <div className="empty with-icon"><Loader2 size={22} className="spin" /> Buscando…</div>}
-      {!searching && query && results.length === 0 && <div className="empty">Sin resultados.</div>}
+      {searching && <div className="empty with-icon"><Loader2 size={22} className="spin" /> Searching…</div>}
+      {!searching && query && results.length === 0 && <div className="empty">No results.</div>}
       <div className="results">
         {results.map((r, i) => (
           <div

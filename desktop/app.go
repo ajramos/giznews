@@ -97,6 +97,26 @@ func (a *App) Search(query string, limit int) ([]*gizdesktop.SearchResultDTO, er
 	return a.api.Search(bg(), query, limit)
 }
 
+// ---- Jobs ----
+func (a *App) ListJobs() ([]*gizdesktop.JobDTO, error) {
+	return a.api.ListJobs(bg())
+}
+func (a *App) RemoveJob(id int64) error {
+	return a.api.RemoveJob(bg(), id)
+}
+func (a *App) ClearFinishedJobs() error {
+	return a.api.ClearFinishedJobs(bg())
+}
+func (a *App) CancelJob(id int64) error {
+	return a.api.CancelJob(bg(), id)
+}
+func (a *App) BulkSetStatus(ids []int64, status string) (*gizdesktop.BulkResult, error) {
+	return a.api.BulkSetStatus(bg(), ids, status)
+}
+func (a *App) IngestURL(url string) (*gizdesktop.ArticleDTO, error) {
+	return a.api.IngestURL(bg(), url)
+}
+
 // ---- Meta ----
 func (a *App) Status() (*gizdesktop.StatusDTO, error) {
 	return a.api.Status(bg())

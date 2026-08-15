@@ -48,12 +48,12 @@ export function StatusBar({
       <div className="sb-keys">
         {bulk
           ? [
-              { key: "space", label: "marcar" },
-              { key: "j/k", label: "navegar" },
-              { key: "a", label: "archivar" },
-              { key: "t", label: "leído" },
-              { key: "m", label: "destacar" },
-              { key: "Esc/v", label: "salir" },
+              { key: "space", label: "toggle" },
+              { key: "j/k", label: "navigate" },
+              { key: "a", label: "archive" },
+              { key: "t", label: "read" },
+              { key: "m", label: "star" },
+              { key: "Esc/v", label: "exit" },
             ].map((k) => (
               <span key={k.key + k.label} className="sb-key"><kbd>{k.key}</kbd> {k.label}</span>
             ))
@@ -64,15 +64,15 @@ export function StatusBar({
             ))}
       </div>
       <div className="sb-right">
-        <button className="pill auto" title="Auto-refresh cada 15 min" onClick={onToggleAuto}>
+        <button className="pill auto" title="Auto-refresh every 15 min" onClick={onToggleAuto}>
           {autoRefresh ? "auto 15m ✓" : "auto off"}
         </button>
         {llmOn && llmReachable ? (
-          <span className="pill llm on" title={`LLM conectado (${llmProvider})`}>● {llmProvider}</span>
+          <span className="pill llm on" title={`LLM connected (${llmProvider})`}>● {llmProvider}</span>
         ) : llmOn ? (
-          <span className="pill llm off" title="LLM configurado pero no responde">○ {llmProvider}</span>
+          <span className="pill llm off" title="LLM configured but not responding">○ {llmProvider}</span>
         ) : (
-          <span className="pill" title="LLM desactivado en config.json (llm.enabled)">LLM off</span>
+          <span className="pill" title="LLM disabled in config.json (llm.enabled)">LLM off</span>
         )}
       </div>
     </footer>

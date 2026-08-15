@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -97,8 +98,30 @@ func TestClassifyViaAPI(t *testing.T) {
 	}
 }
 
-func TestClassifyWithoutLLMDefaults(t *testing.T) {
-	app := newAppWithLLM(t, "", false)
+func TestClassifyConcurrentBatches(t *testing.T) {
+	app := newAppWithEchoProvider(t)
+	app.cfg.Classify.BatchSize = 5
+	app.cfg.Classify.Concurrency = 4
+	ctx := context.Background()
+
+	s, _ := app.AddSource(ctx, "S", "rss", "https://x.com/rss", "")
+	repo := db.NewArticleRepo(app.db)
+	for i := 0; i < 40; i++ {
+		_, _, _ = repo.Upsert(ctx, db.NewArticle{
+			SourceID: s.ID, GUID: fmt.Sprintf("g%d", i), Title: fmt.Sprintf("News %d", i), Status: db.StatusUnread,
+		})
+	}
+
+	res, err := app.Classify(ctx, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ByLLM != 40 {
+		t.Fatalf("ByLLM = %d, want 40 (res=%+v)", res.ByLLM, res)
+	}
+}
+
+func TestClassifyWithoutLLMDefaults(t *testing.T) {	app := newAppWithLLM(t, "", false)
 	ctx := context.Background()
 	s, _ := app.AddSource(ctx, "S", "rss", "https://x.com/rss", "")
 	repo := db.NewArticleRepo(app.db)

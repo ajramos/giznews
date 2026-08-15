@@ -8,7 +8,7 @@ test.describe("UI render", () => {
     await shot(page, "01-layout");
 
     await expect(page.locator(".topbar .brand-name")).toHaveText("GizNews");
-    await expect(page.locator(".topbar .pill").first()).toContainText("no leídos");
+    await expect(page.locator(".topbar .pill").first()).toContainText("unread");
 
     await expect(page.locator(".article-row")).toHaveCount(7); // 7 unread in mock
     // no sources sidebar — sources live in the :sources picker
@@ -51,8 +51,8 @@ test.describe("UI render", () => {
     await page.addInitScript(() => localStorage.removeItem("giznews-welcomed"));
     await page.goto("/");
     await expect(page.locator(".welcome")).toBeVisible({ timeout: 8000 });
-    await expect(page.locator(".welcome")).toContainText("Bienvenido a GizNews");
-    await page.locator(".welcome").getByRole("button", { name: "Empezar" }).click();
+    await expect(page.locator(".welcome")).toContainText("Welcome to GizNews");
+    await page.locator(".welcome").getByRole("button", { name: "Get started" }).click();
     await expect(page.locator(".welcome")).toHaveCount(0);
     await expect(page.locator(".article-row").first()).toBeVisible();
   });

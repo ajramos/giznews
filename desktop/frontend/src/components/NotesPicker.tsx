@@ -11,7 +11,7 @@ const TYPE_META: Record<string, { label: string; icon: LucideIcon }> = {
 };
 
 const FILTERS: { key: string; type: string; label: string }[] = [
-  { key: "*", type: "", label: "todas" },
+  { key: "*", type: "", label: "all" },
   { key: "a", type: "atom", label: "atoms" },
   { key: "e", type: "electron", label: "electrons" },
   { key: "m", type: "molecule", label: "molecules" },
@@ -58,13 +58,13 @@ export function NotesPicker({ onOpen, onClose, notify }: Props) {
     <div className="overlay" onClick={onClose}>
       <div className="palette notes-picker" onClick={(e) => e.stopPropagation()}>
         <div className="palette-head">
-          <NotebookText size={14} /> Notas del knowledge graph ({notes.length})
+          <NotebookText size={14} /> Knowledge-graph notes ({notes.length})
           <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>
-            {FILTERS.find((f) => f.type === filter)?.label ?? "todas"}
+            {FILTERS.find((f) => f.type === filter)?.label ?? "all"}
           </span>
         </div>
         <div className="source-picker-list">
-          {notes.length === 0 && <div className="palette-empty">Sin notas. Ejecuta <kbd>:procesar</kbd> (o <kbd>:kb build</kbd>) para generarlas.</div>}
+          {notes.length === 0 && <div className="palette-empty">No notes. Run <kbd>:process</kbd> (or <kbd>:kb build</kbd>) to generate them.</div>}
           {notes.map((n, i) => {
             const meta = TYPE_META[n.type] ?? TYPE_META.atom;
             const Icon = meta.icon;
@@ -83,11 +83,11 @@ export function NotesPicker({ onOpen, onClose, notify }: Props) {
           })}
         </div>
         <div className="palette-head" style={{ borderTop: "1px solid var(--border)", borderBottom: "none", flexWrap: "wrap", gap: "4px 14px" }}>
-          <span><kbd>j/k</kbd> navegar</span>
-          <span><kbd>Enter</kbd> abrir</span>
+          <span><kbd>j/k</kbd> navigate</span>
+          <span><kbd>Enter</kbd> open</span>
           <span><kbd>a/e/m</kbd> atom/electron/molecule</span>
-          <span><kbd>*</kbd> todas</span>
-          <span><kbd>Esc</kbd> cerrar</span>
+          <span><kbd>*</kbd> all</span>
+          <span><kbd>Esc</kbd> close</span>
         </div>
       </div>
     </div>

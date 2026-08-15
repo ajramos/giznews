@@ -3,7 +3,6 @@ package desktop
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/ajramos/giznews/internal/fetch"
 	"github.com/ajramos/giznews/internal/sources"
@@ -17,10 +16,11 @@ func (a *App) fetchService() (*fetch.Service, error) {
 		a.cfg.Gmail.Queries,
 		a.cfg.Gmail.MaxAge,
 	)
-	svc, err := fetch.NewService(a.db, man, log.New(logWriter{}, "giznews: ", 0))
+	svc, err := fetch.NewService(a.db, man, a.logger())
 	if err != nil {
 		return nil, err
 	}
+	svc.SetMaxAge(a.cfg.Fetch.MaxAgeDays)
 	if a.cfg.Extract.OnFetch {
 		svc.SetExtraction(a.cfg.Extract.Limit, a.cfg.Extract.Concurrency)
 	}
@@ -33,20 +33,29 @@ func (logWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 // Fetch runs the pipeline and maps the result to the API DTO.
 func (a *App) Fetch(ctx context.Context) (*FetchResult, error) {
-	svc, err := a.fetchService()
-	if err != nil {
-		return nil, fmt.Errorf("fetch service: %w", err)
-	}
-	res, err := svc.FetchAll(ctx)
+	var result *FetchResult
+	err := a.trackJob(ctx, "Fetch articles", "fetch", func(jctx context.Context, p *jobProgress) error {
+		svc, err := a.fetchService()
+		if err != nil {
+			return fmt.Errorf("fetch service: %w", err)
+		}
+		res, err := svc.FetchAll(jctx)
+		if err != nil {
+			return err
+		}
+		result = &FetchResult{
+			NewArticles:    res.NewArticles,
+			Updated:        res.Updated,
+			SourcesFetched: res.SourcesFetched,
+			SourcesFailed:  res.SourcesFailed,
+			Extracted:      res.Extracted,
+			ElapsedMs:      res.ElapsedMs,
+		}
+		p.Message(fmt.Sprintf("%d new · %d extracted", res.NewArticles, res.Extracted))
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return &FetchResult{
-		NewArticles:    res.NewArticles,
-		Updated:        res.Updated,
-		SourcesFetched: res.SourcesFetched,
-		SourcesFailed:  res.SourcesFailed,
-		Extracted:      res.Extracted,
-		ElapsedMs:      res.ElapsedMs,
-	}, nil
+	return result, nil
 }

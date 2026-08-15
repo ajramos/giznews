@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ajramos/giznews/internal/db"
 	"github.com/ajramos/giznews/internal/sources"
@@ -19,6 +20,14 @@ const feedA = `<?xml version="1.0"?>
 <link>https://x.example/scale?utm_source=rss&amp;utm_medium=feed</link></item>
 <item><guid>a2</guid><title>Quantization at the edge</title>
 <link>https://x.example/quant</link></item>
+</channel></rss>`
+
+var feedOld = `<?xml version="1.0"?>
+<rss version="2.0"><channel>
+<item><guid>old1</guid><title>Ancient archive post</title>
+<link>https://x.example/old1</link><pubDate>Mon, 01 Jan 2015 00:00:00 GMT</pubDate></item>
+<item><guid>recent1</guid><title>Fresh post</title>
+<link>https://x.example/recent1</link><pubDate>` + time.Now().UTC().Format(time.RFC1123Z) + `</pubDate></item>
 </channel></rss>`
 
 func newPipeline(t *testing.T) (*Service, *db.DB) {
@@ -98,8 +107,37 @@ func TestFetchAllDedupAcrossSources(t *testing.T) {
 	_ = s1
 }
 
-func TestSimHashNearDuplicate(t *testing.T) {
-	a := SimHash("OpenAI releases GPT-5 with advanced reasoning capabilities today")
+func TestSetMaxAgeDropsStaleItems(t *testing.T) {
+	svc, d := newPipeline(t)
+	svc.SetMaxAge(30)
+	ctx := context.Background()
+	repo := db.NewSourceRepo(d)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		w.Write([]byte(feedOld))
+	}))
+	defer srv.Close()
+
+	if _, err := repo.Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: srv.URL, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.FetchAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only the fresh post should have been ingested; the 2015 post is dropped.
+	if res.NewArticles != 1 {
+		t.Fatalf("new = %d, want 1 (dups/skipped: %d)", res.NewArticles, res.Duplicates)
+	}
+	total, _ := db.NewArticleRepo(d).Count(ctx, "")
+	if total != 1 {
+		t.Fatalf("total articles = %d, want 1", total)
+	}
+}
+
+func TestSimHashNearDuplicate(t *testing.T) {	a := SimHash("OpenAI releases GPT-5 with advanced reasoning capabilities today")
 	b := SimHash("OpenAI releases GPT-5 with advanced reasoning capabilities today!")
 	if HammingDistance(a, b) > 2 {
 		t.Fatalf("near duplicates should be close: %d", HammingDistance(a, b))

@@ -35,7 +35,7 @@ test("real Wails snake_case wire shape renders correctly", async ({ page }) => {
   // snake_case fields map to the camelCase TS fields:
   await expect(page.locator(".article-row")).toHaveCount(2);
   await expect(page.locator(".article-row").first()).toContainText("Wire-shape article one");
-  await expect(page.locator(".topbar .pill").first()).toContainText("no leídos");
+  await expect(page.locator(".topbar .pill").first()).toContainText("unread");
   // LLM enabled + reachable → green pill with provider name
   await expect(page.locator(".statusbar .pill.llm.on")).toContainText("ollama");
 

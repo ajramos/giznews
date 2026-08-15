@@ -74,18 +74,18 @@ export function LinksPicker({ links, onPick, onClose }: Props) {
   return (
     <div className="overlay" onClick={onClose}>
       <div className="palette links-picker" onClick={(e) => e.stopPropagation()}>
-        <div className="palette-head"><Link2 size={14} /> Enlaces de la nota ({filtered.length})</div>
+        <div className="palette-head"><Link2 size={14} /> Links ({filtered.length})</div>
         <div className="search-box">
           <Search size={15} />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setFocus("input"); setSel(0); }}
-            placeholder="filtrar por título o tipo…"
+            placeholder="filter by title or type…"
           />
         </div>
         <div className="palette-list">
-          {filtered.length === 0 && <div className="palette-empty">Sin enlaces.</div>}
+          {filtered.length === 0 && <div className="palette-empty">No links.</div>}
           {filtered.map((l, i) => {
             const Icon = TYPE_ICON[l.type] ?? FileText;
             return (
@@ -99,14 +99,14 @@ export function LinksPicker({ links, onPick, onClose }: Props) {
                   <span className="sp-type"><Icon size={13} /></span>
                   <span className="cmd-name">{i + 1}. {l.title}</span>
                 </span>
-                <span className="cmd-hint">{l.url ? l.url : `${l.dir === "out" ? "→ enlaza a" : "← enlazado por"} · ${l.type}`}</span>
+                <span className="cmd-hint">{l.url ? l.url : `${l.dir === "out" ? "→ links to" : "← linked by"} · ${l.type}`}</span>
               </div>
             );
           })}
         </div>
         <div className="palette-head" style={{ borderTop: "1px solid var(--border)", borderBottom: "none", flexWrap: "wrap", gap: "4px 12px" }}>
           <span className="muted" style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <CornerDownLeft size={12} /> Enter / 1-9 abre · Tab lista · Esc cerrar
+            <CornerDownLeft size={12} /> Enter / 1-9 open · Tab list · Esc close
           </span>
         </div>
       </div>

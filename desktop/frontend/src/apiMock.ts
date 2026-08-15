@@ -4,10 +4,12 @@
 
 import type {
   ArticleDTO,
+  BulkResult,
   ClassifyResult,
   DigestDTO,
   FetchResult,
   IndexResult,
+  JobDTO,
   KBResult,
   ListArticlesOptions,
   NoteDTO,
@@ -53,9 +55,9 @@ const sampleArticles: ArticleDTO[] = [
 ];
 
 const sampleNotes: NoteDTO[] = [
-  { id: 101, type: "electron", title: "ai agents", slug: "ai-agents", content: "# ai agents\n\n## Definición\nConcepto recurrente — referenciado en 3 nota(s).\n\n## Fuentes\n- [[model-context-protocol-mcp-explained]] — MCP: how agents connect to tools\n- [[building-more-capable-ai-agents]] — World models\n", tags: ["ai", "concept"], wikilinks: ["mcp"], createdAt: "2026-08-14T10:00:00Z" },
-  { id: 102, type: "atom", title: "DeepSeek Harness developer preview", slug: "deepseek-harness-developer-preview", content: "# DeepSeek Harness developer preview\n\n## Resumen\nDeepSeek released a dev preview.\n\n" + lorem(20) + "\n\n## Conexiones\n- [[deepseek]]\n", tags: ["atom", "ai", "deepseek"], wikilinks: ["deepseek"], createdAt: "2026-08-14T10:01:00Z" },
-  { id: 103, type: "molecule", title: "Síntesis de models", slug: "sintesis-models", content: "# 🧪 Síntesis de models\n\n## Central Idea\nThe current landscape is defined by performance and safety.\n\n## Conexiones\n- [[deepseek-harness-developer-preview]]\n", tags: ["synthesis", "ai"], wikilinks: ["deepseek-harness-developer-preview"], createdAt: "2026-08-14T10:02:00Z" },
+  { id: 101, type: "electron", title: "ai agents", slug: "ai-agents", content: "# ai agents\n\n## Definition\nRecurring concept — referenced in 3 note(s).\n\n## Sources\n- [[model-context-protocol-mcp-explained]] — MCP: how agents connect to tools\n- [[building-more-capable-ai-agents]] — World models\n", tags: ["ai", "concept"], wikilinks: ["mcp"], createdAt: "2026-08-14T10:00:00Z" },
+  { id: 102, type: "atom", title: "DeepSeek Harness developer preview", slug: "deepseek-harness-developer-preview", content: "# DeepSeek Harness developer preview\n\n## Summary\nDeepSeek released a dev preview.\n\n" + lorem(20) + "\n\n## Connections\n- [[deepseek]]\n", tags: ["atom", "ai", "deepseek"], wikilinks: ["deepseek"], createdAt: "2026-08-14T10:01:00Z" },
+  { id: 103, type: "molecule", title: "Synthesis of models", slug: "synthesis-models", content: "# 🧪 Synthesis of models\n\n## Central Idea\nThe current landscape is defined by performance and safety.\n\n## Connections\n- [[deepseek-harness-developer-preview]]\n", tags: ["synthesis", "ai"], wikilinks: ["deepseek-harness-developer-preview"], createdAt: "2026-08-14T10:02:00Z" },
 ];
 
 const sampleDigest: DigestDTO = {
@@ -82,6 +84,26 @@ const sampleSearch: SearchResultDTO[] = [
 ];
 
 const delay = (ms = 30) => new Promise((r) => setTimeout(r, ms));
+
+// In-memory jobs store so the jobs picker works in browser/mock mode. Mirrors
+// the backend JobManager: running jobs show progress, finished ones persist.
+let jobSeq = 0;
+const mockJobs: JobDTO[] = [];
+
+function beginJob(name: string, type: string): number {
+  const id = ++jobSeq;
+  mockJobs.unshift({ id, name, type, status: "running", phase: "", done: 0, total: 0, createdAt: new Date().toISOString() });
+  return id;
+}
+function patchJob(id: number, patch: Partial<JobDTO>): void {
+  const j = mockJobs.find((x) => x.id === id);
+  if (j) Object.assign(j, patch);
+}
+function finishJob(id: number, errMsg?: string): void {
+  const j = mockJobs.find((x) => x.id === id);
+  if (!j || j.status !== "running") return; // do not clobber a canceled job
+  Object.assign(j, { status: errMsg ? "error" : "done", errMsg, finishedAt: new Date().toISOString() } as Partial<JobDTO>);
+}
 
 // Dense mode (?dense=1) simulates a full inbox (150 articles, long bodies) so
 // scroll/wheel/layout issues can be reproduced and tested.
@@ -179,18 +201,48 @@ export const mockBackend: APIShape = {
   },
   setArticleImportance: async (_id: number, _importance: number): Promise<void> => { await delay(); },
 
-  fetch: async (): Promise<FetchResult> => { await delay(60); return { newArticles: 3, updated: 0, sourcesFetched: 4, sourcesFailed: 0, extracted: 2, elapsedMs: 500 }; },
-  classify: async (_limit: number): Promise<ClassifyResult> => { await delay(60); return { classified: 8, byRules: 2, byLLM: 6, skippedNoLLM: 0, batches: 1, errors: [] }; },
+  fetch: async (): Promise<FetchResult> => {
+    const id = beginJob("Fetch articles", "fetch");
+    await delay(60);
+    finishJob(id);
+    return { newArticles: 3, updated: 0, sourcesFetched: 4, sourcesFailed: 0, extracted: 2, elapsedMs: 500 };
+  },
+  classify: async (_limit: number): Promise<ClassifyResult> => {
+    const id = beginJob("Classify articles", "classify");
+    patchJob(id, { phase: "rules", done: 8, total: 8 });
+    await delay(50);
+    patchJob(id, { phase: "llm", done: 8, total: 8 });
+    await delay(80);
+    finishJob(id);
+    return { classified: 8, byRules: 2, byLLM: 6, skippedNoLLM: 0, batches: 1, errors: [] };
+  },
   summarizeArticle: async (id: number): Promise<ArticleDTO> => {
+    const jid = beginJob("Summarize article", "summarize");
     await delay(80);
     const a = await mockBackend.getArticle(id);
     a.summary = "Mock summary: this article covers a key development in the AI landscape and why it matters for practitioners.";
+    finishJob(jid);
     return a;
   },
-  digest: async (): Promise<DigestDTO> => { await delay(80); return DIGEST; },
+  digest: async (): Promise<DigestDTO> => {
+    const id = beginJob("Generate digest", "digest");
+    await delay(80);
+    finishJob(id);
+    return DIGEST;
+  },
 
-  kbuild: async (): Promise<KBResult> => { await delay(60); return { atomsCreated: 5, electronsCreated: 2, electronsUpdated: 0, moleculesCreated: 0, articlesSkipped: 12 }; },
-  ksynthesize: async (_category: string): Promise<KBResult> => { await delay(60); return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, articlesSkipped: 0 }; },
+  kbuild: async (): Promise<KBResult> => {
+    const id = beginJob("Build knowledge graph", "kb");
+    await delay(60);
+    finishJob(id);
+    return { atomsCreated: 5, electronsCreated: 2, electronsUpdated: 0, moleculesCreated: 0, articlesSkipped: 12 };
+  },
+  ksynthesize: async (_category: string): Promise<KBResult> => {
+    const id = beginJob("Synthesize category", "kb");
+    await delay(60);
+    finishJob(id);
+    return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, articlesSkipped: 0 };
+  },
   ensureArticleNote: async (articleID: number): Promise<NoteDTO> => {
     await delay(60);
     const art = ARTICLES.find((a) => a.id === articleID);
@@ -200,7 +252,7 @@ export const mockBackend: APIShape = {
       type: "atom",
       title,
       slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      content: `# ${title}\n\n## Resumen\n\nNota generada para este artículo.\n`,
+      content: `# ${title}\n\n## Summary\n\nNote generated for this article.\n`,
       tags: ["atom", "ai"],
       wikilinks: [],
       createdAt: new Date().toISOString(),
@@ -226,12 +278,65 @@ export const mockBackend: APIShape = {
     return NOTES.slice(0, 2);
   },
 
-  searchIndex: async (): Promise<IndexResult> => { await delay(); return { notesEmbedded: 3, articlesEmbedded: 8, ftsNotes: 3, ftsArticles: 8, embeddingsFailed: 0 }; },
+  searchIndex: async (): Promise<IndexResult> => {
+    const id = beginJob("Index search", "index");
+    await delay();
+    finishJob(id);
+    return { notesEmbedded: 3, articlesEmbedded: 8, ftsNotes: 3, ftsArticles: 8, embeddingsFailed: 0 };
+  },
   search: async (_q: string, _limit: number): Promise<SearchResultDTO[]> => { await delay(60); return sampleSearch; },
+
+  listJobs: async (): Promise<JobDTO[]> => { await delay(5); return mockJobs.map((j) => ({ ...j })); },
+  removeJob: async (id: number): Promise<void> => {
+    const i = mockJobs.findIndex((j) => j.id === id);
+    if (i >= 0) mockJobs.splice(i, 1);
+  },
+  clearFinishedJobs: async (): Promise<void> => {
+    for (let i = mockJobs.length - 1; i >= 0; i--) {
+      if (mockJobs[i].status !== "running") mockJobs.splice(i, 1);
+    }
+  },
+  cancelJob: async (id: number): Promise<void> => {
+    const j = mockJobs.find((x) => x.id === id);
+    if (j && j.status === "running") Object.assign(j, { status: "canceled", finishedAt: new Date().toISOString() });
+  },
+  bulkSetStatus: async (ids: number[], status: string): Promise<BulkResult> => {
+    const id = beginJob(`Mark ${ids.length} ${status}`, "bulk");
+    for (let i = 0; i < ids.length; i++) {
+      await delay(30);
+      patchJob(id, { phase: "bulk", done: i + 1, total: ids.length });
+      const a = ARTICLES.find((x) => x.id === ids[i]);
+      if (a) a.status = status as ArticleDTO["status"];
+    }
+    finishJob(id);
+    return { updated: ids.length, total: ids.length };
+  },
+  ingestURL: async (url: string): Promise<ArticleDTO> => {
+    const id = beginJob("Ingest URL", "ingest");
+    patchJob(id, { phase: "fetch", done: 0, total: 1 });
+    await delay(90);
+    patchJob(id, { phase: "done", done: 1, total: 1 });
+    const article: ArticleDTO = {
+      id: Date.now(),
+      sourceId: 0,
+      sourceName: "Manual",
+      url,
+      title: url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+      importance: 0,
+      status: "unread",
+      category: "",
+      tags: [],
+      contentMD: md(`Ingested from ${url}.\n\nThis is the extracted body of the linked article.`),
+      fetchedAt: new Date().toISOString(),
+    };
+    ARTICLES.unshift(article);
+    finishJob(id);
+    return { ...article };
+  },
 
   status: async (): Promise<StatusDTO> => {
     await delay();
-    return { dbPath: "/mock/db", vaultPath: "/mock/vault", llmProvider: "ollama", llmEnabled: true, llmReachable: true, embeddingsModel: "nomic-embed-text", unreadArticles: ARTICLES.filter((a) => a.status === "unread").length, totalArticles: ARTICLES.length, totalNotes: NOTES.length };
+    return { dbPath: "/mock/db", vaultPath: "/mock/vault", llmProvider: "ollama", llmEnabled: true, llmReachable: true, embeddingsModel: "nomic-embed-text", unreadArticles: ARTICLES.filter((a) => a.status === "unread").length, totalArticles: ARTICLES.length, totalNotes: NOTES.length, pendingClassify: 12 };
   },
 
   openURL: async (_url: string): Promise<void> => { await delay(); },

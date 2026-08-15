@@ -51,7 +51,7 @@ export function ThemePicker({ value, onChange }: Props) {
   return (
     <>
       <span className="theme-picker">
-        <button ref={btnRef} className="icon-btn" onClick={() => (open ? setOpen(false) : openPicker())} title="Tema (picker)">
+        <button ref={btnRef} className="icon-btn" onClick={() => (open ? setOpen(false) : openPicker())} title="Theme (picker)">
           <Palette size={15} />
           <span className="theme-name">{cur.label}</span>
         </button>

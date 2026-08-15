@@ -1,8 +1,8 @@
 // Keyboard grammar — vim-consistent, single-letter panels.
-// Motions: j/k (con prefijo de conteo 5j), gg/G, Ctrl+d/u
-// Verbs:  y resumen · a archivar · t leído · m destacar · O abrir · Enter
-// Paneles (toggle): s búsqueda · g grafo · d digest · : palette · ? ayuda
-// Vistas: u no leídos · r leídos · x archivados · * destacados
+// Motions: j/k (with count prefix 5j), gg/G, Ctrl+d/u
+// Verbs:  y summarize · a archive · t read · m star · O open · Enter
+// Panels (toggle): s search · g graph · d digest · : palette · ? help
+// Views: u unread · r read · x archived · * starred
 
 export interface HelpCategory {
   title: string;
@@ -11,104 +11,107 @@ export interface HelpCategory {
 
 export const HELP: HelpCategory[] = [
   {
-    title: "Navegación",
+    title: "Navigation",
     rows: [
-      { keys: "j / k", label: "Siguiente / anterior (5j = saltar 5) — carga automática" },
-      { keys: "gg / G", label: "Inicio / final de la lista" },
-      { keys: "Ctrl+d / Ctrl+u", label: "Media página abajo / arriba" },
-      { keys: "J / K", label: "Abrir siguiente / anterior artículo" },
-      { keys: "Enter", label: "Abrir artículo (y enfocar el lector)" },
+      { keys: "j / k", label: "Next / previous (5j = jump 5) — auto-loads" },
+      { keys: "gg / G", label: "Top / bottom of the list" },
+      { keys: "Ctrl+d / Ctrl+u", label: "Half page down / up" },
+      { keys: "J / K", label: "Open next / previous article" },
+      { keys: "Enter", label: "Open article (and focus the reader)" },
+      { keys: "Esc", label: "Back to the list (unfocus the reader)" },
     ],
   },
   {
-    title: "Acciones sobre el artículo",
+    title: "Article actions",
     rows: [
-      { keys: "Enter", label: "Abrir / cerrar artículo (enfoca el lector)" },
-      { keys: "J / K", label: "Siguiente / anterior artículo (abre)" },
-      { keys: "j / k", label: "Scroll del lector cuando está enfocado" },
-      { keys: "Espacio / Shift+Espacio", label: "Página abajo / arriba en el lector" },
-      { keys: "Esc", label: "Volver a la lista (desenfocar el lector)" },
-      { keys: "y", label: "Resumen IA" },
-      { keys: "a", label: "Archivar (5a = archivar 5) — deshacer con toast" },
-      { keys: "t", label: "Marcar leído / no leído" },
-      { keys: "m", label: "Destacar (star)" },
-      { keys: "O", label: "Abrir en el navegador" },
+      { keys: "Enter", label: "Open / close article (focuses the reader)" },
+      { keys: "J / K", label: "Next / previous article (opens)" },
+      { keys: "j / k", label: "Scroll the reader while focused" },
+      { keys: "Space / Shift+Space", label: "Page down / up in the reader" },
+      { keys: "y", label: "AI summary" },
+      { keys: "a", label: "Archive (5a = archive 5) — undo via toast" },
+      { keys: "t", label: "Mark read / unread" },
+      { keys: "m", label: "Star" },
+      { keys: "O", label: "Open in browser" },
     ],
   },
   {
-    title: "Paneles (toggle)",
+    title: "Panels (toggle)",
     rows: [
-      { keys: "s", label: "Búsqueda semántica" },
-      { keys: "g", label: "Grafo de conocimiento" },
-      { keys: "f", label: "Flujo del vault (inbox → electrons → atoms → molecules)" },
-      { keys: "n", label: "Notas del knowledge graph" },
-      { keys: "d", label: "Digest diario" },
+      { keys: "s", label: "Semantic search" },
+      { keys: "g", label: "Knowledge graph" },
+      { keys: "f", label: "Vault flow (inbox → electrons → atoms → molecules)" },
+      { keys: "n", label: "Knowledge-graph notes" },
+      { keys: "z", label: "Background jobs" },
+      { keys: "d", label: "Daily digest" },
       { keys: ":", label: "Command palette" },
-      { keys: "Esc", label: "Cerrar panel / volver" },
+      { keys: "Esc", label: "Close panel / back" },
     ],
   },
   {
-    title: "Vistas de la lista",
+    title: "List views",
     rows: [
-      { keys: "u / r / x / *", label: "No leídos · Leídos · Archivados · Destacados" },
+      { keys: "u / r / x / *", label: "Unread · Read · Archived · Starred" },
     ],
   },
   {
-    title: "Modo bulk (selección múltiple)",
+    title: "Bulk mode (multi-select)",
     rows: [
-      { keys: "v", label: "Entrar en modo bulk" },
-      { keys: "espacio", label: "Marcar / desmarcar el artículo actual" },
-      { keys: "j / k", label: "Navegar (sin cambiar la selección)" },
-      { keys: "a / t / m", label: "Aplicar archivar · leído · destacar a la selección" },
-      { keys: "Esc / v", label: "Salir del modo bulk" },
+      { keys: "v", label: "Enter bulk mode" },
+      { keys: "space", label: "Toggle the current article" },
+      { keys: "j / k", label: "Navigate (without changing selection)" },
+      { keys: "a / t / m", label: "Apply archive · read · star to the selection" },
+      { keys: "Esc / v", label: "Exit bulk mode" },
     ],
   },
   {
     title: "App",
     rows: [
-      { keys: ":procesar", label: "Pipeline completo (fetch → clasificar → kb → indexar)" },
-      { keys: "f", label: "Flujo del vault: h/l etapa · j/k ítems · L enlaces · Enter abrir" },
-      { keys: "q", label: "Salir de GizNews" },
+      { keys: ":process", label: "Full pipeline (fetch → classify → kb → index)" },
+      { keys: ":url", label: "Add an article by URL" },
+      { keys: ":jobs", label: "Browse background jobs (cancel / remove)" },
+      { keys: "f", label: "Vault flow: h/l stage · j/k items · L links · Enter open" },
+      { keys: "q", label: "Quit GizNews" },
     ],
   },
 ];
 
 export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
   list: [
-    { key: "j/k", label: "navegar" },
-    { key: "Enter", label: "abrir" },
-    { key: "y", label: "resumen" },
-    { key: "a", label: "archivar" },
-    { key: "t", label: "leído" },
-    { key: "m", label: "destacar" },
-    { key: "s", label: "buscar" },
-    { key: "g", label: "grafo" },
+    { key: "j/k", label: "navigate" },
+    { key: "Enter", label: "open" },
+    { key: "y", label: "summarize" },
+    { key: "a", label: "archive" },
+    { key: "t", label: "read" },
+    { key: "m", label: "star" },
+    { key: "s", label: "search" },
+    { key: "g", label: "graph" },
     { key: ":", label: "cmd" },
-    { key: "?", label: "ayuda" },
+    { key: "?", label: "help" },
   ],
   reader: [
     { key: "j/k", label: "scroll" },
-    { key: "J/K", label: "siguiente/prev" },
-    { key: "space", label: "página" },
-    { key: "Esc", label: "volver a la lista" },
-    { key: "y", label: "resumen" },
-    { key: "a", label: "archivar" },
-    { key: "m", label: "destacar" },
-    { key: "O", label: "abrir web" },
+    { key: "J/K", label: "next/prev" },
+    { key: "space", label: "page" },
+    { key: "Esc", label: "back to list" },
+    { key: "y", label: "summarize" },
+    { key: "a", label: "archive" },
+    { key: "m", label: "star" },
+    { key: "O", label: "open web" },
   ],
   search: [
-    { key: "↑/↓", label: "resultados" },
-    { key: "Enter", label: "abrir" },
-    { key: "Esc", label: "cerrar" },
+    { key: "↑/↓", label: "results" },
+    { key: "Enter", label: "open" },
+    { key: "Esc", label: "close" },
   ],
   graph: [
-    { key: "clic", label: "expandir nodo" },
-    { key: "dbl", label: "abrir nota" },
-    { key: "Esc", label: "cerrar" },
+    { key: "click", label: "expand node" },
+    { key: "dbl", label: "open note" },
+    { key: "Esc", label: "close" },
   ],
   digest: [
-    { key: "1..9", label: "conteo" },
-    { key: "j/k", label: "navegar" },
-    { key: "Esc", label: "volver" },
+    { key: "1..9", label: "count" },
+    { key: "j/k", label: "navigate" },
+    { key: "Esc", label: "back" },
   ],
 };

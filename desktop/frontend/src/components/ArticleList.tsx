@@ -6,10 +6,10 @@ import { stars, timeAgo, catClass } from "./Markdown";
 export type ViewFilter = "unread" | "read" | "archived" | "starred";
 
 const VIEWS: { key: ViewFilter; label: string; icon: ReactNode }[] = [
-  { key: "unread", label: "No leídos", icon: <Inbox size={12} /> },
-  { key: "read", label: "Leídos", icon: <Check size={12} /> },
-  { key: "archived", label: "Archivados", icon: <Archive size={12} /> },
-  { key: "starred", label: "Destacados", icon: <Star size={12} /> },
+  { key: "unread", label: "Unread", icon: <Inbox size={12} /> },
+  { key: "read", label: "Read", icon: <Check size={12} /> },
+  { key: "archived", label: "Archived", icon: <Archive size={12} /> },
+  { key: "starred", label: "Starred", icon: <Star size={12} /> },
 ];
 
 interface Props {
@@ -53,8 +53,8 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
       ) : articles.length === 0 ? (
         <div className="empty with-icon">
           <Inbox size={30} />
-          <span>{hasSources ? "No hay artículos en esta vista." : "No hay fuentes configuradas."}</span>
-          <span className="muted">{hasSources ? "Ejecuta :procesar para traer y clasificar noticias" : "Añade fuentes con :sources y procesa con :procesar"}</span>
+          <span>{hasSources ? "No articles in this view." : "No sources configured."}</span>
+          <span className="muted">{hasSources ? "Run :process to fetch and classify" : "Add sources with :sources then run :process"}</span>
         </div>
       ) : (
         <>
@@ -71,7 +71,7 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
                 <span className="article-flag" title={statusTitle(a.status)}>
                   {a.status === "unread" ? <span className="unread-badge" /> : a.status === "starred" ? <span className="star-badge">★</span> : null}
                 </span>
-                <span className="article-imp imp" data-level={a.importance} title={`Importancia: ${a.importance}/3`}>
+                <span className="article-imp imp" data-level={a.importance} title={`Importance: ${a.importance}/3`}>
                   {stars(a.importance)}
                 </span>
                 <span className="article-main">
@@ -94,10 +94,10 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
 
 function statusTitle(s: string): string {
   switch (s) {
-    case "unread": return "No leído";
-    case "read": return "Leído";
-    case "archived": return "Archivado (lógico, recuperable)";
-    case "starred": return "Destacado";
+    case "unread": return "Unread";
+    case "read": return "Read";
+    case "archived": return "Archived (logical, recoverable)";
+    case "starred": return "Starred";
     default: return s;
   }
 }

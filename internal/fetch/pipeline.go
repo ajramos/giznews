@@ -40,6 +40,8 @@ type Service struct {
 	extractLimit    int
 	extractWorkers  int
 
+	maxAge time.Duration // 0 = unlimited
+
 	mu         sync.RWMutex
 	recentHash map[uint64]bool
 	knownURLs  map[string]bool
@@ -58,6 +60,16 @@ func NewService(database *db.DB, man *sources.Manager, logger *log.Logger) (*Ser
 		return nil, fmt.Errorf("warm dedup cache: %w", err)
 	}
 	return s, nil
+}
+
+// SetMaxAge drops feed items published more than the given number of days ago.
+// A non-positive value disables the filter (keep everything).
+func (s *Service) SetMaxAge(days int) {
+	if days <= 0 {
+		s.maxAge = 0
+		return
+	}
+	s.maxAge = time.Duration(days) * 24 * time.Hour
 }
 
 // warmDedup preloads recent article fingerprints so cross-source duplicates
@@ -190,6 +202,11 @@ func (s *Service) ingest(ctx context.Context, src *db.Source, it *sources.Item, 
 	url := NormalizeURL(it.URL)
 	if url == "" {
 		return ingestDuplicate, nil // no usable URL → skip
+	}
+
+	// Drop stale archive items (e.g. a blog feed exposing its whole history).
+	if s.maxAge > 0 && !it.Published.IsZero() && time.Since(it.Published) > s.maxAge {
+		return ingestDuplicate, nil
 	}
 
 	// Cross-source dedup by URL.
