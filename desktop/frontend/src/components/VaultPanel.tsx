@@ -251,7 +251,7 @@ export function VaultPanel({ onOpenNote, onOpenArticle, onClose, notify }: Props
       {linksOpen && selected && (
         <LinksPicker
           links={links}
-          onPick={(id) => { setLinksOpen(false); goToNote(id); }}
+          onPick={(item) => { setLinksOpen(false); goToNote(item.id); }}
           onClose={() => setLinksOpen(false)}
         />
       )}

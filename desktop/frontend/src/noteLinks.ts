@@ -15,3 +15,13 @@ export function buildNoteLinks(note: NoteDTO, notes: NoteDTO[]): LinkItem[] {
     .map((n) => ({ id: n.id, title: n.title, type: n.type, dir: "in" }));
   return [...out, ...incoming];
 }
+
+// buildArticleLinks builds the picker for an article being read: always its
+// external URL, plus its Atom note's connections when a note exists.
+export function buildArticleLinks(url: string, note: NoteDTO | null, notes: NoteDTO[]): LinkItem[] {
+  const links: LinkItem[] = [];
+  if (url) links.push({ id: 0, title: url, type: "external", dir: "out", url });
+  if (note) links.push(...buildNoteLinks(note, notes));
+  return links;
+}
+

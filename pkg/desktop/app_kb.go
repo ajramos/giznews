@@ -2,6 +2,9 @@ package desktop
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 
 	"github.com/ajramos/giznews/internal/db"
 	"github.com/ajramos/giznews/internal/kb"
@@ -70,6 +73,32 @@ func (a *App) EnsureArticleNote(ctx context.Context, articleID int64) (*NoteDTO,
 	}
 	note, err := svc.EnsureArticleNote(ctx, articleID)
 	if err != nil {
+		return nil, err
+	}
+	return toNoteDTO(note), nil
+}
+
+// GetArticleNote returns the Atom note created from an article (via the ingest
+// mapping), or nil when the article has no note yet.
+func (a *App) GetArticleNote(ctx context.Context, articleID int64) (*NoteDTO, error) {
+	var noteID int64
+	err := a.db.SQL().QueryRowContext(ctx,
+		"SELECT COALESCE(note_id, 0) FROM ingests WHERE ref_type = 'article' AND ref_id = ?",
+		fmt.Sprintf("%d", articleID)).Scan(&noteID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if noteID == 0 {
+		return nil, nil
+	}
+	note, err := db.NewKBRepo(a.db).Get(ctx, noteID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return toNoteDTO(note), nil

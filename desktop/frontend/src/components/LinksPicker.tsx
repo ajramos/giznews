@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Link2, CornerDownLeft, FileText, GitBranch, FlaskConical, Inbox, type LucideIcon } from "lucide-react";
+import { Search, Link2, CornerDownLeft, FileText, GitBranch, FlaskConical, Inbox, ExternalLink, type LucideIcon } from "lucide-react";
 
 export interface LinkItem {
-  id: number;
+  id: number; // note id (0 for external links)
   title: string;
-  type: string;
+  type: string; // note type, or "external"
   dir: "out" | "in"; // out = "enlaza a", in = "enlazado por"
+  url?: string; // when set, this is an external link
 }
 
 const TYPE_ICON: Record<string, LucideIcon> = {
@@ -13,11 +14,12 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   electron: GitBranch,
   molecule: FlaskConical,
   inbox: Inbox,
+  external: ExternalLink,
 };
 
 interface Props {
   links: LinkItem[];
-  onPick: (id: number) => void;
+  onPick: (item: LinkItem) => void;
   onClose: () => void;
 }
 
@@ -56,13 +58,13 @@ export function LinksPicker({ links, onPick, onClose }: Props) {
       }
       if (e.key === "Enter") {
         e.preventDefault(); e.stopPropagation();
-        if (filtered.length) { onPick(filtered[focus === "list" ? sel : 0].id); onClose(); }
+        if (filtered.length) { onPick(filtered[focus === "list" ? sel : 0]); onClose(); }
         return;
       }
       if (e.key >= "1" && e.key <= "9") {
         e.preventDefault(); e.stopPropagation();
         const i = Number(e.key) - 1;
-        if (filtered[i]) { onPick(filtered[i].id); onClose(); }
+        if (filtered[i]) { onPick(filtered[i]); onClose(); }
       }
     };
     window.addEventListener("keydown", onKey, true);
@@ -88,16 +90,16 @@ export function LinksPicker({ links, onPick, onClose }: Props) {
             const Icon = TYPE_ICON[l.type] ?? FileText;
             return (
               <div
-                key={l.id + l.dir}
+                key={(l.url ?? String(l.id)) + l.dir}
                 className={`palette-item ${focus === "list" && i === sel ? "selected" : ""}`}
                 onMouseEnter={() => { setFocus("list"); setSel(i); }}
-                onClick={() => { onPick(l.id); onClose(); }}
+                onClick={() => { onPick(l); onClose(); }}
               >
                 <span className="cmd-left">
                   <span className="sp-type"><Icon size={13} /></span>
                   <span className="cmd-name">{i + 1}. {l.title}</span>
                 </span>
-                <span className="cmd-hint">{l.dir === "out" ? "→ enlaza a" : "← enlazado por"} · {l.type}</span>
+                <span className="cmd-hint">{l.url ? "abrir ↗" : `${l.dir === "out" ? "→ enlaza a" : "← enlazado por"} · ${l.type}`}</span>
               </div>
             );
           })}

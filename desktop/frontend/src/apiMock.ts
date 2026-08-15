@@ -208,6 +208,12 @@ export const mockBackend: APIShape = {
     if (!NOTES.some((n) => n.title === title)) NOTES.push(note);
     return note;
   },
+  getArticleNote: async (articleID: number): Promise<NoteDTO | null> => {
+    await delay();
+    const art = ARTICLES.find((a) => a.id === articleID);
+    if (!art) return null;
+    return NOTES.find((n) => n.title === art.title) ?? null;
+  },
   listNotes: async (type: string): Promise<NoteDTO[]> => { await delay(); return NOTES.filter((n) => (type ? n.type === type : true)); },
   getNote: async (id: number): Promise<NoteDTO> => {
     await delay();

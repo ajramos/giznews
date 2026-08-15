@@ -49,4 +49,15 @@ test.describe("note reader", () => {
     await press(page, "Escape");
     await expect(page.locator(".links-picker")).toHaveCount(0);
   });
+
+  test("L on an unprocessed article shows at least its URL", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "j"); // article 2 has no atom note in the mock
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
+    await press(page, "L");
+    await expect(page.locator(".links-picker")).toBeVisible({ timeout: 6000 });
+    await expect(page.locator(".links-picker .palette-item").first()).toContainText("abrir");
+    await press(page, "Escape");
+    await expect(page.locator(".links-picker")).toHaveCount(0);
+  });
 });
