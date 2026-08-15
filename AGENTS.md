@@ -1,69 +1,75 @@
-# AGENTS.md — convenciones para agentes de IA en giznews
+# AGENTS.md — conventions for AI agents working on giznews
 
-Esta guía define cómo trabajar en este repo de forma consistente. Léela antes
-de tocar código.
+This guide defines how to work on this repo consistently. Read it before
+touching code.
 
-## Estructura
+## Structure
 
-- **`internal/`** — lógica de negocio en Go puro (sin CGO). Paquetes por
-  dominio: `sources`, `fetch`, `classify`, `digest`, `kb`, `search`,
-  `extract`, `db`, `llm`, `config`.
-- **`pkg/desktop/`** — API pública (DTOs + métodos con `context.Context`).
-  Es la única frontera que el módulo desktop puede importar.
-- **`desktop/`** — módulo Go anidado Wails (`replace → ../`). **Nunca importa
-  `internal/`** (regla de Go). Frontend React + Vite + TS en
-  `desktop/frontend/`.
+- **`internal/`** — business logic in pure Go (no CGO). Domain packages:
+  `sources`, `fetch`, `classify`, `digest`, `kb`, `search`, `extract`, `db`,
+  `llm`, `config`.
+- **`pkg/desktop/`** — public API (DTOs + methods with `context.Context`).
+  The only boundary the desktop module may import.
+- **`desktop/`** — nested Wails Go module (`replace → ../`). **Never imports
+  `internal/`** (Go rule). React + Vite + TS frontend in `desktop/frontend/`.
 
-## Comandos de verificación (siempre al terminar)
+## Verification commands (always run when done)
 
 ```sh
 cd /Users/ajramos/Documents/dev/giznews
-go build ./... && go vet ./... && go test ./...        # backend (10+ paquetes)
-cd desktop && go build ./...                           # módulo Wails
-cd desktop/frontend && npx tsc --noEmit                # tipos del frontend
-cd desktop/frontend && npx playwright test             # e2e (44+ specs, incluye mock)
-cd desktop && wails build                              # empaquetado nativo
+go build ./... && go vet ./... && go test ./...        # backend (10+ packages)
+cd desktop && go build ./...                           # Wails module
+cd desktop/frontend && npx tsc --noEmit                # frontend types
+cd desktop/frontend && npx playwright test             # e2e (includes mock)
+cd desktop && wails build                              # native packaging
 ```
 
-Todo debe quedar verde antes de commitear.
+Everything must be green before committing.
 
-## Reglas de arquitectura
+## Architecture rules
 
-- La lógica de negocio **siempre** en Go (`internal/`); el frontend solo
-  consume `pkg/desktop` vía bindings Wails.
-- `pkg/desktop` expone métodos con `context.Context`; el módulo `desktop/`
-  los envuelve **sin ctx** para Wails (quirk de binding) en `desktop/app.go`.
-- El frontend usa `src/api.ts` como bridge: convierte el wire shape de Wails
-  (**snake_case**, p. ej. `content_md`, `llm_enabled`) a camelCase
-  (`contentMD`, `llmEnabled`). **No cambies `camel()`** sin tocar también el
-  contrato; está cubierto por `e2e/real-shape.spec.ts`.
-- SQLite con `modernc.org/sqlite` (sin CGO). Migraciones incrementales por
-  `PRAGMA user_version` en `internal/db/db.go`. Actualiza
-  `TestMigrateFromV1` al añadir una migración.
-- Scroll interno: los contenedores scrollables deben tener `min-height: 0`
-  (flex/grid) — ver `desktop/frontend/src/styles.css`.
+- Business logic **always** in Go (`internal/`); the frontend only consumes
+  `pkg/desktop` via Wails bindings.
+- `pkg/desktop` exposes methods with `context.Context`; the `desktop/` module
+  wraps them **without ctx** for Wails (binding quirk) in `desktop/app.go`.
+- The frontend uses `src/api.ts` as the bridge: it converts Wails' wire shape
+  (**snake_case**, e.g. `content_md`, `llm_enabled`) to camelCase
+  (`contentMD`, `llmEnabled`). **Do not change `camel()`** without updating the
+  contract too; it is covered by `e2e/real-shape.spec.ts`.
+- SQLite with `modernc.org/sqlite` (no CGO). Incremental migrations via
+  `PRAGMA user_version` in `internal/db/db.go`. Update `TestMigrateFromV1`
+  when adding a migration.
+- Internal scrolling: scrollable containers must have `min-height: 0`
+  (flex/grid) — see `desktop/frontend/src/styles.css`.
 
 ## Frontend (desktop/frontend)
 
-- **`src/api.ts`** — bridge tipado + `apiMock.ts` para dev/e2e sin Wails
-  (`isWails()` elige backend real o mock).
-- **e2e (Playwright)** — `e2e/*.spec.ts`. `gotoApp` salta el tour de
-  bienvenida. Usa `?dense=1` para listas largas (scroll/wheel). El wire shape
-  real se testea en `real-shape.spec.ts`.
-- Atajos de teclado y ayuda en `src/keys.ts`; nuevos atajos van ahí y se
-  documentan en `?`.
-- Estados de un artículo: `unread | read | archived | starred` — todos lógicos,
-  nada se borra físicamente. El archivo ofrece undo.
+- **`src/api.ts`** — typed bridge + `apiMock.ts` for dev/e2e without Wails
+  (`isWails()` picks the real backend or the mock).
+- **e2e (Playwright)** — `e2e/*.spec.ts`. `gotoApp` skips the welcome tour.
+  Use `?dense=1` for long lists (scroll/wheel). The real wire shape is tested
+  in `real-shape.spec.ts`.
+- Keyboard shortcuts and help live in `src/keys.ts`; new shortcuts go there
+  and are documented in `?`.
+- Article states: `unread | read | archived | starred` — all logical, nothing
+  is physically deleted. Archiving offers undo.
 
-## Base de datos / config del usuario
+## Database / user config
 
-- Config: `~/.config/giznews/config.json` (schema en `internal/config`).
-  Nombres de campo: `lenientInt`, `llm.enabled`, `extract.on_fetch/limit/
-  concurrency`, `gmail.credentials_path` (compartido con giztui).
-- Vault de conocimiento: `~/Documents/obsidian/chronicles-ai` (Obsidian).
+- Config: `~/.config/giznews/config.json` (schema in `internal/config`).
+  Field names: `lenientInt`, `llm.enabled`, `extract.on_fetch/limit/
+  concurrency`, `gmail.credentials_path` (shared with giztui).
+- Knowledge vault: `~/Documents/obsidian/chronicles-ai` (Obsidian).
 
-## Convenciones de código
+## Code conventions
 
-- Go: `gofmt` + `go vet` limpios; errores envueltos (`fmt.Errorf("ctx: %w", err)`).
-- TS: strict; `npx tsc --noEmit` sin errores.
-- Sin comentarios de relleno; los pocos comentarios deben explicar el *por qué*.
+- Go: clean `gofmt` + `go vet`; errors wrapped (`fmt.Errorf("ctx: %w", err)`).
+- TS: strict; `npx tsc --noEmit` with no errors.
+- No filler comments; the few comments must explain the *why*.
+
+## Language
+
+- **All documentation and UI text go in English.** Never mix commands/labels
+  in Spanish: `docs/`, comments, `keys.ts`, component strings, toasts, palette
+  hints, and `AGENTS.md`-level notes. Spanish is only allowed when talking to
+  the user, never in the repo.
