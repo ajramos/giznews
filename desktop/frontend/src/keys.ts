@@ -40,12 +40,22 @@ export const HELP: HelpCategory[] = [
     rows: [
       { keys: "s", label: "Semantic search" },
       { keys: "g", label: "Knowledge graph" },
-      { keys: "f", label: "Vault flow (inbox → electrons → atoms → molecules)" },
-      { keys: "n", label: "Knowledge-graph notes" },
+      { keys: "f", label: "Knowledge vault (world): inbox → electrons → atoms → molecules" },
+      { keys: "n", label: "Open the vault at the Atoms stage (quick note browse)" },
       { keys: "z", label: "Background jobs" },
       { keys: "d", label: "Daily digest" },
       { keys: ":", label: "Command palette" },
       { keys: "Esc", label: "Close panel / back" },
+    ],
+  },
+  {
+    title: "Worlds (news vs knowledge)",
+    rows: [
+      { keys: "u / r / x / *", label: "News world (article list) — also :news" },
+      { keys: "f", label: "Toggle vault ↔ news" },
+      { keys: "n", label: "Vault, Atoms stage" },
+      { keys: "h/l · j/k · Enter", label: "In the vault: switch stage · move item · open (detail on the right)" },
+      { keys: "✕ News pill", label: "In the vault, click the topbar pill to return to news" },
     ],
   },
   {
@@ -80,7 +90,6 @@ export const HELP: HelpCategory[] = [
       { keys: ":url", label: "Add an article by URL" },
       { keys: ":jobs", label: "Browse background jobs (cancel / remove)" },
       { keys: ":flow", label: "Pipeline flow (live counts per stage)" },
-      { keys: "f", label: "Vault flow: h/l stage · j/k items · L links · Enter open" },
       { keys: "q", label: "Quit GizNews" },
     ],
   },
@@ -125,5 +134,12 @@ export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
     { key: "1..9", label: "count" },
     { key: "j/k", label: "navigate" },
     { key: "Esc", label: "back" },
+  ],
+  vault: [
+    { key: "h/l", label: "stage" },
+    { key: "j/k", label: "items" },
+    { key: "Enter", label: "open" },
+    { key: "L", label: "links" },
+    { key: "f/u", label: "news" },
   ],
 };

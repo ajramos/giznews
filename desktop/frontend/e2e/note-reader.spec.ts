@@ -1,35 +1,40 @@
 import { test, expect } from "@playwright/test";
 import { gotoApp, press, shot } from "./helpers";
 
-// Reading a note: j/k/arrows scroll the note; L opens the links picker.
+// Reading a note in the knowledge world (vault): the article list disappears
+// and the note renders in the detail (right) column.
 test.describe("note reader", () => {
-  test("j/k scroll the note instead of changing it", async ({ page }) => {
+  test("opening a note from the vault hides the article list", async ({ page }) => {
     await gotoApp(page);
-    // open the notes picker and open the atom note (has long content)
-    await press(page, "n");
-    await expect(page.locator(".notes-picker")).toBeVisible();
-    await page.locator(".notes-picker .source-picker-item", { hasText: "DeepSeek Harness" }).click();
+    await press(page, "n"); // vault → Atoms stage
+    await expect(page.locator(".vault-browser")).toBeVisible();
+    await expect(page.locator(".vault-tab.active")).toContainText("Atoms");
+    await expect(page.locator(".vault-browser .palette-item").first()).toBeVisible();
+    await press(page, "Enter"); // open the first atom (DeepSeek Harness)
     await expect(page.locator(".reader .note-type")).toBeVisible({ timeout: 6000 });
+    await expect(page.locator(".article-row")).toHaveCount(0);
+    await shot(page, "15-note-in-vault");
+  });
 
-    const title = await page.locator(".reader-head h1").innerText();
+  test("space scrolls the note", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "n");
+    await expect(page.locator(".vault-browser .palette-item").first()).toBeVisible();
+    await press(page, "Enter");
+    await expect(page.locator(".reader .note-type")).toBeVisible({ timeout: 6000 });
     const el = page.locator(".reader-scroll");
     await el.evaluate((node) => { node.scrollTop = 0; });
-
-    await press(page, "j");
+    await press(page, " ");
     await expect
       .poll(() => el.evaluate((node) => node.scrollTop))
       .toBeGreaterThan(0);
-
-    // the note is still the same (didn't switch to another article/note)
-    await expect(page.locator(".reader-head h1")).toHaveText(title);
-    await shot(page, "15-note-scroll");
   });
 
   test("L opens the links picker in the note reader", async ({ page }) => {
     await gotoApp(page);
     await press(page, "n");
-    await expect(page.locator(".notes-picker")).toBeVisible();
-    await page.locator(".notes-picker .source-picker-item", { hasText: "DeepSeek Harness" }).click();
+    await expect(page.locator(".vault-browser .palette-item").first()).toBeVisible();
+    await press(page, "Enter");
     await expect(page.locator(".reader .note-type")).toBeVisible({ timeout: 6000 });
 
     await press(page, "L");

@@ -1,7 +1,7 @@
 import { useContext, createContext } from "react";
 import { CONTEXT_KEYS } from "../keys";
 
-export type UIContext = "list" | "reader" | "search" | "graph" | "digest";
+export type UIContext = "list" | "reader" | "search" | "graph" | "digest" | "vault";
 
 const Ctx = createContext<UIContext>("list");
 export const useUIContext = () => useContext(Ctx);

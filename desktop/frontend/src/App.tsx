@@ -25,13 +25,12 @@ import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
-import { NotesPicker } from "./components/NotesPicker";
 import { JobsPanel } from "./components/JobsPanel";
 import { CategoryPicker } from "./components/CategoryPicker";
 import { FlowPanel } from "./components/FlowPanel";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
-import { VaultPanel } from "./components/VaultPanel";
+import { VaultBrowser, type StageKey } from "./components/VaultBrowser";
 import { LinksPicker, type LinkItem } from "./components/LinksPicker";
 import { buildNoteLinks, buildArticleLinks } from "./noteLinks";
 import { CircleHelp, Command, RefreshCw } from "lucide-react";
@@ -68,12 +67,12 @@ export default function App() {
   const [deleteSource, setDeleteSource] = useState<SourceDTO | null>(null);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
-  const [notesPickerOpen, setNotesPickerOpen] = useState(false);
   const [jobsOpen, setJobsOpen] = useState(false);
   const [synthPrompt, setSynthPrompt] = useState(false);
   const [urlPrompt, setUrlPrompt] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const [vaultOpen, setVaultOpen] = useState(false);
+  const [mode, setMode] = useState<"news" | "vault">("news");
+  const [vaultStage, setVaultStage] = useState<StageKey>("inbox");
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
@@ -200,6 +199,8 @@ export default function App() {
     setView(v);
     setDigestOpen(false);
     setPanel("none");
+    setMode("news");
+    setNoteReader(null);
   }, []);
 
   // ---- article actions ----
@@ -243,6 +244,12 @@ export default function App() {
       setNoteReader(n);
       setReader(null);
       setPanel("none"); // a note takes over the reader, closing any panel
+      // Reading a note means being in the knowledge world: the vault browser
+      // becomes the master list (articles are no longer shown).
+      setMode("vault");
+      if (n.type === "atom" || n.type === "electron" || n.type === "molecule") {
+        setVaultStage(n.type as StageKey);
+      }
     } catch (e) { notify(String(e)); }
   }, [notify]);
 
@@ -391,8 +398,8 @@ export default function App() {
   // Paused while a modal/panel is open (checked via ref inside the timer, so
   // closing a modal does NOT re-trigger a load that would clobber a note).
   const modalOpen =
-    paletteOpen || helpOpen || notesPickerOpen || sourcePickerOpen || themeModalOpen ||
-    jobsOpen || categoryPickerOpen || flowOpen || sourceForm != null || deleteSource != null || vaultOpen ||
+    paletteOpen || helpOpen || sourcePickerOpen || themeModalOpen ||
+    jobsOpen || categoryPickerOpen || flowOpen || sourceForm != null || deleteSource != null ||
     digestOpen || panel !== "none" || synthPrompt || urlPrompt || statusOpen || noteLinks != null;
   const modalOpenRef = useRef(modalOpen);
   modalOpenRef.current = modalOpen;
@@ -400,6 +407,7 @@ export default function App() {
   noteReaderRef.current = noteReader;
 
   useEffect(() => {
+    if (mode !== "news") return;
     const art = articlesRef.current[selectedIndex];
     if (!art) return;
     const t = window.setTimeout(() => {
@@ -409,7 +417,7 @@ export default function App() {
       void openArticle(art.id, true); // silent: never clobber an open note
     }, 120);
     return () => window.clearTimeout(t);
-  }, [selectedIndex, articles.length, openArticle]);
+  }, [selectedIndex, articles.length, openArticle, mode]);
 
   useEffect(() => {
     const next = articlesRef.current[selectedIndex + 1];
@@ -577,8 +585,8 @@ export default function App() {
     { name: "flow", hint: "Pipeline flow (live counts)", run: () => setFlowOpen(true) },
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
-    { name: "notes", hint: "Browse knowledge-graph notes", run: () => setNotesPickerOpen(true) },
-    { name: "vault", hint: "Vault flow (inbox → electrons → atoms → molecules)", run: () => setVaultOpen(true) },
+    { name: "vault", hint: "Knowledge vault (inbox → electrons → atoms → molecules)", run: () => setMode("vault") },
+    { name: "news", hint: "Back to the news feed", run: () => { setMode("news"); setNoteReader(null); } },
     { name: "status", hint: "Status (articles, notes, LLM)", run: () => setStatusOpen(true) },
     { name: "add-source", hint: "Add a source (RSS/HN/arXiv/gmail)", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
     { name: "theme", hint: "Choose theme", run: () => setThemeModalOpen(true) },
@@ -605,14 +613,12 @@ export default function App() {
         if (helpOpen) { setHelpOpen(false); return; }
         if (themeModalOpen) { setThemeModalOpen(false); return; }
         if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
-        if (notesPickerOpen) { setNotesPickerOpen(false); return; }
         if (jobsOpen) { setJobsOpen(false); return; }
         if (categoryPickerOpen) { setCategoryPickerOpen(false); return; }
         if (flowOpen) { setFlowOpen(false); return; }
         if (synthPrompt) { setSynthPrompt(false); return; }
         if (urlPrompt) { setUrlPrompt(false); return; }
         if (statusOpen) { setStatusOpen(false); return; }
-        if (vaultOpen) { setVaultOpen(false); return; }
         if (sourceForm) { setSourceForm(null); return; }
         if (deleteSource) { setDeleteSource(null); return; }
         if (panel !== "none") { setPanel("none"); return; }
@@ -622,7 +628,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || notesPickerOpen || jobsOpen || categoryPickerOpen || flowOpen || synthPrompt || urlPrompt || statusOpen || vaultOpen) return;
+      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || jobsOpen || categoryPickerOpen || flowOpen || synthPrompt || urlPrompt || statusOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -739,8 +745,8 @@ export default function App() {
         }
         return;
       }
-      if (k === "n") { setNotesPickerOpen(true); return; }
-      if (k === "f") { setVaultOpen(true); return; }
+      if (k === "n") { setVaultStage("atom"); setMode("vault"); return; }
+      if (k === "f") { setMode((m) => (m === "vault" ? "news" : "vault")); return; }
       if (k === "z") { setJobsOpen(true); return; }
       if (k === ";") { setCategoryPickerOpen(true); return; }
       if (k === "[") { setFilterImportance((v) => (v + 3) % 4); return; }
@@ -755,7 +761,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, jobsOpen, categoryPickerOpen, flowOpen, synthPrompt, urlPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -786,14 +792,16 @@ export default function App() {
     finally { setDeleteSource(null); }
   }, [deleteSource, filterSource, selectSource, loadSources, notify]);
 
-  const uiCtx: "list" | "reader" | "search" | "graph" | "digest" =
-    panel === "search" ? "search"
+  const uiCtx: "list" | "reader" | "search" | "graph" | "digest" | "vault" =
+    mode === "vault" ? "vault"
+    : panel === "search" ? "search"
     : panel === "graph" ? "graph"
     : digestOpen ? "digest"
     : reader ? "reader"
     : "list";
 
-  const modeLabel = panel === "search" ? "SEARCH"
+  const modeLabel = mode === "vault" ? "VAULT"
+    : panel === "search" ? "SEARCH"
     : panel === "graph" ? "GRAPH"
     : digestOpen ? "DIGEST"
     : reader ? "READER"
@@ -839,6 +847,11 @@ export default function App() {
                 ✕ unclassified
               </button>
             )}
+            {mode === "vault" && (
+              <button className="pill filter" onClick={() => { setMode("news"); setNoteReader(null); }}>
+                ✕ News
+              </button>
+            )}
           </div>
         )}
         <div className="topbar-actions">
@@ -851,22 +864,33 @@ export default function App() {
 
       <main className="layout">
         <section className="col list-col">
-          <ArticleList
-            articles={articles}
-            selectedIndex={selectedIndex}
-            loading={loadingList}
-            view={view}
-            hasSources={sources.length > 0}
-            bulkSel={bulkSel}
-            filterCategory={filterCategory}
-            filterImportance={filterImportance}
-            filterUnclassified={filterUnclassified}
-            onView={(v) => void switchView(v)}
-            onCategory={(c) => setFilterCategory(c)}
-            onImportance={(n) => setFilterImportance(n)}
-            onUnclassified={(v) => setFilterUnclassified(v)}
-            onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
-          />
+          {mode === "vault" ? (
+            <VaultBrowser
+              stage={vaultStage}
+              onStage={setVaultStage}
+              onOpenNote={(id) => void openNote(id)}
+              onOpenArticle={(id) => void openArticle(id)}
+              onClose={() => setMode("news")}
+              notify={notify}
+            />
+          ) : (
+            <ArticleList
+              articles={articles}
+              selectedIndex={selectedIndex}
+              loading={loadingList}
+              view={view}
+              hasSources={sources.length > 0}
+              bulkSel={bulkSel}
+              filterCategory={filterCategory}
+              filterImportance={filterImportance}
+              filterUnclassified={filterUnclassified}
+              onView={(v) => void switchView(v)}
+              onCategory={(c) => setFilterCategory(c)}
+              onImportance={(n) => setFilterImportance(n)}
+              onUnclassified={(v) => setFilterUnclassified(v)}
+              onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
+            />
+          )}
         </section>
 
         <section className="col reader-col">
@@ -970,13 +994,6 @@ export default function App() {
           onClose={() => setSourcePickerOpen(false)}
         />
       )}
-      {notesPickerOpen && (
-        <NotesPicker
-          onOpen={(id) => { setNotesPickerOpen(false); void openNote(id); }}
-          onClose={() => setNotesPickerOpen(false)}
-          notify={notify}
-        />
-      )}
       {synthPrompt && (
         <PromptModal
           title="Category to synthesize"
@@ -1005,14 +1022,6 @@ export default function App() {
       )}
       {flowOpen && <FlowPanel onClose={() => setFlowOpen(false)} />}
       {statusOpen && <StatusModal onClose={() => setStatusOpen(false)} />}
-      {vaultOpen && (
-        <VaultPanel
-          onOpenNote={(id) => { setVaultOpen(false); void openNote(id); }}
-          onOpenArticle={(id) => { setVaultOpen(false); void openArticle(id); }}
-          onClose={() => setVaultOpen(false)}
-          notify={notify}
-        />
-      )}
       {noteLinks && (
         <LinksPicker
           links={noteLinks}
