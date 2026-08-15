@@ -99,7 +99,7 @@ export function LinksPicker({ links, onPick, onClose }: Props) {
                   <span className="sp-type"><Icon size={13} /></span>
                   <span className="cmd-name">{i + 1}. {l.title}</span>
                 </span>
-                <span className="cmd-hint">{l.url ? "abrir ↗" : `${l.dir === "out" ? "→ enlaza a" : "← enlazado por"} · ${l.type}`}</span>
+                <span className="cmd-hint">{l.url ? l.url : `${l.dir === "out" ? "→ enlaza a" : "← enlazado por"} · ${l.type}`}</span>
               </div>
             );
           })}

@@ -515,7 +515,7 @@ img, video, iframe { max-width: 100%; height: auto; }
 .palette-item.selected { background: var(--sel-bg); }
 .palette-item .cmd-left { display: flex; align-items: center; gap: 10px; }
 .cmd-name { font-family: var(--font-mono); font-size: 13px; }
-.cmd-hint { color: var(--fg-dim); font-size: 12px; }
+.cmd-hint { color: var(--fg-dim); font-size: 12px; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-empty { padding: 18px 16px; color: var(--fg-dim); text-align: center; }
 
 .help { width: 620px; max-width: 94vw; }

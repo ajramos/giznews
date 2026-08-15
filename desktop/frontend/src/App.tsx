@@ -224,17 +224,17 @@ export default function App() {
     } catch (e) { notify(String(e)); }
   }, [notify]);
 
-  // Open the links picker for an ARTICLE being read: always its external URL,
-  // plus its Atom note's connections when one exists (via the ingest mapping).
+  // Open the links picker for an ARTICLE being read: links embedded in its
+  // body, its external URL, plus its Atom note's connections when one exists.
   const openArticleLinks = useCallback(async (articleId: number) => {
     try {
-      const art = articlesRef.current.find((a) => a.id === articleId);
-      if (!art) return;
+      const art = reader; // the full article (with content_md)
+      if (!art || art.id !== articleId) return;
       const note = await api.getArticleNote(articleId);
       const notes = await api.listNotes("");
-      setNoteLinks(buildArticleLinks(art.url, note, notes));
+      setNoteLinks(buildArticleLinks(art.url, art.contentMD ?? "", note, notes));
     } catch (e) { notify(String(e)); }
-  }, [notify]);
+  }, [reader, notify]);
 
   const selected = articles[selectedIndex] ?? null;
 
