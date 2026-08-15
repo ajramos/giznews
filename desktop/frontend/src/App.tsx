@@ -180,14 +180,19 @@ export default function App() {
     after?.();
     void loadStatus();
   }, [articles, loadStatus]);
-  const openArticle = useCallback(async (id: number) => {
+  const openArticle = useCallback(async (id: number, silent = false) => {
     // Guard: skip if this article is already the one loading (dedupes the
     // auto-load effect vs Enter vs adjacent-nav all racing on the same id).
     if (loadingIdRef.current === id) return;
     loadingIdRef.current = id;
     // Show the title immediately from the list while content is extracted.
     const listArt = articlesRef.current.find((a) => a.id === id);
-    if (listArt) { setReader(listArt); setNoteReader(null); }
+    if (listArt) {
+      setReader(listArt);
+      // The background auto-load must never clobber an open note; only an
+      // explicit user action switches from a note back to an article.
+      if (!silent) setNoteReader(null);
+    }
     setContentLoading(true);
     try {
       const full = await api.getArticleContent(id);
@@ -322,20 +327,28 @@ export default function App() {
 
   // ---- lazy loading: the selected article loads automatically (debounced),
   // and the adjacent ones are prefetched so navigation is instant. ----
-  // Paused while a modal/panel is open so an in-flight article load can't
-  // clobber a note the user just opened (e.g. from the vault or graph).
+  // Paused while a modal/panel is open (checked via ref inside the timer, so
+  // closing a modal does NOT re-trigger a load that would clobber a note).
   const modalOpen =
     paletteOpen || helpOpen || notesPickerOpen || sourcePickerOpen || themeModalOpen ||
     pipelineOpen || sourceForm != null || deleteSource != null || vaultOpen ||
-    digestOpen || panel !== "none" || synthPrompt || statusOpen;
+    digestOpen || panel !== "none" || synthPrompt || statusOpen || noteLinks != null;
+  const modalOpenRef = useRef(modalOpen);
+  modalOpenRef.current = modalOpen;
+  const noteReaderRef = useRef<NoteDTO | null>(null);
+  noteReaderRef.current = noteReader;
 
   useEffect(() => {
-    if (modalOpen) return;
     const art = articlesRef.current[selectedIndex];
     if (!art) return;
-    const t = window.setTimeout(() => void openArticle(art.id), 120);
+    const t = window.setTimeout(() => {
+      // Don't auto-load an article while a modal is open or a note is being
+      // read — it would clobber the note the user just opened.
+      if (modalOpenRef.current || noteReaderRef.current) return;
+      void openArticle(art.id, true); // silent: never clobber an open note
+    }, 120);
     return () => window.clearTimeout(t);
-  }, [selectedIndex, articles.length, openArticle, modalOpen]);
+  }, [selectedIndex, articles.length, openArticle]);
 
   useEffect(() => {
     const next = articlesRef.current[selectedIndex + 1];
