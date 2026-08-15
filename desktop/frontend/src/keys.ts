@@ -61,6 +61,7 @@ export const HELP: HelpCategory[] = [
       { keys: "space", label: "Toggle the current article" },
       { keys: "j / k", label: "Navigate (without changing selection)" },
       { keys: "a / t / m", label: "Apply archive · read · star to the selection" },
+      { keys: "c", label: "Classify the selection (background job, priority over the queue)" },
       { keys: "Esc / v", label: "Exit bulk mode" },
     ],
   },

@@ -216,6 +216,19 @@ export const mockBackend: APIShape = {
     finishJob(id);
     return { classified: 8, byRules: 2, byLLM: 6, skippedNoLLM: 0, batches: 1, errors: [] };
   },
+  classifyArticles: async (ids: number[]): Promise<ClassifyResult> => {
+    const id = beginJob(`Classify ${ids.length} selected`, "classify");
+    patchJob(id, { phase: "rules", done: ids.length, total: ids.length });
+    await delay(40);
+    patchJob(id, { phase: "llm", done: ids.length, total: ids.length });
+    await delay(80);
+    for (const aid of ids) {
+      const a = ARTICLES.find((x) => x.id === aid);
+      if (a && !a.category) a.category = "general";
+    }
+    finishJob(id);
+    return { classified: ids.length, byRules: 0, byLLM: ids.length, skippedNoLLM: 0, batches: 1, errors: [] };
+  },
   summarizeArticle: async (id: number): Promise<ArticleDTO> => {
     const jid = beginJob("Summarize article", "summarize");
     await delay(80);

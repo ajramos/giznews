@@ -169,6 +169,19 @@ test.describe("vim keyboard grammar", () => {
     await expect(page.locator(".statusbar .mode.bulk")).toHaveCount(0);
   });
 
+  test("bulk: c classifies the selection as a background job", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "v");       // select first
+    await press(page, "j");
+    await press(page, " ");       // select second
+    await expect(page.locator(".article-row.bulk")).toHaveCount(2);
+    await press(page, "c");       // classify selected
+    await expect(page.locator(".statusbar .mode.bulk")).toHaveCount(0);
+    await expect(page.locator(".jobs-picker")).toBeVisible({ timeout: 6000 });
+    await expect(page.locator(".job-item", { hasText: "Classify 2 selected" })).toHaveCount(1, { timeout: 6000 });
+    await page.keyboard.press("Escape");
+  });
+
   test("? opens help, Esc closes", async ({ page }) => {
     await gotoApp(page);
     await press(page, "?");

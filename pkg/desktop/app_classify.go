@@ -59,6 +59,51 @@ func (a *App) Classify(ctx context.Context, limit int) (*ClassifyResult, error) 
 	return result, nil
 }
 
+// ClassifyArticles classifies an explicit set of articles (bulk selection),
+// letting the user prioritize specific items. Runs as a background job.
+func (a *App) ClassifyArticles(ctx context.Context, ids []int64) (*ClassifyResult, error) {
+	var result *ClassifyResult
+	err := a.trackJob(ctx, fmt.Sprintf("Classify %d selected", len(ids)), "classify", func(jctx context.Context, p *jobProgress) error {
+		prov, err := a.provider()
+		if err != nil {
+			return err
+		}
+		svc := classify.NewService(a.db, classify.Options{
+			Limit:       0,
+			BatchSize:   a.cfg.Classify.BatchSize,
+			Concurrency: a.cfg.Classify.Concurrency,
+			UseLLM:      a.cfg.Classify.UseLLM && prov != nil,
+			Model:       a.cfg.LLM.Model,
+			OnProgress: func(phase string, done, total int) {
+				p.Progress(phase, done, total)
+			},
+		}, prov, a.logger())
+
+		res, err := svc.ClassifyIDs(jctx, ids)
+		if err != nil {
+			return err
+		}
+		result = &ClassifyResult{
+			Classified:   res.Classified,
+			ByRules:      res.ByRules,
+			ByLLM:        res.ByLLM,
+			SkippedNoLLM: res.SkippedNoLLM,
+			Batches:      res.Batches,
+			Errors:       res.Errors,
+		}
+		msg := fmt.Sprintf("%d classified (%d rules · %d LLM)", res.Classified, res.ByRules, res.ByLLM)
+		if len(res.Errors) > 0 {
+			msg += fmt.Sprintf(" · %d batch errors", len(res.Errors))
+		}
+		p.Message(msg)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // SummarizeArticle generates a summary for one article and persists it.
 func (a *App) SummarizeArticle(ctx context.Context, id int64) (*ArticleDTO, error) {
 	var out *ArticleDTO

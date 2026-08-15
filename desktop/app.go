@@ -59,6 +59,9 @@ func (a *App) Fetch() (*gizdesktop.FetchResult, error) {
 func (a *App) Classify(limit int) (*gizdesktop.ClassifyResult, error) {
 	return a.api.Classify(bg(), limit)
 }
+func (a *App) ClassifyArticles(ids []int64) (*gizdesktop.ClassifyResult, error) {
+	return a.api.ClassifyArticles(bg(), ids)
+}
 func (a *App) SummarizeArticle(id int64) (*gizdesktop.ArticleDTO, error) {
 	return a.api.SummarizeArticle(bg(), id)
 }

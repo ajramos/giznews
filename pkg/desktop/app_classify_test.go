@@ -98,6 +98,35 @@ func TestClassifyViaAPI(t *testing.T) {
 	}
 }
 
+func TestClassifyArticlesBulk(t *testing.T) {
+	app := newAppWithEchoProvider(t)
+	ctx := context.Background()
+
+	s, _ := app.AddSource(ctx, "S", "rss", "https://x.com/rss", "")
+	repo := db.NewArticleRepo(app.db)
+	var ids []int64
+	for i := 0; i < 3; i++ {
+		id, _, _ := repo.Upsert(ctx, db.NewArticle{
+			SourceID: s.ID, GUID: fmt.Sprintf("g%d", i), Title: fmt.Sprintf("News %d", i), Status: db.StatusUnread,
+		})
+		ids = append(ids, id)
+	}
+
+	res, err := app.ClassifyArticles(ctx, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ByLLM != 3 {
+		t.Fatalf("ByLLM = %d, want 3 (res=%+v)", res.ByLLM, res)
+	}
+	for _, id := range ids {
+		a, _ := app.GetArticle(ctx, id)
+		if a.Category != "industry" {
+			t.Fatalf("article %d category = %q, want industry", id, a.Category)
+		}
+	}
+}
+
 func TestClassifyConcurrentBatches(t *testing.T) {
 	app := newAppWithEchoProvider(t)
 	app.cfg.Classify.BatchSize = 5

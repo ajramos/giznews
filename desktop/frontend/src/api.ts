@@ -109,6 +109,7 @@ export interface APIShape {
   setArticleImportance: (id: number, importance: number) => Promise<void>;
   fetch: () => Promise<FetchResult>;
   classify: (limit: number) => Promise<ClassifyResult>;
+  classifyArticles: (ids: number[]) => Promise<ClassifyResult>;
   summarizeArticle: (id: number) => Promise<ArticleDTO>;
   digest: () => Promise<DigestDTO>;
   kbuild: () => Promise<KBResult>;
@@ -156,6 +157,7 @@ const realApi: APIShape = {
 
   fetch: () => call<FetchResult>("Fetch"),
   classify: (limit: number) => call<ClassifyResult>("Classify", limit),
+  classifyArticles: (ids: number[]) => call<ClassifyResult>("ClassifyArticles", ids),
   summarizeArticle: (id: number) =>
     call("SummarizeArticle", id).then((v) => normalize<ArticleDTO>(v)),
   digest: () => call<DigestDTO>("Digest"),

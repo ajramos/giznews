@@ -107,6 +107,42 @@ func (r *ArticleRepo) Get(ctx context.Context, id int64) (*Article, error) {
 	return scanArticle(row)
 }
 
+// GetByIDs returns articles by their ids, preserving the input order. Unknown
+// ids are skipped.
+func (r *ArticleRepo) GetByIDs(ctx context.Context, ids []int64) ([]*Article, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	rows, err := r.db.sql.QueryContext(ctx,
+		"SELECT "+articleColumns+articleFrom+" WHERE a.id IN ("+strings.Join(placeholders, ",")+")", args...)
+	if err != nil {
+		return nil, fmt.Errorf("get articles by ids: %w", err)
+	}
+	defer rows.Close()
+
+	byID := map[int64]*Article{}
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		byID[a.ID] = a
+	}
+	out := make([]*Article, 0, len(ids))
+	for _, id := range ids {
+		if a, ok := byID[id]; ok {
+			out = append(out, a)
+		}
+	}
+	return out, rows.Err()
+}
+
 // ListOptions filters the article list.
 type ListOptions struct {
 	Status        ArticleStatus // empty = all

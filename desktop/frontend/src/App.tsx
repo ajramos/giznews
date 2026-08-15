@@ -296,6 +296,22 @@ export default function App() {
     }, () => void loadArticles());
   }, [applyRange, loadArticles]);
 
+  // classify the bulk selection as a background job (priority over the queue).
+  const classifySelected = useCallback(() => {
+    if (bulkIds.length === 0) return;
+    const ids = bulkIds;
+    setJobsOpen(true);
+    exitBulk();
+    void (async () => {
+      try {
+        const r = await api.classifyArticles(ids);
+        notify(`${r.classified} classified (${r.byRules} rules · ${r.byLLM} LLM)`);
+        await loadArticles();
+        await loadStatus();
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [bulkIds, exitBulk, notify, loadArticles, loadStatus]);
+
   // action entry point that honors bulk mode.
   const bulkAction = useCallback((verb: "archive" | "read" | "star") => {
     if (bulk && bulkIds.length > 0) {
@@ -320,8 +336,7 @@ export default function App() {
 
   const toggleStar = useCallback(async () => {
     if (!selected) return;
-    const next = selected.status === "starred" ? "unread" : "starred";
-    await api.setArticleStatus(selected.id, next);
+    const next = selected.status === "starred" ? "unread" : "starred";    await api.setArticleStatus(selected.id, next);
     setArticles((prev) => prev.map((a) => (a.id === selected.id ? { ...a, status: next } : a)));
     notify(next === "starred" ? "Starred" : "Unstarred");
   }, [selected, notify]);
@@ -604,6 +619,7 @@ export default function App() {
         if (k === "a") { bulkAction("archive"); return; }
         if (k === "t") { bulkAction("read"); return; }
         if (k === "m") { bulkAction("star"); return; }
+        if (k === "c") { classifySelected(); return; }
         return; // consume everything else while in bulk
       }
 
@@ -694,7 +710,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, jobsOpen, synthPrompt, urlPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, notesPickerOpen, jobsOpen, synthPrompt, urlPrompt, statusOpen, vaultOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).

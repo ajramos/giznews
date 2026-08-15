@@ -53,6 +53,23 @@ func (s *Service) ClassifyAll(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list unclassified: %w", err)
 	}
+	return s.classify(ctx, articles)
+}
+
+// ClassifyIDs classifies an explicit set of articles (bulk selection), letting
+// the user prioritize specific items regardless of the unclassified queue.
+func (s *Service) ClassifyIDs(ctx context.Context, ids []int64) (*Result, error) {
+	repo := db.NewArticleRepo(s.db)
+	articles, err := repo.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get articles by ids: %w", err)
+	}
+	return s.classify(ctx, articles)
+}
+
+// classify runs rules + LLM over the given articles and returns a summary.
+func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result, error) {
+	repo := db.NewArticleRepo(s.db)
 	res := &Result{}
 
 	rules, err := CompileAll(ctx, db.NewRuleRepo(s.db))
@@ -83,7 +100,8 @@ func (s *Service) ClassifyAll(ctx context.Context) (*Result, error) {
 		res.Errors = append(res.Errors, batchErrs...)
 		res.ByLLM = classified
 		res.Classified += classified
-	} else if len(llmBatch) > 0 {		// No LLM available: mark them with a deterministic default so they are
+	} else if len(llmBatch) > 0 {
+		// No LLM available: mark them with a deterministic default so they are
 		// not re-picked next run, but still get a baseline importance.
 		for _, a := range llmBatch {
 			imp := defaultImportance(a)
