@@ -51,7 +51,9 @@ detail), and Obsidian (graph, backlinks, atomic notes).
   with a bounded reading measure.
 - **Pane 3 (context)** shows the current item's relationships — the bridge
   between news and knowledge ("assimilation" made visible).
-- Panes are resizable (splitters); the context pane is collapsible via a key.
+- The context pane is **collapsed by default** (the reader stays wide) and
+  expands via a key (e.g. `Tab` / `c`); it can also be pinned open.
+- Panes are resizable (splitters).
 
 ## 4. Design system (tokens)
 
