@@ -206,6 +206,7 @@ export default function App() {
     setPanel("none");
     setMode("news");
     setNoteReader(null);
+    setPaneFocus("list");
   }, []);
 
   // ---- article actions ----
@@ -635,7 +636,7 @@ export default function App() {
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
     { name: "vault", hint: "Knowledge vault (electrons → atoms → molecules)", run: () => setMode("vault") },
-    { name: "news", hint: "Back to the news feed", run: () => { setMode("news"); setNoteReader(null); } },
+    { name: "news", hint: "Back to the news feed", run: () => { setMode("news"); setNoteReader(null); setPaneFocus("list"); } },
     { name: "status", hint: "Status (articles, notes, LLM)", run: () => setStatusOpen(true) },
     { name: "add-source", hint: "Add a source (RSS/HN/arXiv/gmail)", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
     { name: "theme", hint: "Choose theme", run: () => setThemeModalOpen(true) },
@@ -804,8 +805,8 @@ export default function App() {
         }
         return;
       }
-      if (k === "n") { setVaultStage("atom"); setMode("vault"); return; }
-      if (k === "f") { setMode((m) => (m === "vault" ? "news" : "vault")); return; }
+      if (k === "n") { setVaultStage("atom"); setMode("vault"); setPaneFocus("list"); return; }
+      if (k === "f") { setMode((m) => (m === "vault" ? "news" : "vault")); setPaneFocus("list"); return; }
       if (k === "z") { setJobsOpen(true); return; }
       if (k === ";") { setCategoryPickerOpen(true); return; }
       if (k === "c") { setContextOpen((v) => !v); return; }
@@ -897,7 +898,7 @@ export default function App() {
           <div className="status">
             <button
               className="pill mode-toggle"
-              onClick={() => setMode((m) => (m === "vault" ? "news" : "vault"))}
+              onClick={() => { setMode((m) => (m === "vault" ? "news" : "vault")); setPaneFocus("list"); }}
               title="Switch world"
             >
               {mode === "vault" ? "Vault" : "News"}
@@ -966,7 +967,7 @@ export default function App() {
               onCategory={(c) => setFilterCategory(c)}
               onImportance={(n) => setFilterImportance(n)}
               onUnclassified={(v) => setFilterUnclassified(v)}
-              onSelect={(i) => { setSelectedIndex(i); if (reader) setReader(null); }}
+              onSelect={(i) => { setSelectedIndex(i); setPaneFocus("list"); if (reader) setReader(null); }}
             />
           )}
         </section>

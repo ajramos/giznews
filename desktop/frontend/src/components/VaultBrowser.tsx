@@ -186,7 +186,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
               key={it.id}
               className={`palette-item ${i === sel ? "selected" : ""}`}
               onMouseEnter={() => setSel(i)}
-              onClick={() => { onOpenNote(it.id); onFocus(); }}
+              onClick={() => onOpenNote(it.id)}
             >
               <span className="cmd-left">
                 <span className="sp-type"><Icon size={13} /></span>
