@@ -44,6 +44,17 @@ test.describe("classification filters", () => {
     await expect(page.locator(".article-row")).toHaveCount(7);
   });
 
+  test("search box filters the list by title", async ({ page }) => {
+    await gotoApp(page);
+    await expect(page.locator(".article-row")).toHaveCount(7);
+    await press(page, "/"); // focus search
+    await page.locator(".list-search input").fill("watermark");
+    await expect(page.locator(".article-row")).toHaveCount(1);
+    await expect(page.locator(".article-row").first()).toContainText("Watermarking");
+    await page.locator(".list-search .icon-btn").click(); // clear
+    await expect(page.locator(".article-row")).toHaveCount(7);
+  });
+
   test(":flow shows the pipeline with counts", async ({ page }) => {
     await gotoApp(page);
     await press(page, ":");

@@ -452,6 +452,16 @@ select option { background: var(--bg-panel); color: var(--fg); }
   display: flex; flex-direction: column; gap: 4px;
   padding: 6px 12px; border-bottom: 1px solid var(--border);
 }
+.list-search {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-bottom: 1px solid var(--border);
+  color: var(--fg-dim);
+}
+.list-search input {
+  flex: 1; border: none; background: transparent; color: var(--fg);
+  font: inherit; font-size: var(--fs-sm); padding: 3px 0; outline: none;
+}
+.list-search .icon-btn { padding: 2px; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .filter-imp { display: flex; gap: 4px; }
 .chip {

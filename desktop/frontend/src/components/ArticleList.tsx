@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { Inbox, Check, Archive, Star } from "lucide-react";
+import { Inbox, Check, Archive, Star, Search, X } from "lucide-react";
 import type { ArticleDTO } from "../types";
 import { stars, timeAgo, catClass } from "./Markdown";
 import { CATEGORIES } from "./CategoryPicker";
@@ -25,15 +25,17 @@ interface Props {
   filterCategory: string | null;
   filterImportance: number;
   filterUnclassified: boolean;
+  filterQuery: string;
   onView: (v: ViewFilter) => void;
   onCategory: (c: string | null) => void;
   onImportance: (n: number) => void;
   onUnclassified: (v: boolean) => void;
+  onQuery: (q: string) => void;
   onToggleBulk: (id: number) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulk, bulkSel, unreadCount, filterCategory, filterImportance, filterUnclassified, onView, onCategory, onImportance, onUnclassified, onToggleBulk, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulk, bulkSel, unreadCount, filterCategory, filterImportance, filterUnclassified, filterQuery, onView, onCategory, onImportance, onUnclassified, onQuery, onToggleBulk, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +56,12 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="list-search">
+        <Search size={13} />
+        <input value={filterQuery} onChange={(e) => onQuery(e.target.value)} placeholder="filter by title or author…" />
+        {filterQuery && <button className="icon-btn" onClick={() => onQuery("")} title="Clear"><X size={13} /></button>}
       </div>
 
       <div className="filter-row">

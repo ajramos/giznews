@@ -60,6 +60,7 @@ export default function App() {
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterImportance, setFilterImportance] = useState(0); // 0 = any
   const [filterUnclassified, setFilterUnclassified] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
@@ -151,6 +152,7 @@ export default function App() {
         ...(filterCategory ? { category: filterCategory } : {}),
         ...(filterImportance > 0 ? { importanceMin: filterImportance } : {}),
         ...(filterUnclassified ? { unclassified: true } : {}),
+        ...(filterQuery ? { query: filterQuery } : {}),
         ...opts,
       });
       setArticles(list);
@@ -160,7 +162,7 @@ export default function App() {
     } finally {
       setLoadingList(false);
     }
-  }, [view, notify, filterCategory, filterImportance, filterUnclassified]);
+  }, [view, notify, filterCategory, filterImportance, filterUnclassified, filterQuery]);
 
   const reloadAll = useCallback(() => {
     void loadSources();
@@ -351,7 +353,10 @@ export default function App() {
     void (async () => {
       try {
         const r = await api.classifyArticles(ids);
-        notify(`${r.classified} classified (${r.byRules} rules · ${r.byLLM} LLM)`);
+        notify(`${r.classified} of ${ids.length} classified (${r.byRules} rules · ${r.byLLM} LLM)`);
+        // Drop the "unclassified" filter so the now-classified articles stay
+        // visible with their category/importance chips.
+        setFilterUnclassified(false);
         await loadArticles();
         await loadStatus();
       } catch (e) { notify(String(e)); }
@@ -848,6 +853,7 @@ export default function App() {
       if (k === "f") { setMode((m) => (m === "vault" ? "news" : "vault")); setPaneFocus("list"); return; }
       if (k === "z") { setJobsOpen(true); return; }
       if (k === ";") { setCategoryPickerOpen(true); return; }
+      if (k === "/") { document.querySelector<HTMLInputElement>(".list-search input")?.focus(); return; }
       if (k === "c") { setContextOpen((v) => !v); return; }
       if (k === "[") { setFilterImportance((v) => (v + 3) % 4); return; }
       if (k === "]") { setFilterImportance((v) => (v + 1) % 4); return; }
@@ -1014,10 +1020,12 @@ export default function App() {
               filterCategory={filterCategory}
               filterImportance={filterImportance}
               filterUnclassified={filterUnclassified}
+              filterQuery={filterQuery}
               onView={(v) => void switchView(v)}
               onCategory={(c) => setFilterCategory(c)}
               onImportance={(n) => setFilterImportance(n)}
               onUnclassified={(v) => setFilterUnclassified(v)}
+              onQuery={(q) => setFilterQuery(q)}
               onToggleBulk={toggleBulkId}
               onSelect={(i) => { setSelectedIndex(i); setPaneFocus("list"); if (reader) setReader(null); }}
             />
