@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { Newspaper, Loader2, Boxes, Bot, FlaskConical, Building2, Coins, Scale, Wrench, Code2, MessageSquare, FileText } from "lucide-react";
 import type { DigestDTO, DigestMeta } from "../types";
 import { stars } from "./Markdown";
+import { Select } from "./Select";
 
 interface Props {
   digest: DigestDTO | null;
@@ -39,10 +40,13 @@ export function DigestView({ digest, loading, unreadCount, focusId, history, sel
       <div className="digest-head">
         <h1><Newspaper size={19} /> Digest</h1>
         {digest && <span className="digest-date-pill">{digest.date}</span>}
-        <select value={selectedDate ?? ""} onChange={(e) => onSelectDate(e.target.value || null)} title="Saved digests">
-          <option value="">Today (live)</option>
-          {history.map((h) => <option key={h.date} value={h.date}>{h.date}</option>)}
-        </select>
+        <Select
+          className="digest-date-select"
+          value={selectedDate ?? ""}
+          onChange={(v) => onSelectDate(v || null)}
+          title="Saved digests"
+          options={[{ value: "", label: "Today (live)" }, ...history.map((h) => ({ value: h.date, label: h.date }))]}
+        />
         <span className="pill">{unreadCount} unread</span>
         <button onClick={onGenerate} disabled={loading}>
           {loading ? <Loader2 size={13} className="spin" /> : <Newspaper size={13} />}

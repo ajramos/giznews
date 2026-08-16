@@ -115,10 +115,11 @@ func (f *HackerNewsFetcher) Fetch(ctx context.Context) ([]*Item, error) {
 		if t, err := time.Parse(time.RFC3339, h.CreatedAt); err == nil {
 			pub = t
 		}
+		// HN "story" hits are mostly links to external articles: they carry no
+		// body of their own (StoryText is only set for Ask HN / text posts), so
+		// leave the body empty and let the reader extract it on demand from the
+		// target URL. Never fake a "HN discussion" body.
 		body := htmlToMarkdown(h.StoryText)
-		if body == "" {
-			body = fmt.Sprintf("HN discussion (%d points, %d comments)", h.Points, h.Comments)
-		}
 		items = append(items, &Item{
 			GUID:      "hn-" + h.ObjectID,
 			URL:       link,

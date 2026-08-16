@@ -60,7 +60,8 @@ test.describe("classification filters", () => {
     await gotoApp(page);
     await press(page, "d");
     await expect(page.locator(".digest-view")).toBeVisible({ timeout: 6000 });
-    await expect(page.locator(".digest-head select option")).toHaveCount(2, { timeout: 6000 });
+    await page.locator(".digest-date-select .select-btn").click();
+    await expect(page.locator(".digest-date-select .select-opt")).toHaveCount(2, { timeout: 6000 });
     await press(page, "Escape");
   });
 

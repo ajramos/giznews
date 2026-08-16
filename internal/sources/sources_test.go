@@ -130,6 +130,10 @@ func TestHackerNewsFetcher(t *testing.T) {
 	if items[0].GUID != "hn-1001" {
 		t.Fatalf("guid = %q", items[0].GUID)
 	}
+	// Link posts have no body of their own — it is extracted on demand.
+	if items[0].ContentMD != "" {
+		t.Fatalf("link post body = %q, want empty", items[0].ContentMD)
+	}
 	// No URL → link to HN item page.
 	if items[1].URL != "https://news.ycombinator.com/item?id=1002" {
 		t.Fatalf("fallback url = %q", items[1].URL)

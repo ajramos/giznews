@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pencil, X, Zap } from "lucide-react";
 import type { RuleActionDTO, RuleDTO } from "../types";
 import { CATEGORIES } from "./CategoryPicker";
+import { Select, type SelectOption } from "./Select";
 
 interface Props {
   initial: RuleDTO | null;
@@ -54,20 +55,25 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
           </div>
           <div className="field">
             <label>Category</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">(none)</option>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            <Select
+              value={category}
+              onChange={setCategory}
+              options={[{ value: "", label: "(none)" }, ...CATEGORIES.map((c): SelectOption => ({ value: c, label: c }))]}
+            />
           </div>
           <div className="field">
             <label>Importance</label>
-            <select value={importance} onChange={(e) => setImportance(e.target.value)}>
-              <option value="">(none)</option>
-              <option value="0">0 · noise</option>
-              <option value="1">1 · background</option>
-              <option value="2">2 · relevant</option>
-              <option value="3">3 · key</option>
-            </select>
+            <Select
+              value={importance}
+              onChange={setImportance}
+              options={[
+                { value: "", label: "(none)" },
+                { value: "0", label: "0 · noise" },
+                { value: "1", label: "1 · background" },
+                { value: "2", label: "2 · relevant" },
+                { value: "3", label: "3 · key" },
+              ]}
+            />
           </div>
           <div className="field">
             <label>Tags (comma-separated)</label>
