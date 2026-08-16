@@ -44,6 +44,21 @@ test.describe("note reader", () => {
     await expect(page.locator(".links-picker")).toHaveCount(0);
   });
 
+  test("note frontmatter renders as metadata chips, not raw YAML", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "n"); // atoms
+    await expect(page.locator(".vault-browser .palette-item").first()).toBeVisible();
+    await press(page, "Enter"); // open the first atom (has YAML frontmatter)
+    await expect(page.locator(".reader .note-type")).toBeVisible({ timeout: 6000 });
+    // no raw frontmatter block in the body
+    await expect(page.locator(".reader-scroll")).not.toContainText("type: atom");
+    await expect(page.locator(".reader-scroll")).not.toContainText("---");
+    // metadata chips in the header
+    await expect(page.locator(".reader-head .note-meta .cat-chip")).toContainText("models");
+    await expect(page.locator(".reader-head .note-rating")).toContainText("★★★");
+    await expect(page.locator(".reader-head .note-source")).toContainText("HN RSS");
+  });
+
   test("L on an article shows its note connections", async ({ page }) => {
     await gotoApp(page);
     // article 1 auto-loads; it has a matching atom note in the mock

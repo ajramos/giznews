@@ -22,6 +22,22 @@ func newAppForKB(t *testing.T) *App {
 	return NewApp(cfg, d)
 }
 
+func TestToNoteDTOFrontmatter(t *testing.T) {
+	n := &db.KBNote{
+		ID: 1, Type: db.NoteAtom, Title: "T", Slug: "t",
+		Frontmatter: `{"type":"atom","category":"models","source":"HN RSS","url":"https://x.com","rating":3}`,
+	}
+	dto := toNoteDTO(n)
+	if dto.Category != "models" || dto.Source != "HN RSS" || dto.URL != "https://x.com" || dto.Rating != 3 {
+		t.Fatalf("dto = %+v", dto)
+	}
+	// electron frontmatter (no category/rating) leaves those fields empty.
+	e := toNoteDTO(&db.KBNote{ID: 2, Type: db.NoteElectron, Title: "E", Frontmatter: `{"type":"electron","name":"E"}`})
+	if e.Category != "" || e.Rating != 0 || e.URL != "" {
+		t.Fatalf("electron dto = %+v", e)
+	}
+}
+
 func TestKBuildViaAPI(t *testing.T) {
 	app := newAppForKB(t)
 	ctx := context.Background()

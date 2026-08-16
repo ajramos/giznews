@@ -594,6 +594,10 @@ img, video, iframe { max-width: 100%; height: auto; }
   font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
   color: var(--accent); border: 1px solid var(--accent-dim); border-radius: 4px; padding: 0 5px; flex-shrink: 0;
 }
+.note-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.note-rating { color: var(--warn); font-size: 12px; }
+.note-source { color: var(--fg-dim); font-size: var(--fs-xs); }
+.note-created { color: var(--fg-dim); font-size: var(--fs-xs); font-family: var(--font-mono); }
 .graph-current { margin-bottom: 12px; }
 .graph-current h2 { margin: 6px 0; font-size: 15px; }
 .graph-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); min-height: 300px; flex: 1; cursor: grab; }

@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -166,8 +167,24 @@ func (a *App) GraphNeighbors(ctx context.Context, id int64) ([]*NoteDTO, error) 
 }
 
 func toNoteDTO(n *db.KBNote) *NoteDTO {
-	return &NoteDTO{
+	dto := &NoteDTO{
 		ID: n.ID, Type: string(n.Type), Title: n.Title, Slug: n.Slug,
 		Content: n.Content, Tags: n.Tags, Wikilinks: n.Wikilinks, CreatedAt: n.CreatedAt,
 	}
+	// Frontmatter is a JSON map ({"category","source","url","rating","tags"})
+	// for atoms; parse it so the reader can render rich metadata chips.
+	var fm struct {
+		Category string `json:"category"`
+		Source   string `json:"source"`
+		URL      string `json:"url"`
+		Rating   int    `json:"rating"`
+	}
+	if n.Frontmatter != "" {
+		_ = json.Unmarshal([]byte(n.Frontmatter), &fm)
+		dto.Category = fm.Category
+		dto.Source = fm.Source
+		dto.URL = fm.URL
+		dto.Rating = fm.Rating
+	}
+	return dto
 }

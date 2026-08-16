@@ -22,7 +22,8 @@ import { GraphPanel } from "./components/GraphPanel";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
 import { HelpOverlay } from "./components/HelpOverlay";
 import { StatusBar } from "./components/StatusBar";
-import { Markdown } from "./components/Markdown";
+import { Markdown, stars, catClass } from "./components/Markdown";
+import { stripFrontmatter } from "./frontmatter";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
@@ -1065,11 +1066,20 @@ export default function App() {
           ) : noteReader ? (
             <div className="reader">
               <div className="reader-head">
-                <span className="note-type">{noteReader.type}</span>
+                <div className="note-meta">
+                  <span className="note-type">{noteReader.type}</span>
+                  {noteReader.category && <span className={`cat-chip ${catClass(noteReader.category)}`}>{noteReader.category}</span>}
+                  {noteReader.rating != null && <span className="note-rating">{stars(noteReader.rating)}</span>}
+                  {noteReader.source && <span className="note-source">{noteReader.source}</span>}
+                  <span className="note-created">{noteReader.createdAt ? noteReader.createdAt.slice(0, 10) : ""}</span>
+                </div>
                 <h1>{noteReader.title}</h1>
+                {(noteReader.tags?.length ?? 0) > 0 && (
+                  <div className="ctx-tags">{(noteReader.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}</div>
+                )}
               </div>
               <div className="reader-scroll">
-                <Markdown content={noteReader.content} />
+                <Markdown content={stripFrontmatter(noteReader.content)} />
               </div>
             </div>
           ) : (

@@ -47,6 +47,11 @@ type NoteDTO struct {
 	Tags      []string `json:"tags"`
 	Wikilinks []string `json:"wikilinks"`
 	CreatedAt string   `json:"created_at"`
+	// Frontmatter metadata (present on atoms; empty on electrons/molecules).
+	Category string `json:"category,omitempty"`
+	Rating   int    `json:"rating,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Source   string `json:"source,omitempty"`
 }
 
 // SearchResultDTO is one hit from hybrid search.

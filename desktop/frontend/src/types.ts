@@ -37,6 +37,10 @@ export interface NoteDTO {
   tags: string[];
   wikilinks: string[];
   createdAt: string;
+  category?: string;
+  rating?: number;
+  url?: string;
+  source?: string;
 }
 
 export interface DigestThemeDTO {
