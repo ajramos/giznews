@@ -29,10 +29,11 @@ interface Props {
   onCategory: (c: string | null) => void;
   onImportance: (n: number) => void;
   onUnclassified: (v: boolean) => void;
+  onToggleBulk: (id: number) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulk, bulkSel, unreadCount, filterCategory, filterImportance, filterUnclassified, onView, onCategory, onImportance, onUnclassified, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulk, bulkSel, unreadCount, filterCategory, filterImportance, filterUnclassified, onView, onCategory, onImportance, onUnclassified, onToggleBulk, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,7 +107,7 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
               <div
                 key={a.id}
                 className={`article-row ${i === selectedIndex ? "selected" : ""} ${inBulk ? "bulk" : ""} ${a.status === "read" ? "read" : ""} ${a.status === "archived" ? "archived" : ""}`}
-                onClick={() => onSelect(i)}
+                onClick={() => (bulk ? onToggleBulk(a.id) : onSelect(i))}
                 onDoubleClick={() => onSelect(i)}
               >
                 {bulk ? (

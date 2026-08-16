@@ -299,6 +299,16 @@ export default function App() {
 
   const exitBulk = useCallback(() => { setBulk(false); setBulkSel(new Set()); }, []);
 
+  // toggle one article in the bulk selection (space key or checkbox click).
+  const toggleBulkId = useCallback((id: number) => {
+    setBulkSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const archiveIds = useCallback((ids: number[]) => {
     if (ids.length === 0) return;
     const batch = ids.map((id) => articles.find((a) => a.id === id)).filter((a): a is ArticleDTO => !!a);
@@ -744,18 +754,12 @@ export default function App() {
       }
       if (bulk) {
         const bn = Math.max(0, articles.length - 1);
+        e.preventDefault(); // consume bulk keys (space must not scroll the list)
         if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + 1, bn)); return; }
         if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - 1, 0)); return; }
         if (k === " ") {
           const id = selected?.id;
-          if (id != null) {
-            setBulkSel((prev) => {
-              const next = new Set(prev);
-              if (next.has(id)) next.delete(id);
-              else next.add(id);
-              return next;
-            });
-          }
+          if (id != null) toggleBulkId(id);
           return;
         }
         if (k === "a") { bulkAction("archive"); return; }
@@ -857,7 +861,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected, processSelected, summarizeSelected, zoomBy, zoomReset]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, toggleBulkId, bulkAction, classifySelected, processSelected, summarizeSelected, zoomBy, zoomReset]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -1014,6 +1018,7 @@ export default function App() {
               onCategory={(c) => setFilterCategory(c)}
               onImportance={(n) => setFilterImportance(n)}
               onUnclassified={(v) => setFilterUnclassified(v)}
+              onToggleBulk={toggleBulkId}
               onSelect={(i) => { setSelectedIndex(i); setPaneFocus("list"); if (reader) setReader(null); }}
             />
           )}

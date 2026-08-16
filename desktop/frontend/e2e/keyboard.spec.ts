@@ -157,6 +157,19 @@ test.describe("vim keyboard grammar", () => {
     await expect(page.locator(".article-row.bulk")).toHaveCount(0);
   });
 
+  test("bulk: clicking a row toggles its selection (checkbox)", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "v"); // enters bulk, selects current (row 0)
+    await expect(page.locator(".article-row.bulk")).toHaveCount(1);
+    // click row 2 → toggles it on
+    await page.locator(".article-row").nth(2).click();
+    await expect(page.locator(".article-row.bulk")).toHaveCount(2);
+    // click row 0 → toggles it off
+    await page.locator(".article-row").nth(0).click();
+    await expect(page.locator(".article-row.bulk")).toHaveCount(1);
+    await press(page, "Escape");
+  });
+
   test("bulk: space to select multiple, a archives them", async ({ page }) => {
     await gotoApp(page);
     const before = await page.locator(".article-row").count();
