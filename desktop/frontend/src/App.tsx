@@ -84,6 +84,7 @@ export default function App() {
   const [vaultStage, setVaultStage] = useState<StageKey>("atom");
   const [contextOpen, setContextOpen] = useState(false);
   const [listWidth, setListWidth] = useState(340);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
@@ -94,7 +95,7 @@ export default function App() {
   // ---- reader / panels ----
   const [reader, setReader] = useState<ArticleDTO | null>(null);
   const [noteReader, setNoteReader] = useState<NoteDTO | null>(null);
-  const [paneFocus, setPaneFocus] = useState<"list" | "reader">("list");
+  const [paneFocus, setPaneFocus] = useState<"list" | "reader" | "context">("list");
   const [summarizing, setSummarizing] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [digest, setDigest] = useState<DigestDTO | null>(null);
@@ -425,6 +426,15 @@ export default function App() {
     if (el) el.scrollBy({ top: dir * el.clientHeight * 0.9 });
   }, []);
 
+  // Font zoom (cmd +/- / cmd 0): scales the whole app via CSS zoom (WebKit).
+  const zoomBy = useCallback((delta: number) => {
+    setZoomLevel((z) => Math.max(0.8, Math.min(1.6, Math.round((z + delta) * 10) / 10)));
+  }, []);
+  const zoomReset = useCallback(() => setZoomLevel(1), []);
+  useEffect(() => {
+    document.documentElement.style.zoom = String(zoomLevel);
+  }, [zoomLevel]);
+
   const openAdjacent = useCallback((delta: number) => {
     const n = Math.max(0, articles.length - 1);
     setSelectedIndex((i) => Math.max(0, Math.min(i + delta, n)));
@@ -660,6 +670,21 @@ export default function App() {
       const k = e.key;
       const now = Date.now();
 
+      // Native shortcuts (copy/paste/quit) pass through untouched. Only zoom
+      // and page-up/down combos are handled here.
+      if (e.metaKey) {
+        if (k === "=" || k === "+") { e.preventDefault(); zoomBy(0.1); return; }
+        if (k === "-") { e.preventDefault(); zoomBy(-0.1); return; }
+        if (k === "0") { e.preventDefault(); zoomReset(); return; }
+        return;
+      }
+      if (e.ctrlKey) {
+        if (k === "d") { e.preventDefault(); if (reader) scrollReader(0.9); else setSelectedIndex((i) => Math.min(i + 8, Math.max(0, articles.length - 1))); return; }
+        if (k === "u") { e.preventDefault(); if (reader) scrollReader(-0.9); else setSelectedIndex((i) => Math.max(i - 8, 0)); return; }
+        return;
+      }
+      if (e.altKey) return;
+
       if (k === "Escape") {
         if (noteLinks) { setNoteLinks(null); return; }
         if (bulk) { exitBulk(); return; }
@@ -682,10 +707,21 @@ export default function App() {
         if (digestOpen) { setDigestOpen(false); return; }
         if (noteReader) { setNoteReader(null); return; }
         if (paneFocus === "reader") { setPaneFocus("list"); return; }
+        if (paneFocus === "context") { setPaneFocus("list"); return; }
         return;
       }
       if (typing) return; // inputs handle their own keys
       if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || jobsOpen || categoryPickerOpen || flowOpen || logsOpen || rulesPickerOpen || ruleForm || synthPrompt || urlPrompt || statusOpen) return;
+
+      // Tab cycles pane focus: list → reader → context (skips a collapsed context).
+      if (k === "Tab") {
+        e.preventDefault();
+        const order: ("list" | "reader" | "context")[] = contextOpen ? ["list", "reader", "context"] : ["list", "reader"];
+        const i = order.indexOf(paneFocus);
+        const next = e.shiftKey ? (i - 1 + order.length) % order.length : (i + 1) % order.length;
+        setPaneFocus(order[next]);
+        return;
+      }
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -758,17 +794,9 @@ export default function App() {
       // Article reader (list focus): L shows the article's knowledge-graph connections.
       if (reader && k === "L") { void openArticleLinks(reader.id); return; }
 
-      // reader paging (space / Ctrl+d / Ctrl+u) when an article is open
+      // reader paging (space) when an article is open
       if (k === " ") {
         scrollReader(e.shiftKey ? -0.9 : 0.9);
-        return;
-      }
-      if (k === "d" && e.ctrlKey) {
-        if (reader) scrollReader(0.9); else setSelectedIndex((i) => Math.min(i + 8, n));
-        return;
-      }
-      if (k === "u" && e.ctrlKey) {
-        if (reader) scrollReader(-0.9); else setSelectedIndex((i) => Math.max(i - 8, 0));
         return;
       }
 
@@ -828,7 +856,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected, processSelected, summarizeSelected]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected, processSelected, summarizeSelected, zoomBy, zoomReset]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -1063,6 +1091,7 @@ export default function App() {
             <ContextPanel
               article={reader}
               note={noteReader}
+              active={paneFocus === "context"}
               onOpenNote={(id) => void openNote(id)}
               onCreateNote={createNoteForArticle}
               onOpenGraph={openGraphForNote}

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { FileText, GitBranch, FlaskConical, Plus, Link2, GitFork, Boxes } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { FileText, GitBranch, FlaskConical, Plus, Link2, Boxes } from "lucide-react";
 import { api } from "../api";
 import type { ArticleDTO, NoteDTO } from "../types";
 import { stars, catClass } from "./Markdown";
@@ -7,6 +7,7 @@ import { stars, catClass } from "./Markdown";
 interface Props {
   article: ArticleDTO | null;
   note: NoteDTO | null;
+  active: boolean;
   onOpenNote: (id: number) => void;
   onCreateNote: (articleId: number) => void;
   onOpenGraph: (noteId: number | null) => void;
@@ -18,12 +19,25 @@ const TYPE_ICON: Record<string, typeof FileText> = {
   molecule: FlaskConical,
 };
 
+interface CtxAction {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  section: string;
+  run: () => void;
+}
+
+function noteIcon(n: NoteDTO): ReactNode {
+  const I = TYPE_ICON[n.type] ?? FileText;
+  return <I size={13} />;
+}
+
 // ContextPanel is the third pane: the bridge between an item and the knowledge
-// graph. For an article it shows its note + related notes; for a note it shows
-// its connections and tags.
-export function ContextPanel({ article, note, onOpenNote, onCreateNote, onOpenGraph }: Props) {
+// graph. When focused (Tab), j/k navigate its actions and Enter runs them.
+export function ContextPanel({ article, note, active, onOpenNote, onCreateNote, onOpenGraph }: Props) {
   const [notes, setNotes] = useState<NoteDTO[]>([]);
   const [articleNote, setArticleNote] = useState<NoteDTO | null>(null);
+  const [focus, setFocus] = useState(0);
 
   useEffect(() => {
     api.listNotes("").then(setNotes).catch(() => {});
@@ -38,10 +52,7 @@ export function ContextPanel({ article, note, onOpenNote, onCreateNote, onOpenGr
 
   const related = useMemo(() => {
     if (!article) return [];
-    return notes.filter((n) => {
-      if (n.type !== "atom" || !n.tags?.length) return false;
-      return n.tags.some((t) => (article.tags ?? []).includes(t));
-    });
+    return notes.filter((n) => n.type === "atom" && n.tags?.length && n.tags.some((t) => (article.tags ?? []).includes(t)));
   }, [article, notes]);
 
   const outgoing = useMemo(() => {
@@ -54,98 +65,83 @@ export function ContextPanel({ article, note, onOpenNote, onCreateNote, onOpenGr
     return notes.filter((n) => (n.wikilinks ?? []).includes(note.slug));
   }, [note, notes]);
 
-  if (article) {
-    return (
-      <div className="ctx-pane">
-        <div className="ctx-head"><Boxes size={14} /> Context</div>
-        <div className="ctx-body">
-          <div className="ctx-row">
-            {article.category && <span className={`cat-chip ${catClass(article.category)}`}>{article.category}</span>}
-            <span className="ctx-imp">{stars(article.importance)}</span>
-            {article.sourceName && <span className="ctx-src">{article.sourceName}</span>}
-          </div>
-          {(article.tags?.length ?? 0) > 0 && (
-            <div className="ctx-tags">{(article.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}</div>
-          )}
+  const actions: CtxAction[] = useMemo(() => {
+    const out: CtxAction[] = [];
+    if (article) {
+      if (articleNote) {
+        out.push({ key: "note", label: articleNote.title, icon: <FileText size={13} />, section: "Knowledge", run: () => onOpenNote(articleNote.id) });
+      } else {
+        out.push({ key: "create", label: "Create note", icon: <Plus size={13} />, section: "Knowledge", run: () => onCreateNote(article.id) });
+      }
+      for (const n of related) out.push({ key: `rel-${n.id}`, label: n.title, icon: noteIcon(n), section: "Related notes", run: () => onOpenNote(n.id) });
+    } else if (note) {
+      for (const n of outgoing) out.push({ key: `out-${n.id}`, label: n.title, icon: noteIcon(n), section: "Links out", run: () => onOpenNote(n.id) });
+      for (const n of incoming) out.push({ key: `in-${n.id}`, label: n.title, icon: noteIcon(n), section: "Backlinks", run: () => onOpenNote(n.id) });
+      out.push({ key: "graph", label: "Open in graph", icon: <GitBranch size={13} />, section: "Graph", run: () => onOpenGraph(note.id) });
+    }
+    return out;
+  }, [article, note, articleNote, related, outgoing, incoming, onOpenNote, onCreateNote, onOpenGraph]);
 
-          <div className="ctx-section">
-            <div className="ctx-label"><GitFork size={12} /> Knowledge</div>
-            {articleNote ? (
-              <button className="ctx-item" onClick={() => onOpenNote(articleNote.id)}>
-                <FileText size={13} />
-                <span className="ctx-item-title">{articleNote.title}</span>
-                <span className="ctx-item-hint">open</span>
-              </button>
-            ) : (
-              <button className="ctx-item" onClick={() => onCreateNote(article.id)}>
-                <Plus size={13} />
-                <span className="ctx-item-title">Create note</span>
-              </button>
-            )}
-          </div>
+  useEffect(() => { setFocus(0); }, [article?.id, note?.id]);
 
-          {related.length > 0 && (
-            <div className="ctx-section">
-              <div className="ctx-label"><Link2 size={12} /> Related notes</div>
-              {related.map((n) => (
-                <button key={n.id} className="ctx-item" onClick={() => onOpenNote(n.id)}>
-                  {(() => { const I = TYPE_ICON[n.type] ?? FileText; return <I size={13} />; })()}
-                  <span className="ctx-item-title">{n.title}</span>
-                </button>
-              ))}
-            </div>
-          )}
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const n = actions.length;
+      if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.min(f + 1, n - 1)); }
+      else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.max(f - 1, 0)); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); const a = actions[focus]; if (a) a.run(); }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [active, actions, focus]);
+
+  const meta = article
+    ? (
+      <>
+        <div className="ctx-row">
+          {article.category && <span className={`cat-chip ${catClass(article.category)}`}>{article.category}</span>}
+          <span className="ctx-imp">{stars(article.importance)}</span>
+          {article.sourceName && <span className="ctx-src">{article.sourceName}</span>}
         </div>
-      </div>
-    );
-  }
-
-  if (note) {
-    return (
-      <div className="ctx-pane">
-        <div className="ctx-head"><Boxes size={14} /> Context</div>
-        <div className="ctx-body">
-          <div className="ctx-row">
-            <span className={`note-type ${note.type}`}>{note.type}</span>
-          </div>
-          {(note.tags?.length ?? 0) > 0 && (
-            <div className="ctx-tags">{(note.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}</div>
-          )}
-
-          <div className="ctx-section">
-            <div className="ctx-label"><Link2 size={12} /> Links out</div>
-            {outgoing.length === 0 && <div className="ctx-empty">No outgoing links.</div>}
-            {outgoing.map((n) => (
-              <button key={n.id} className="ctx-item" onClick={() => onOpenNote(n.id)}>
-                {(() => { const I = TYPE_ICON[n.type] ?? FileText; return <I size={13} />; })()}
-                <span className="ctx-item-title">{n.title}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="ctx-section">
-            <div className="ctx-label">Backlinks</div>
-            {incoming.length === 0 && <div className="ctx-empty">No backlinks.</div>}
-            {incoming.map((n) => (
-              <button key={n.id} className="ctx-item" onClick={() => onOpenNote(n.id)}>
-                {(() => { const I = TYPE_ICON[n.type] ?? FileText; return <I size={13} />; })()}
-                <span className="ctx-item-title">{n.title}</span>
-              </button>
-            ))}
-          </div>
-
-          <button className="ctx-graph" onClick={() => onOpenGraph(note.id)}>
-            <GitBranch size={13} /> Open in graph
-          </button>
-        </div>
-      </div>
-    );
-  }
+        {(article.tags?.length ?? 0) > 0 && (
+          <div className="ctx-tags">{(article.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}</div>
+        )}
+      </>
+    )
+    : note
+    ? (
+      <>
+        <div className="ctx-row"><span className={`note-type ${note.type}`}>{note.type}</span></div>
+        {(note.tags?.length ?? 0) > 0 && (
+          <div className="ctx-tags">{(note.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}</div>
+        )}
+      </>
+    )
+    : null;
 
   return (
-    <div className="ctx-pane">
+    <div className={`ctx-pane ${active ? "active" : ""}`}>
       <div className="ctx-head"><Boxes size={14} /> Context</div>
-      <div className="ctx-body"><div className="ctx-empty">Open an article or note to see its connections.</div></div>
+      <div className="ctx-body">
+        {meta}
+        {actions.length === 0 ? (
+          <div className="ctx-empty">Open an article or note to see its connections.</div>
+        ) : (
+          actions.map((a, i) => {
+            const showHeader = i === 0 || actions[i - 1].section !== a.section;
+            return (
+              <div key={a.key} style={{ display: "contents" }}>
+                {showHeader && <div className="ctx-label"><Link2 size={12} /> {a.section}</div>}
+                <button className={`ctx-item ${i === focus ? "focused" : ""}`} onClick={a.run} onMouseEnter={() => setFocus(i)}>
+                  {a.icon}
+                  <span className="ctx-item-title">{a.label}</span>
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

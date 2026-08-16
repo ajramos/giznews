@@ -357,6 +357,8 @@ select option { background: var(--bg-panel); color: var(--fg); }
   background: var(--bg-elev); color: var(--fg); font-size: var(--fs-sm); cursor: pointer;
 }
 .ctx-item:hover { border-color: var(--accent-dim); }
+.ctx-item.focused { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-dim); }
+.ctx-pane.active { box-shadow: inset 2px 0 0 var(--accent); }
 .ctx-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctx-item-hint { color: var(--accent); font-size: var(--fs-xs); }
 .ctx-empty { color: var(--fg-dim); font-size: var(--fs-sm); padding: 2px 0; }
