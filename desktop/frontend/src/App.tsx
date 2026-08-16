@@ -23,7 +23,7 @@ import { CommandPalette, type PaletteCommand } from "./components/CommandPalette
 import { HelpOverlay } from "./components/HelpOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { Markdown, stars, catClass } from "./components/Markdown";
-import { stripFrontmatter } from "./frontmatter";
+import { noteBody } from "./frontmatter";
 import { WelcomeOverlay } from "./components/WelcomeOverlay";
 import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
@@ -1079,7 +1079,7 @@ export default function App() {
                 )}
               </div>
               <div className="reader-scroll">
-                <Markdown content={stripFrontmatter(noteReader.content)} />
+                <Markdown content={noteBody(noteReader.content)} />
               </div>
             </div>
           ) : (
