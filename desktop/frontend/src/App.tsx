@@ -7,6 +7,8 @@ import type {
   DigestMeta,
   ListArticlesOptions,
   NoteDTO,
+  RuleActionDTO,
+  RuleDTO,
   SearchResultDTO,
   SourceDTO,
   StatusDTO,
@@ -29,6 +31,8 @@ import { JobsPanel } from "./components/JobsPanel";
 import { CategoryPicker, CATEGORIES } from "./components/CategoryPicker";
 import { FlowPanel } from "./components/FlowPanel";
 import { LogsPanel } from "./components/LogsPanel";
+import { RulesPicker } from "./components/RulesPicker";
+import { RuleForm } from "./components/RuleForm";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
 import { VaultBrowser, type StageKey } from "./components/VaultBrowser";
@@ -58,6 +62,8 @@ export default function App() {
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [rulesPickerOpen, setRulesPickerOpen] = useState(false);
+  const [ruleForm, setRuleForm] = useState<{ initial: RuleDTO | null } | null>(null);
   const [status, setStatus] = useState<StatusDTO | null>(null);
 
   // ---- ui chrome ----
@@ -630,6 +636,7 @@ export default function App() {
     { name: "jobs", hint: "Background jobs", run: () => setJobsOpen(true) },
     { name: "flow", hint: "Pipeline flow (live counts)", run: () => setFlowOpen(true) },
     { name: "logs", hint: "Pipeline log (what the app decided)", run: () => setLogsOpen(true) },
+    { name: "rules", hint: "Deterministic classification rules", run: () => setRulesPickerOpen(true) },
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
     { name: "vault", hint: "Knowledge vault (electrons → atoms → molecules)", run: () => setMode("vault") },
@@ -664,6 +671,8 @@ export default function App() {
         if (categoryPickerOpen) { setCategoryPickerOpen(false); return; }
         if (flowOpen) { setFlowOpen(false); return; }
         if (logsOpen) { setLogsOpen(false); return; }
+        if (rulesPickerOpen) { setRulesPickerOpen(false); return; }
+        if (ruleForm) { setRuleForm(null); return; }
         if (synthPrompt) { setSynthPrompt(false); return; }
         if (urlPrompt) { setUrlPrompt(false); return; }
         if (statusOpen) { setStatusOpen(false); return; }
@@ -676,7 +685,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || jobsOpen || categoryPickerOpen || flowOpen || logsOpen || synthPrompt || urlPrompt || statusOpen) return;
+      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || jobsOpen || categoryPickerOpen || flowOpen || logsOpen || rulesPickerOpen || ruleForm || synthPrompt || urlPrompt || statusOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -819,7 +828,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected, processSelected, summarizeSelected]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected, processSelected, summarizeSelected]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -836,6 +845,18 @@ export default function App() {
       notify(`Source added: ${data.name}`);
     } catch (e) { notify(String(e)); }
   }, [loadSources, notify]);
+
+  const saveRule = useCallback(async (data: { name: string; query: string; actions: RuleActionDTO[]; enabled: boolean }) => {
+    try {
+      if (ruleForm?.initial) {
+        await api.updateRule(ruleForm.initial.id, data.name, data.query, data.actions, data.enabled);
+      } else {
+        await api.addRule(data.name, data.query, data.actions, data.enabled);
+      }
+      setRuleForm(null);
+      notify(`Rule saved: ${data.name}`);
+    } catch (e) { notify(String(e)); }
+  }, [ruleForm, notify]);
 
   const confirmDeleteSource = useCallback(async () => {
     if (!deleteSource) return;
@@ -1086,6 +1107,14 @@ export default function App() {
           onClose={() => setSourcePickerOpen(false)}
         />
       )}
+      {rulesPickerOpen && (
+        <RulesPicker
+          onAdd={() => { setRulesPickerOpen(false); setRuleForm({ initial: null }); }}
+          onEdit={(r) => { setRulesPickerOpen(false); setRuleForm({ initial: r }); }}
+          onClose={() => setRulesPickerOpen(false)}
+          notify={notify}
+        />
+      )}
       {synthPrompt && (
         <PromptModal
           title="Category to synthesize"
@@ -1136,6 +1165,9 @@ export default function App() {
       )}
       {sourceForm && (
         <SourceForm initial={sourceForm.initial} onSave={saveSource} onCancel={() => setSourceForm(null)} />
+      )}
+      {ruleForm && (
+        <RuleForm initial={ruleForm.initial} onSave={saveRule} onCancel={() => setRuleForm(null)} />
       )}
       {deleteSource && (
         <div className="modal-overlay" onClick={() => setDeleteSource(null)}>

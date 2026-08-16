@@ -74,4 +74,19 @@ test.describe("classification filters", () => {
     await press(page, "Escape");
     await expect(page.locator(".logs-panel")).toHaveCount(0);
   });
+
+  test(":rules lists the deterministic rules and toggles one", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, ":");
+    await page.locator(".palette input").fill("rules");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toBeVisible();
+    await expect(page.locator(".source-picker .source-picker-item")).toHaveCount(2);
+    await expect(page.locator(".source-picker .source-picker-item", { hasText: "openai" })).toBeVisible();
+    // Enter toggles the first rule off
+    await press(page, "Enter");
+    await expect(page.locator(".source-picker .source-picker-item").first().locator(".sp-dot")).toHaveAttribute("data-on", "false");
+    await press(page, "Escape");
+    await expect(page.locator(".source-picker")).toHaveCount(0);
+  });
 });

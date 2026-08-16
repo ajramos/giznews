@@ -15,6 +15,8 @@ import type {
   KBResult,
   ListArticlesOptions,
   NoteDTO,
+  RuleActionDTO,
+  RuleDTO,
   SearchResultDTO,
   SourceDTO,
   StatusDTO,
@@ -95,6 +97,10 @@ const delay = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 let jobSeq = 0;
 const mockJobs: JobDTO[] = [];
 const mockDigests: DigestDTO[] = [];
+const mockRules: RuleDTO[] = [
+  { id: 1, name: "openai", query: "openai|gpt|chatgpt", actions: [{ type: "category", value: "industry" }, { type: "importance", value: "2" }], enabled: true },
+  { id: 2, name: "anthropic", query: "anthropic|claude", actions: [{ type: "category", value: "models" }], enabled: true },
+];
 
 function beginJob(name: string, type: string): number {
   const id = ++jobSeq;
@@ -288,6 +294,31 @@ export const mockBackend: APIShape = {
       "giznews: 2026/08/16 10:00:09 batch 2/10: 10 classified in 1.9s",
       "giznews: 2026/08/16 10:00:11 extracted 4 article bodies",
     ].join("\n");
+  },
+
+  listRules: async (): Promise<RuleDTO[]> => { await delay(); return mockRules.map((r) => ({ ...r, actions: [...r.actions] })); },
+  addRule: async (name: string, query: string, actions: RuleActionDTO[], enabled: boolean): Promise<RuleDTO> => {
+    await delay();
+    const r: RuleDTO = { id: Date.now(), name, query, actions, enabled };
+    mockRules.unshift(r);
+    return { ...r };
+  },
+  updateRule: async (id: number, name: string, query: string, actions: RuleActionDTO[], enabled: boolean): Promise<RuleDTO> => {
+    await delay();
+    const r = mockRules.find((x) => x.id === id);
+    if (!r) throw new Error("rule not found");
+    r.name = name; r.query = query; r.actions = actions; r.enabled = enabled;
+    return { ...r, actions: [...r.actions] };
+  },
+  setRuleEnabled: async (id: number, enabled: boolean): Promise<void> => {
+    await delay();
+    const r = mockRules.find((x) => x.id === id);
+    if (r) r.enabled = enabled;
+  },
+  deleteRule: async (id: number): Promise<void> => {
+    await delay();
+    const i = mockRules.findIndex((x) => x.id === id);
+    if (i >= 0) mockRules.splice(i, 1);
   },
 
   kbuild: async (): Promise<KBResult> => {

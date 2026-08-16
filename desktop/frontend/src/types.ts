@@ -158,5 +158,18 @@ export interface FlowStatus {
   runningJobs: number;
 }
 
+export interface RuleActionDTO {
+  type: string; // category | tag | importance | archive
+  value: string;
+}
+
+export interface RuleDTO {
+  id: number;
+  name: string;
+  query: string;
+  actions: RuleActionDTO[];
+  enabled: boolean;
+}
+
 export type ViewMode = "articles" | "digest";
 export type PanelMode = "none" | "search" | "graph" | "palette";

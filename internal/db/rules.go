@@ -116,6 +116,18 @@ func (r *RuleRepo) SetEnabled(ctx context.Context, id int64, enabled bool) error
 	return checkAffected(res, "set rule enabled")
 }
 
+// Update persists a rule's mutable fields.
+func (r *RuleRepo) Update(ctx context.Context, id int64, nr NewRule) error {
+	actions, _ := json.Marshal(nr.Actions)
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE rules SET name = ?, query = ?, actions = ?, enabled = ?, updated_at = ? WHERE id = ?",
+		nr.Name, nr.Query, string(actions), boolToInt(nr.Enabled), Now(), id)
+	if err != nil {
+		return fmt.Errorf("update rule: %w", err)
+	}
+	return checkAffected(res, "update rule")
+}
+
 // Delete removes a rule.
 func (r *RuleRepo) Delete(ctx context.Context, id int64) error {
 	res, err := r.db.sql.ExecContext(ctx, "DELETE FROM rules WHERE id = ?", id)

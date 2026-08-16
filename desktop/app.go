@@ -81,6 +81,23 @@ func (a *App) Logs(limit int) string {
 	return a.api.Logs(limit)
 }
 
+// ---- Rules ----
+func (a *App) ListRules() ([]*gizdesktop.RuleDTO, error) {
+	return a.api.ListRules(bg())
+}
+func (a *App) AddRule(name, query string, actions []gizdesktop.RuleActionDTO, enabled bool) (*gizdesktop.RuleDTO, error) {
+	return a.api.AddRule(bg(), name, query, actions, enabled)
+}
+func (a *App) UpdateRule(id int64, name, query string, actions []gizdesktop.RuleActionDTO, enabled bool) (*gizdesktop.RuleDTO, error) {
+	return a.api.UpdateRule(bg(), id, name, query, actions, enabled)
+}
+func (a *App) SetRuleEnabled(id int64, enabled bool) error {
+	return a.api.SetRuleEnabled(bg(), id, enabled)
+}
+func (a *App) DeleteRule(id int64) error {
+	return a.api.DeleteRule(bg(), id)
+}
+
 // ---- Knowledge graph ----
 func (a *App) KBuild() (*gizdesktop.KBResult, error) {
 	return a.api.KBuild(bg())

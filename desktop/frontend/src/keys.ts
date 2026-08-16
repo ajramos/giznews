@@ -94,6 +94,7 @@ export const HELP: HelpCategory[] = [
       { keys: ":jobs", label: "Browse background jobs (cancel / remove)" },
       { keys: ":flow", label: "Pipeline flow (live counts per stage)" },
       { keys: ":logs", label: "Pipeline log (what the app decided)" },
+      { keys: ":rules", label: "Deterministic classification rules (edit the ⚡ prefilter)" },
       { keys: "q", label: "Quit GizNews" },
     ],
   },

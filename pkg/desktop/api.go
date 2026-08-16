@@ -58,6 +58,13 @@ type API interface {
 	CancelJob(ctx context.Context, id int64) error
 	BulkSetStatus(ctx context.Context, ids []int64, status string) (*BulkResult, error)
 
+	// Rules (deterministic classification)
+	ListRules(ctx context.Context) ([]*RuleDTO, error)
+	AddRule(ctx context.Context, name, query string, actions []RuleActionDTO, enabled bool) (*RuleDTO, error)
+	UpdateRule(ctx context.Context, id int64, name, query string, actions []RuleActionDTO, enabled bool) (*RuleDTO, error)
+	SetRuleEnabled(ctx context.Context, id int64, enabled bool) error
+	DeleteRule(ctx context.Context, id int64) error
+
 	// Ingest a single article by URL
 	IngestURL(ctx context.Context, url string) (*ArticleDTO, error)
 

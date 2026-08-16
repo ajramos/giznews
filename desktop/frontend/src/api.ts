@@ -19,6 +19,8 @@ import type {
   KBResult,
   ListArticlesOptions,
   NoteDTO,
+  RuleActionDTO,
+  RuleDTO,
   SearchResultDTO,
   SourceDTO,
   StatusDTO,
@@ -118,6 +120,11 @@ export interface APIShape {
   getDigest: (date: string) => Promise<DigestDTO | null>;
   flow: () => Promise<FlowStatus>;
   logs: (limit: number) => Promise<string>;
+  listRules: () => Promise<RuleDTO[]>;
+  addRule: (name: string, query: string, actions: RuleActionDTO[], enabled: boolean) => Promise<RuleDTO>;
+  updateRule: (id: number, name: string, query: string, actions: RuleActionDTO[], enabled: boolean) => Promise<RuleDTO>;
+  setRuleEnabled: (id: number, enabled: boolean) => Promise<void>;
+  deleteRule: (id: number) => Promise<void>;
   kbuild: () => Promise<KBResult>;
   ksynthesize: (category: string) => Promise<KBResult>;
   ensureArticleNote: (articleID: number) => Promise<NoteDTO>;
@@ -172,6 +179,16 @@ const realApi: APIShape = {
     call("GetDigest", date).then((v) => (v ? normalize<DigestDTO>(v) : null)),
   flow: () => call("Flow").then((v) => normalize<FlowStatus>(v)),
   logs: (limit: number) => call<string>("Logs", limit),
+
+  listRules: () => call("ListRules").then((v) => arr<RuleDTO>(v)),
+  addRule: (name: string, query: string, actions: RuleActionDTO[], enabled: boolean) =>
+    call("AddRule", name, query, actions, enabled).then((v) => normalize<RuleDTO>(v)),
+  updateRule: (id: number, name: string, query: string, actions: RuleActionDTO[], enabled: boolean) =>
+    call("UpdateRule", id, name, query, actions, enabled).then((v) => normalize<RuleDTO>(v)),
+  setRuleEnabled: (id: number, enabled: boolean) =>
+    call("SetRuleEnabled", id, enabled).then(() => undefined),
+  deleteRule: (id: number) =>
+    call("DeleteRule", id).then(() => undefined),
 
   kbuild: () => call<KBResult>("KBuild"),
   ksynthesize: (category: string) => call<KBResult>("KSynthesize", category),
