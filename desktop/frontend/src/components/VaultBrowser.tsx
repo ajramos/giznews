@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, FileText, FlaskConical, Loader2, FolderOpen, type LucideIcon } from "lucide-react";
 import { api } from "../api";
 import type { NoteDTO } from "../types";
@@ -16,7 +16,9 @@ interface Props {
   stage: StageKey;
   onStage: (s: StageKey) => void;
   onOpenNote: (id: number) => void;
+  onFocus: () => void;
   onClose: () => void;
+  active: boolean;
   notify: (msg: string) => void;
 }
 
@@ -24,10 +26,11 @@ interface Props {
 // stages (electrons → atoms → molecules). The news list is the inbox, so the
 // vault only holds the knowledge notes. Enter opens a note in the detail
 // (right) column; the browser stays so you keep browsing the flow.
-export function VaultBrowser({ stage, onStage, onOpenNote, onClose, notify }: Props) {
+export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, active, notify }: Props) {
   const [notes, setNotes] = useState<NoteDTO[] | null>(null);
   const [sel, setSel] = useState(0);
   const [linksOpen, setLinksOpen] = useState(false);
+  const autoLoaded = useRef<string | null>(null);
 
   useEffect(() => {
     api.listNotes("").then(setNotes).catch((e) => { notify(String(e)); setNotes([]); });
@@ -70,10 +73,19 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onClose, notify }: Pr
 
   useEffect(() => { setSel(0); }, [stage]);
 
-  // keyboard (capture phase): h/l stage · j/k items · g/G extremes · Enter open
-  // · L links · f back to news. Esc closes the links overlay only.
+  // auto-load the first note of the stage so the reader never lands empty.
   useEffect(() => {
-    if (linksOpen) return;
+    if (!notes || items.length === 0) return;
+    if (autoLoaded.current === stage) return;
+    autoLoaded.current = stage;
+    onOpenNote(items[0].id);
+  }, [stage, notes, items, onOpenNote]);
+
+  // keyboard (capture phase): h/l stage · j/k items · g/G extremes · Enter open
+  // · L links · f back to news. Esc closes the links overlay only. Inactive
+  // when the reader has focus (keys scroll the note instead).
+  useEffect(() => {
+    if (!active || linksOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "f") { e.preventDefault(); e.stopPropagation(); onClose(); return; }
       if (e.key === "h" || e.key === "ArrowLeft") {
@@ -92,7 +104,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onClose, notify }: Pr
       if (e.key === "G") { e.preventDefault(); e.stopPropagation(); setSel(Math.max(0, items.length - 1)); return; }
       if (e.key === "Enter") {
         e.preventDefault(); e.stopPropagation();
-        if (selected) onOpenNote(selected.id);
+        if (selected) { onOpenNote(selected.id); onFocus(); }
         return;
       }
       if (e.key === "L") {
@@ -103,7 +115,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onClose, notify }: Pr
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [stage, sel, items, selected, linksOpen, onClose, onOpenNote, onStage]);
+  }, [active, stage, sel, items, selected, linksOpen, onClose, onOpenNote, onFocus, onStage]);
 
   if (notes === null) {
     return (
@@ -128,6 +140,12 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onClose, notify }: Pr
         })}
       </div>
 
+      <div className="vb-legend">
+        <span><GitBranch size={11} /> concepts · </span>
+        <span><FileText size={11} /> one per article · </span>
+        <span><FlaskConical size={11} /> category synthesis</span>
+      </div>
+
       <div className="vault-list">
         {items.length === 0 && <div className="palette-empty">No notes in this stage.</div>}
         {items.map((it, i) => {
@@ -137,7 +155,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onClose, notify }: Pr
               key={it.id}
               className={`palette-item ${i === sel ? "selected" : ""}`}
               onMouseEnter={() => setSel(i)}
-              onClick={() => onOpenNote(it.id)}
+              onClick={() => { onOpenNote(it.id); onFocus(); }}
             >
               <span className="cmd-left">
                 <span className="sp-type"><Icon size={13} /></span>

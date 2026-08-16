@@ -19,7 +19,9 @@ interface Props {
   loading: boolean;
   view: ViewFilter;
   hasSources: boolean;
+  bulk: boolean;
   bulkSel: Set<number>;
+  unreadCount: number;
   filterCategory: string | null;
   filterImportance: number;
   filterUnclassified: boolean;
@@ -30,7 +32,7 @@ interface Props {
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulkSel, filterCategory, filterImportance, filterUnclassified, onView, onCategory, onImportance, onUnclassified, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulk, bulkSel, unreadCount, filterCategory, filterImportance, filterUnclassified, onView, onCategory, onImportance, onUnclassified, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
               className={`view-tab ${view === v.key ? "active" : ""}`}
               onClick={() => onView(v.key)}
             >
-              {v.icon} {v.label}
+              {v.icon} {v.label}{v.key === "unread" && unreadCount > 0 && <span className="view-count">{unreadCount}</span>}
             </button>
           ))}
         </div>
@@ -107,9 +109,13 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
                 onClick={() => onSelect(i)}
                 onDoubleClick={() => onSelect(i)}
               >
-                <span className="article-flag" title={statusTitle(a.status)}>
-                  {a.status === "unread" ? <span className="unread-badge" /> : a.status === "starred" ? <span className="star-badge">★</span> : null}
-                </span>
+                {bulk ? (
+                  <span className="bulk-check">{inBulk ? "✓" : ""}</span>
+                ) : (
+                  <span className="article-flag" title={statusTitle(a.status)}>
+                    {a.status === "unread" ? <span className="unread-badge" /> : a.status === "starred" ? <span className="star-badge">★</span> : null}
+                  </span>
+                )}
                 <span className="article-imp imp" data-level={a.importance} title={`Importance: ${a.importance}/3`}>
                   {stars(a.importance)}
                 </span>

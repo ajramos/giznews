@@ -31,9 +31,10 @@ import { FlowPanel } from "./components/FlowPanel";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
 import { VaultBrowser, type StageKey } from "./components/VaultBrowser";
+import { ContextPanel } from "./components/ContextPanel";
 import { LinksPicker, type LinkItem } from "./components/LinksPicker";
 import { buildNoteLinks, buildArticleLinks } from "./noteLinks";
-import { CircleHelp, Command, RefreshCw, Brain, Loader2 } from "lucide-react";
+import { CircleHelp, Command, RefreshCw, Loader2 } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
 
@@ -73,6 +74,7 @@ export default function App() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [mode, setMode] = useState<"news" | "vault">("news");
   const [vaultStage, setVaultStage] = useState<StageKey>("atom");
+  const [contextOpen, setContextOpen] = useState(false);
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
@@ -83,7 +85,7 @@ export default function App() {
   // ---- reader / panels ----
   const [reader, setReader] = useState<ArticleDTO | null>(null);
   const [noteReader, setNoteReader] = useState<NoteDTO | null>(null);
-  const [readerFocused, setReaderFocused] = useState(false);
+  const [paneFocus, setPaneFocus] = useState<"list" | "reader">("list");
   const [summarizing, setSummarizing] = useState(false);
   const [contentLoading, setContentLoading] = useState(false);
   const [digest, setDigest] = useState<DigestDTO | null>(null);
@@ -509,6 +511,21 @@ export default function App() {
     } catch (e) { notify(String(e)); }
   }, [selected, openGraph, notify]);
 
+  // create a note for a specific article (from the context pane).
+  const createNoteForArticle = useCallback(async (articleId: number) => {
+    try {
+      await api.ensureArticleNote(articleId);
+      notify("Note created");
+      setGraphRefresh((r) => r + 1);
+    } catch (e) { notify(String(e)); }
+  }, [notify]);
+
+  // open the graph focused on a specific note (from the context pane).
+  const openGraphForNote = useCallback((noteId: number | null) => {
+    setGraphFocusId(noteId);
+    setPanel("graph");
+  }, []);
+
   const runSearch = useCallback(async (q: string) => {
     setSearching(true);
     try {
@@ -624,7 +641,7 @@ export default function App() {
         if (panel !== "none") { setPanel("none"); return; }
         if (digestOpen) { setDigestOpen(false); return; }
         if (noteReader) { setNoteReader(null); return; }
-        if (readerFocused) { setReaderFocused(false); return; }
+        if (paneFocus === "reader") { setPaneFocus("list"); return; }
         return;
       }
       if (typing) return; // inputs handle their own keys
@@ -683,9 +700,9 @@ export default function App() {
 
       const n = Math.max(0, articles.length - 1);
 
-      // Reader mode (note open, or article focused via Enter): j/k/arrows/space
-      // scroll the content; L opens its links; Esc returns focus to the list.
-      if (noteReader || readerFocused) {
+      // Reader focus: j/k/arrows/space scroll the detail; L opens links; Esc
+      // returns focus to the list.
+      if (paneFocus === "reader") {
         if (k === "j" || k === "ArrowDown") { scrollReader(0.35); return; }
         if (k === "k" || k === "ArrowUp") { scrollReader(-0.35); return; }
         if (k === " ") { scrollReader(e.shiftKey ? -0.9 : 0.9); return; }
@@ -713,30 +730,34 @@ export default function App() {
         return;
       }
 
-      if (k === "J") { openAdjacent(count); return; }
-      if (k === "K") { openAdjacent(-count); return; }
       if (k === "q") { void api.quit(); return; }
-      if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + count, n)); return; }
-      if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - count, 0)); return; }
-      if (k === "Home") { setSelectedIndex(0); return; }
-      if (k === "End") { setSelectedIndex(n); return; }
-      if (k === "g") {
-        if (now - lastGRef.current < 300) {
-          lastGRef.current = 0;
-          setSelectedIndex(0); // gg → top
-        } else {
-          lastGRef.current = now;
-          graphTimer.current = window.setTimeout(() => { openGraph(); graphTimer.current = null; }, 300);
+
+      // News-world list navigation + actions (inactive in the vault world).
+      if (mode === "news") {
+        if (k === "J") { openAdjacent(count); return; }
+        if (k === "K") { openAdjacent(-count); return; }
+        if (k === "j" || k === "ArrowDown") { setSelectedIndex((i) => Math.min(i + count, n)); return; }
+        if (k === "k" || k === "ArrowUp") { setSelectedIndex((i) => Math.max(i - count, 0)); return; }
+        if (k === "Home") { setSelectedIndex(0); return; }
+        if (k === "End") { setSelectedIndex(n); return; }
+        if (k === "g") {
+          if (now - lastGRef.current < 300) {
+            lastGRef.current = 0;
+            setSelectedIndex(0); // gg → top
+          } else {
+            lastGRef.current = now;
+            graphTimer.current = window.setTimeout(() => { openGraph(); graphTimer.current = null; }, 300);
+          }
+          return;
         }
-        return;
+        if (k === "G") { setSelectedIndex(n); return; }
+        if (k === "Enter") { if (selected) { void openArticle(selected.id); setPaneFocus("reader"); } return; }
+        if (k === "y") { void summarize(); return; }
+        if (k === "a") { archiveRange(count); return; }
+        if (k === "t") { toggleReadRange(count); return; }
+        if (k === "m") { void toggleStar(); return; }
+        if (k === "O" || k === "o") { openExternal(); return; }
       }
-      if (k === "G") { setSelectedIndex(n); return; }
-      if (k === "Enter") { if (selected) { void openArticle(selected.id); setReaderFocused(true); } return; }
-      if (k === "y") { void summarize(); return; }
-      if (k === "a") { archiveRange(count); return; }
-      if (k === "t") { toggleReadRange(count); return; }
-      if (k === "m") { void toggleStar(); return; }
-      if (k === "O" || k === "o") { openExternal(); return; }
       if (k === "s") {
         setPanel((p) => (p === "search" ? "none" : "search"));
         if (!searchIndexedRef.current) {
@@ -749,6 +770,7 @@ export default function App() {
       if (k === "f") { setMode((m) => (m === "vault" ? "news" : "vault")); return; }
       if (k === "z") { setJobsOpen(true); return; }
       if (k === ";") { setCategoryPickerOpen(true); return; }
+      if (k === "c") { setContextOpen((v) => !v); return; }
       if (k === "[") { setFilterImportance((v) => (v + 3) % 4); return; }
       if (k === "]") { setFilterImportance((v) => (v + 1) % 4); return; }
       if (k === "d") { void generateDigest(); return; }
@@ -761,7 +783,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, readerFocused, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -820,8 +842,13 @@ export default function App() {
         </div>
         {status && (
           <div className="status">
-            <span className="pill" title="Unread articles">{status.unreadArticles} unread</span>
-            <span className="pill" title="Knowledge-graph notes in Obsidian (atoms + electrons + molecules)"><Brain size={13} /> {status.totalNotes} notes</span>
+            <button
+              className="pill mode-toggle"
+              onClick={() => setMode((m) => (m === "vault" ? "news" : "vault"))}
+              title="Switch world"
+            >
+              {mode === "vault" ? "Vault" : "News"}
+            </button>
             {runningJobs > 0 && (
               <button className="pill jobs" onClick={() => setJobsOpen(true)} title="Background jobs">
                 <Loader2 size={13} className="spin" /> {runningJobs} running
@@ -864,7 +891,9 @@ export default function App() {
               stage={vaultStage}
               onStage={setVaultStage}
               onOpenNote={(id) => void openNote(id)}
+              onFocus={() => setPaneFocus("reader")}
               onClose={() => setMode("news")}
+              active={paneFocus === "list"}
               notify={notify}
             />
           ) : (
@@ -874,7 +903,9 @@ export default function App() {
               loading={loadingList}
               view={view}
               hasSources={sources.length > 0}
+              bulk={bulk}
               bulkSel={bulkSel}
+              unreadCount={status?.unreadArticles ?? 0}
               filterCategory={filterCategory}
               filterImportance={filterImportance}
               filterUnclassified={filterUnclassified}
@@ -952,6 +983,20 @@ export default function App() {
             />
           )}
         </section>
+
+        {contextOpen ? (
+          <section className="col context-col">
+            <ContextPanel
+              article={reader}
+              note={noteReader}
+              onOpenNote={(id) => void openNote(id)}
+              onCreateNote={createNoteForArticle}
+              onOpenGraph={openGraphForNote}
+            />
+          </section>
+        ) : (
+          <div className="context-tab" onClick={() => setContextOpen(true)} title="Context (c)">ctx</div>
+        )}
       </main>
 
       <StatusBar
