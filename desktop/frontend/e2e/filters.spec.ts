@@ -50,4 +50,15 @@ test.describe("classification filters", () => {
     await expect(page.locator(".digest-head select option")).toHaveCount(2, { timeout: 6000 });
     await press(page, "Escape");
   });
+
+  test(":logs opens the pipeline log", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, ":");
+    await page.locator(".palette input").fill("logs");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".logs-panel")).toBeVisible({ timeout: 6000 });
+    await expect(page.locator(".logs-panel .logs-pre")).toContainText("classifying batch");
+    await press(page, "Escape");
+    await expect(page.locator(".logs-panel")).toHaveCount(0);
+  });
 });

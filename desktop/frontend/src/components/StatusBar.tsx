@@ -54,6 +54,8 @@ export function StatusBar({
               { key: "t", label: "read" },
               { key: "m", label: "star" },
               { key: "c", label: "classify" },
+              { key: "p", label: "note" },
+              { key: "y", label: "summarize" },
               { key: "Esc/v", label: "exit" },
             ].map((k) => (
               <span key={k.key + k.label} className="sb-key"><kbd>{k.key}</kbd> {k.label}</span>

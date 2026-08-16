@@ -274,6 +274,18 @@ export const mockBackend: APIShape = {
       runningJobs: mockJobs.filter((j) => j.status === "running").length,
     };
   },
+  logs: async (): Promise<string> => {
+    await delay();
+    return [
+      "giznews: 2026/08/16 10:00:01 fetching HN RSS (rss)",
+      "giznews: 2026/08/16 10:00:02 source HN RSS: 12 new, 0 updated, 3 dups",
+      "giznews: 2026/08/16 10:00:03 classifying batch 1/10 (10 articles)",
+      "giznews: 2026/08/16 10:00:05 batch 1/10: 10 classified in 2.1s",
+      "giznews: 2026/08/16 10:00:07 classifying batch 2/10 (10 articles)",
+      "giznews: 2026/08/16 10:00:09 batch 2/10: 10 classified in 1.9s",
+      "giznews: 2026/08/16 10:00:11 extracted 4 article bodies",
+    ].join("\n");
+  },
 
   kbuild: async (): Promise<KBResult> => {
     const id = beginJob("Build knowledge graph", "kb");

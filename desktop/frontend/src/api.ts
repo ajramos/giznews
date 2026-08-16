@@ -117,6 +117,7 @@ export interface APIShape {
   listDigests: () => Promise<DigestMeta[]>;
   getDigest: (date: string) => Promise<DigestDTO | null>;
   flow: () => Promise<FlowStatus>;
+  logs: (limit: number) => Promise<string>;
   kbuild: () => Promise<KBResult>;
   ksynthesize: (category: string) => Promise<KBResult>;
   ensureArticleNote: (articleID: number) => Promise<NoteDTO>;
@@ -170,6 +171,7 @@ const realApi: APIShape = {
   getDigest: (date: string) =>
     call("GetDigest", date).then((v) => (v ? normalize<DigestDTO>(v) : null)),
   flow: () => call("Flow").then((v) => normalize<FlowStatus>(v)),
+  logs: (limit: number) => call<string>("Logs", limit),
 
   kbuild: () => call<KBResult>("KBuild"),
   ksynthesize: (category: string) => call<KBResult>("KSynthesize", category),

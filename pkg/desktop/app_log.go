@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // logger returns the shared logger writing to giznews.log (next to the DB),
@@ -20,4 +21,22 @@ func (a *App) logger() *log.Logger {
 		a.loggerL = log.New(f, "giznews: ", log.LstdFlags)
 	})
 	return a.loggerL
+}
+
+// Logs returns the tail of the giznews.log file (last `limit` lines), so the
+// UI can show what the pipeline has been deciding.
+func (a *App) Logs(limit int) string {
+	if limit <= 0 {
+		limit = 200
+	}
+	dir := filepath.Dir(a.cfg.ResolveDBPath())
+	b, err := os.ReadFile(filepath.Join(dir, "giznews.log"))
+	if err != nil {
+		return "No log file yet."
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	if len(lines) > limit {
+		lines = lines[len(lines)-limit:]
+	}
+	return strings.Join(lines, "\n")
 }

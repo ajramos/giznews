@@ -77,6 +77,9 @@ func (a *App) GetDigest(date string) (*gizdesktop.DigestDTO, error) {
 func (a *App) Flow() (*gizdesktop.FlowStatus, error) {
 	return a.api.Flow(bg())
 }
+func (a *App) Logs(limit int) string {
+	return a.api.Logs(limit)
+}
 
 // ---- Knowledge graph ----
 func (a *App) KBuild() (*gizdesktop.KBResult, error) {

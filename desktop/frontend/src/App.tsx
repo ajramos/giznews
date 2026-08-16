@@ -28,6 +28,7 @@ import { SourcePicker } from "./components/SourcePicker";
 import { JobsPanel } from "./components/JobsPanel";
 import { CategoryPicker } from "./components/CategoryPicker";
 import { FlowPanel } from "./components/FlowPanel";
+import { LogsPanel } from "./components/LogsPanel";
 import { PromptModal } from "./components/PromptModal";
 import { StatusModal } from "./components/StatusModal";
 import { VaultBrowser, type StageKey } from "./components/VaultBrowser";
@@ -56,6 +57,7 @@ export default function App() {
   const [filterUnclassified, setFilterUnclassified] = useState(false);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
   const [status, setStatus] = useState<StatusDTO | null>(null);
 
   // ---- ui chrome ----
@@ -340,6 +342,34 @@ export default function App() {
     })();
   }, [bulkIds, exitBulk, notify, loadArticles, loadStatus]);
 
+  // materialize knowledge notes for the bulk selection (kb build for these).
+  const processSelected = useCallback(() => {
+    if (bulkIds.length === 0) return;
+    const ids = bulkIds;
+    exitBulk();
+    void (async () => {
+      try {
+        await Promise.all(ids.map((id) => api.ensureArticleNote(id)));
+        notify(`${ids.length} note(s) created`);
+        void loadStatus();
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [bulkIds, exitBulk, notify, loadStatus]);
+
+  // summarize the bulk selection (each article gets its own background job).
+  const summarizeSelected = useCallback(() => {
+    if (bulkIds.length === 0) return;
+    const ids = bulkIds;
+    exitBulk();
+    void (async () => {
+      try {
+        await Promise.all(ids.map((id) => api.summarizeArticle(id)));
+        notify(`${ids.length} summarized`);
+        void loadArticles();
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [bulkIds, exitBulk, notify, loadArticles]);
+
   // action entry point that honors bulk mode.
   const bulkAction = useCallback((verb: "archive" | "read" | "star") => {
     if (bulk && bulkIds.length > 0) {
@@ -601,6 +631,7 @@ export default function App() {
     { name: "url", hint: "Add an article by URL", run: () => setUrlPrompt(true) },
     { name: "jobs", hint: "Background jobs", run: () => setJobsOpen(true) },
     { name: "flow", hint: "Pipeline flow (live counts)", run: () => setFlowOpen(true) },
+    { name: "logs", hint: "Pipeline log (what the app decided)", run: () => setLogsOpen(true) },
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
     { name: "vault", hint: "Knowledge vault (electrons → atoms → molecules)", run: () => setMode("vault") },
@@ -634,6 +665,7 @@ export default function App() {
         if (jobsOpen) { setJobsOpen(false); return; }
         if (categoryPickerOpen) { setCategoryPickerOpen(false); return; }
         if (flowOpen) { setFlowOpen(false); return; }
+        if (logsOpen) { setLogsOpen(false); return; }
         if (synthPrompt) { setSynthPrompt(false); return; }
         if (urlPrompt) { setUrlPrompt(false); return; }
         if (statusOpen) { setStatusOpen(false); return; }
@@ -646,7 +678,7 @@ export default function App() {
         return;
       }
       if (typing) return; // inputs handle their own keys
-      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || jobsOpen || categoryPickerOpen || flowOpen || synthPrompt || urlPrompt || statusOpen) return;
+      if (noteLinks || paletteOpen || helpOpen || sourceForm || deleteSource || themeModalOpen || sourcePickerOpen || jobsOpen || categoryPickerOpen || flowOpen || logsOpen || synthPrompt || urlPrompt || statusOpen) return;
 
       // digest mode: j/k/Enter navigate its articles
       if (digestOpen) {
@@ -686,6 +718,8 @@ export default function App() {
         if (k === "t") { bulkAction("read"); return; }
         if (k === "m") { bulkAction("star"); return; }
         if (k === "c") { classifySelected(); return; }
+        if (k === "p") { processSelected(); return; }
+        if (k === "y") { summarizeSelected(); return; }
         return; // consume everything else while in bulk
       }
 
@@ -784,7 +818,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, bulkAction, classifySelected, processSelected, summarizeSelected]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -1078,6 +1112,7 @@ export default function App() {
         />
       )}
       {flowOpen && <FlowPanel onClose={() => setFlowOpen(false)} />}
+      {logsOpen && <LogsPanel onClose={() => setLogsOpen(false)} />}
       {statusOpen && <StatusModal onClose={() => setStatusOpen(false)} />}
       {noteLinks && (
         <LinksPicker

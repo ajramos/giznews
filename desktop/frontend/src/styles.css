@@ -301,8 +301,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 .splitter:hover { background: var(--accent-dim); }
 
-/* context pane (third column) */
-.ctx-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* context pane (third column) */.ctx-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .ctx-head {
   padding: 8px 14px; font-size: var(--fs-md); font-weight: 600; color: var(--fg);
   border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: center; gap: 8px;
@@ -330,6 +329,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: auto;
   padding: 7px; border: 1px solid var(--accent-dim); border-radius: var(--radius-sm);
   color: var(--accent); background: transparent; font-size: var(--fs-sm); cursor: pointer;
+}
+
+/* logs panel */
+.logs-panel { width: 720px; max-width: 94vw; }
+.logs-body { max-height: 62vh; overflow-y: auto; padding: 10px 14px; outline: none; }
+.logs-pre {
+  margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.55;
+  color: var(--fg-dim); white-space: pre-wrap; word-break: break-word;
 }
 
 .pane-head {
