@@ -140,12 +140,6 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
         })}
       </div>
 
-      <div className="vb-legend">
-        <span><GitBranch size={11} /> concepts · </span>
-        <span><FileText size={11} /> one per article · </span>
-        <span><FlaskConical size={11} /> category synthesis</span>
-      </div>
-
       <div className="vault-list">
         {items.length === 0 && <div className="palette-empty">No notes in this stage.</div>}
         {items.map((it, i) => {

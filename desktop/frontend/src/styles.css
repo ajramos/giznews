@@ -294,6 +294,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 .context-tab:hover { color: var(--accent); }
 
+/* resizable splitter (list ↔ reader) */
+.splitter {
+  width: 4px; cursor: col-resize; background: transparent; flex-shrink: 0;
+  transition: background .12s ease;
+}
+.splitter:hover { background: var(--accent-dim); }
+
 /* context pane (third column) */
 .ctx-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .ctx-head {
@@ -377,10 +384,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 12px 6px; gap: 8px; border-bottom: 1px solid var(--border);
 }
-.view-tabs { display: flex; gap: 2px; }
+.view-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
 .view-tab {
-  font-size: 11px; padding: 3px 9px; border-radius: 5px; border: 1px solid transparent;
-  background: transparent; color: var(--fg-dim);
+  font-size: 11px; padding: 3px 7px; border-radius: 5px; border: 1px solid transparent;
+  background: transparent; color: var(--fg-dim); display: inline-flex; align-items: center; gap: 4px;
+  white-space: nowrap;
 }
 .view-tab:hover { color: var(--fg); }
 .view-tab.active { color: var(--fg); background: var(--bg-elev); border-color: var(--border); }
@@ -644,11 +652,9 @@ kbd {
   padding: 8px 14px; font-weight: 600; font-size: var(--fs-md); color: var(--fg);
   border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: center; gap: 8px;
 }
-.vb-legend {
-  display: flex; gap: 10px; align-items: center; padding: 5px 14px;
-  border-bottom: 1px solid var(--border); font-size: var(--fs-xs); color: var(--fg-dim); flex-shrink: 0;
-}
-.vb-legend span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* vault note titles read like content (sans), not data (mono) */
+.vault-list .cmd-name { font-family: var(--font-sans); }
 .vault-detail { overflow-y: auto; padding: 12px 14px; }
 .vd-head { display: flex; align-items: center; gap: 8px; }
 .vd-head h2 { margin: 0; font-size: 14px; }

@@ -75,6 +75,7 @@ export default function App() {
   const [mode, setMode] = useState<"news" | "vault">("news");
   const [vaultStage, setVaultStage] = useState<StageKey>("atom");
   const [contextOpen, setContextOpen] = useState(false);
+  const [listWidth, setListWidth] = useState(340);
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
@@ -833,6 +834,21 @@ export default function App() {
     ? `source: ${sources.find((s) => s.id === filterSource)?.name ?? "?"}`
     : undefined;
 
+  const onSplitterDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = listWidth;
+    const move = (ev: MouseEvent) => setListWidth(Math.max(240, Math.min(560, startW + ev.clientX - startX)));
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      document.body.style.cursor = "";
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  }, [listWidth]);
+
   return (
     <div className="app">
       <header className="topbar">
@@ -884,7 +900,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="layout">
+      <main className="layout" style={{ gridTemplateColumns: `${listWidth}px minmax(0, 1fr) auto` }}>
         <section className="col list-col">
           {mode === "vault" ? (
             <VaultBrowser
@@ -917,6 +933,8 @@ export default function App() {
             />
           )}
         </section>
+
+        <div className="splitter" onMouseDown={onSplitterDown} title="Drag to resize" />
 
         <section className="col reader-col">
           {panel === "search" ? (
