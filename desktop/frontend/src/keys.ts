@@ -40,7 +40,7 @@ export const HELP: HelpCategory[] = [
     rows: [
       { keys: "s", label: "Semantic search" },
       { keys: "g", label: "Knowledge graph" },
-      { keys: "f", label: "Knowledge vault (world): inbox → electrons → atoms → molecules" },
+      { keys: "f", label: "Knowledge vault (world): electrons → atoms → molecules" },
       { keys: "n", label: "Open the vault at the Atoms stage (quick note browse)" },
       { keys: "z", label: "Background jobs" },
       { keys: "d", label: "Daily digest" },
@@ -55,7 +55,7 @@ export const HELP: HelpCategory[] = [
       { keys: "f", label: "Toggle vault ↔ news" },
       { keys: "n", label: "Vault, Atoms stage" },
       { keys: "h/l · j/k · Enter", label: "In the vault: switch stage · move item · open (detail on the right)" },
-      { keys: "✕ News pill", label: "In the vault, click the topbar pill to return to news" },
+      { keys: "f / u", label: "Back to the news world (mode shows in the status bar)" },
     ],
   },
   {

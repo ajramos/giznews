@@ -1,0 +1,63 @@
+<h2>Vault world — how should the stages look?</h2>
+<p class="subtitle">We removed the Inbox (news is your inbox) and the numbered prefixes. Here's the two-world model, then pick the tab treatment.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">News world (list = inbox)</div>
+    <div class="mockup-body">
+      <div style="display:flex;height:220px;background:#101218;border-radius:8px;overflow:hidden;font-size:11px;color:#c7cad3">
+        <div style="width:38%;border-right:1px solid #262a35;padding:8px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;gap:4px;font-size:10px"><span style="background:#1b1f2a;padding:2px 6px;border-radius:4px">Unread</span><span style="padding:2px 6px;color:#7a8090">Read</span><span style="padding:2px 6px;color:#7a8090">Archived</span></div>
+          <div style="background:#1b1f2a;padding:5px;border-radius:4px">★★★ DeepSeek Harness</div>
+          <div style="padding:5px">★★ Anthropic watermarking</div>
+          <div style="padding:5px">★★ GLM-5.3 cyber</div>
+        </div>
+        <div style="flex:1;padding:10px;color:#7a8090;display:flex;align-items:center;justify-content:center">article reader</div>
+      </div>
+      <div style="margin-top:6px;background:#101218;padding:5px 10px;border-radius:6px;font-size:10px;color:#8b90a0">LIST&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:#4f8cff">u/r/x/*</span> views&nbsp;&nbsp;·&nbsp;&nbsp;auto 15m ✓</div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Vault world (knowledge only)</div>
+    <div class="mockup-body">
+      <div style="display:flex;height:220px;background:#101218;border-radius:8px;overflow:hidden;font-size:11px;color:#c7cad3">
+        <div style="width:38%;border-right:1px solid #262a35;padding:8px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;gap:4px;font-size:10px"><span style="background:#1b1f2a;padding:2px 6px;border-radius:4px">⚡ Electrons</span><span style="padding:2px 6px;color:#7a8090">📄 Atoms</span><span style="padding:2px 6px;color:#7a8090">🧪 Molecules</span></div>
+          <div style="background:#1b1f2a;padding:5px;border-radius:4px">ai agents</div>
+          <div style="padding:5px">world models</div>
+          <div style="padding:5px">MCP</div>
+        </div>
+        <div style="flex:1;padding:10px;color:#7a8090;display:flex;align-items:center;justify-content:center">note reader</div>
+      </div>
+      <div style="margin-top:6px;background:#101218;padding:5px 10px;border-radius:6px;font-size:10px;color:#8b90a0"><span style="color:#4f8cff">VAULT</span>&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:#4f8cff">h/l</span> stage&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:#4f8cff">j/k</span> items&nbsp;&nbsp;·&nbsp;&nbsp;<span style="color:#4f8cff">f/u</span> news</div>
+    </div>
+  </div>
+</div>
+
+<h3>Pick the stage-tab treatment</h3>
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Icon + label + count</h3>
+      <p><span style="margin-right:8px">⚡ Electrons <span style="background:#1b1f2a;border-radius:999px;padding:0 6px;color:#7a8090">2</span></span> <span style="margin-right:8px">📄 Atoms <span style="background:#1b1f2a;border-radius:999px;padding:0 6px;color:#7a8090">5</span></span> <span>🧪 Molecules <span style="background:#1b1f2a;border-radius:999px;padding:0 6px;color:#7a8090">1</span></span></p>
+      <p>Counts help you see how much is in each stage at a glance.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Icon + label only</h3>
+      <p><span style="margin-right:8px">⚡ Electrons</span> <span style="margin-right:8px">📄 Atoms</span> <span>🧪 Molecules</span></p>
+      <p>Cleanest; counts move to the statusbar if you want them.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Label only (no icon)</h3>
+      <p><span style="margin-right:8px">Electrons</span> <span style="margin-right:8px">Atoms</span> <span>Molecules</span></p>
+      <p>Most minimal, relies on the type name alone.</p>
+    </div>
+  </div>
+</div>

@@ -1,84 +1,55 @@
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, GitBranch, FileText, FlaskConical, Loader2, type LucideIcon } from "lucide-react";
+import { GitBranch, FileText, FlaskConical, Loader2, FolderOpen, type LucideIcon } from "lucide-react";
 import { api } from "../api";
-import type { ArticleDTO, NoteDTO } from "../types";
+import type { NoteDTO } from "../types";
 import { LinksPicker, type LinkItem } from "./LinksPicker";
 
-export type StageKey = "inbox" | "electron" | "atom" | "molecule";
+export type StageKey = "electron" | "atom" | "molecule";
 
 const STAGES: { key: StageKey; label: string; icon: LucideIcon }[] = [
-  { key: "inbox", label: "00 Inbox", icon: Inbox },
-  { key: "electron", label: "01 Electrons", icon: GitBranch },
-  { key: "atom", label: "02 Atoms", icon: FileText },
-  { key: "molecule", label: "03 Molecules", icon: FlaskConical },
+  { key: "electron", label: "Electrons", icon: GitBranch },
+  { key: "atom", label: "Atoms", icon: FileText },
+  { key: "molecule", label: "Molecules", icon: FlaskConical },
 ];
-
-const TYPE_ICON: Record<string, LucideIcon> = {
-  atom: FileText,
-  electron: GitBranch,
-  molecule: FlaskConical,
-  inbox: Inbox,
-};
-
-interface Item {
-  kind: "article" | "note";
-  id: number;
-  title: string;
-  type: string;
-  summary?: string;
-  importance?: number;
-}
 
 interface Props {
   stage: StageKey;
   onStage: (s: StageKey) => void;
   onOpenNote: (id: number) => void;
-  onOpenArticle: (id: number) => void;
   onClose: () => void;
   notify: (msg: string) => void;
 }
 
 // VaultBrowser is the knowledge-world master list (left column): the vault
-// stages (inbox → electrons → atoms → molecules). Enter opens an item in the
-// detail (right) column; the browser stays so you keep browsing the flow.
-export function VaultBrowser({ stage, onStage, onOpenNote, onOpenArticle, onClose, notify }: Props) {
+// stages (electrons → atoms → molecules). The news list is the inbox, so the
+// vault only holds the knowledge notes. Enter opens a note in the detail
+// (right) column; the browser stays so you keep browsing the flow.
+export function VaultBrowser({ stage, onStage, onOpenNote, onClose, notify }: Props) {
   const [notes, setNotes] = useState<NoteDTO[] | null>(null);
-  const [inbox, setInbox] = useState<ArticleDTO[]>([]);
   const [sel, setSel] = useState(0);
   const [linksOpen, setLinksOpen] = useState(false);
 
   useEffect(() => {
     api.listNotes("").then(setNotes).catch((e) => { notify(String(e)); setNotes([]); });
-    api.listInbox(200).then(setInbox).catch(() => {});
   }, [notify]);
 
   const bySlug = useMemo(() => new Map((notes ?? []).map((n) => [n.slug, n])), [notes]);
   const byId = useMemo(() => new Map((notes ?? []).map((n) => [n.id, n])), [notes]);
 
-  const stageNotes = useMemo(() => (notes ?? []).filter((n) => n.type === stage), [notes, stage]);
-
-  const items: Item[] = useMemo(() => {
-    if (stage === "inbox") {
-      return inbox.map((a) => ({ kind: "article", id: a.id, title: a.title, type: "inbox", summary: a.summary, importance: a.importance }));
-    }
-    return stageNotes.map((n) => ({ kind: "note", id: n.id, title: n.title, type: n.type }));
-  }, [stage, inbox, stageNotes]);
-
-  const selected: Item | undefined = items[sel];
+  const items: NoteDTO[] = useMemo(() => (notes ?? []).filter((n) => n.type === stage), [notes, stage]);
+  const selected: NoteDTO | undefined = items[sel];
 
   const links: LinkItem[] = useMemo(() => {
-    if (!selected || selected.kind !== "note") return [];
-    const note = byId.get(selected.id);
-    if (!note) return [];
-    const out: LinkItem[] = (note.wikilinks ?? [])
+    if (!selected) return [];
+    const out: LinkItem[] = (selected.wikilinks ?? [])
       .map((slug) => bySlug.get(slug))
       .filter((n): n is NoteDTO => !!n)
       .map((n) => ({ id: n.id, title: n.title, type: n.type, dir: "out" }));
     const incoming: LinkItem[] = (notes ?? [])
-      .filter((n) => (n.wikilinks ?? []).includes(note.slug))
+      .filter((n) => (n.wikilinks ?? []).includes(selected.slug))
       .map((n) => ({ id: n.id, title: n.title, type: n.type, dir: "in" }));
     return [...out, ...incoming];
-  }, [selected, notes, bySlug, byId]);
+  }, [selected, notes, bySlug]);
 
   // follow a link → jump the vault to that note's stage.
   const goToNote = (id: number) => {
@@ -90,17 +61,17 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onOpenArticle, onClos
   };
 
   const counts = useMemo(() => {
-    const c: Record<StageKey, number> = { inbox: inbox.length, electron: 0, atom: 0, molecule: 0 };
+    const c: Record<StageKey, number> = { electron: 0, atom: 0, molecule: 0 };
     for (const n of notes ?? []) {
       if (n.type === "electron" || n.type === "atom" || n.type === "molecule") c[n.type]++;
     }
     return c;
-  }, [notes, inbox]);
+  }, [notes]);
 
   useEffect(() => { setSel(0); }, [stage]);
 
   // keyboard (capture phase): h/l stage · j/k items · g/G extremes · Enter open
-  // · L links (note) · f back to news. Esc closes the links overlay only.
+  // · L links · f back to news. Esc closes the links overlay only.
   useEffect(() => {
     if (linksOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -121,21 +92,18 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onOpenArticle, onClos
       if (e.key === "G") { e.preventDefault(); e.stopPropagation(); setSel(Math.max(0, items.length - 1)); return; }
       if (e.key === "Enter") {
         e.preventDefault(); e.stopPropagation();
-        if (selected) {
-          if (selected.kind === "note") onOpenNote(selected.id);
-          else onOpenArticle(selected.id);
-        }
+        if (selected) onOpenNote(selected.id);
         return;
       }
       if (e.key === "L") {
         e.preventDefault(); e.stopPropagation();
-        if (selected && selected.kind === "note") setLinksOpen(true);
+        if (selected) setLinksOpen(true);
         return;
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [stage, sel, items, selected, linksOpen, onClose, onOpenNote, onOpenArticle, onStage]);
+  }, [stage, sel, items, selected, linksOpen, onClose, onOpenNote, onStage]);
 
   if (notes === null) {
     return (
@@ -147,7 +115,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onOpenArticle, onClos
 
   return (
     <div className="vault-browser">
-      <div className="vb-head">🔀 Vault</div>
+      <div className="vb-head"><FolderOpen size={14} /> Vault</div>
 
       <div className="vault-tabs">
         {STAGES.map((s) => {
@@ -161,32 +129,23 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onOpenArticle, onClos
       </div>
 
       <div className="vault-list">
-        {items.length === 0 && <div className="palette-empty">No items in this stage.</div>}
+        {items.length === 0 && <div className="palette-empty">No notes in this stage.</div>}
         {items.map((it, i) => {
-          const Icon = TYPE_ICON[it.type] ?? FileText;
+          const Icon = STAGES.find((s) => s.key === it.type)?.icon ?? FileText;
           return (
             <div
-              key={it.kind + it.id}
+              key={it.id}
               className={`palette-item ${i === sel ? "selected" : ""}`}
               onMouseEnter={() => setSel(i)}
-              onClick={() => { if (it.kind === "note") onOpenNote(it.id); else onOpenArticle(it.id); }}
+              onClick={() => onOpenNote(it.id)}
             >
               <span className="cmd-left">
                 <span className="sp-type"><Icon size={13} /></span>
                 <span className="cmd-name">{it.title}</span>
               </span>
-              {it.importance !== undefined && <span className="cmd-hint">{"★".repeat(it.importance)}</span>}
             </div>
           );
         })}
-      </div>
-
-      <div className="vb-foot">
-        <span><kbd>h/l</kbd> stage</span>
-        <span><kbd>j/k</kbd> items</span>
-        <span><kbd>Enter</kbd> open</span>
-        <span><kbd>L</kbd> links</span>
-        <span><kbd>f</kbd> news</span>
       </div>
 
       {linksOpen && selected && (

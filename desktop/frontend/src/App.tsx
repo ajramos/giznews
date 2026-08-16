@@ -33,7 +33,7 @@ import { StatusModal } from "./components/StatusModal";
 import { VaultBrowser, type StageKey } from "./components/VaultBrowser";
 import { LinksPicker, type LinkItem } from "./components/LinksPicker";
 import { buildNoteLinks, buildArticleLinks } from "./noteLinks";
-import { CircleHelp, Command, RefreshCw } from "lucide-react";
+import { CircleHelp, Command, RefreshCw, Brain, Loader2 } from "lucide-react";
 
 type Panel = "none" | "search" | "graph";
 
@@ -72,7 +72,7 @@ export default function App() {
   const [urlPrompt, setUrlPrompt] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [mode, setMode] = useState<"news" | "vault">("news");
-  const [vaultStage, setVaultStage] = useState<StageKey>("inbox");
+  const [vaultStage, setVaultStage] = useState<StageKey>("atom");
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
@@ -585,7 +585,7 @@ export default function App() {
     { name: "flow", hint: "Pipeline flow (live counts)", run: () => setFlowOpen(true) },
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
-    { name: "vault", hint: "Knowledge vault (inbox → electrons → atoms → molecules)", run: () => setMode("vault") },
+    { name: "vault", hint: "Knowledge vault (electrons → atoms → molecules)", run: () => setMode("vault") },
     { name: "news", hint: "Back to the news feed", run: () => { setMode("news"); setNoteReader(null); } },
     { name: "status", hint: "Status (articles, notes, LLM)", run: () => setStatusOpen(true) },
     { name: "add-source", hint: "Add a source (RSS/HN/arXiv/gmail)", run: () => { setSourcePickerOpen(false); setSourceForm({ initial: null }); } },
@@ -821,10 +821,10 @@ export default function App() {
         {status && (
           <div className="status">
             <span className="pill" title="Unread articles">{status.unreadArticles} unread</span>
-            <span className="pill" title="Knowledge-graph notes in Obsidian (atoms + electrons + molecules)">🧠 {status.totalNotes} notes</span>
+            <span className="pill" title="Knowledge-graph notes in Obsidian (atoms + electrons + molecules)"><Brain size={13} /> {status.totalNotes} notes</span>
             {runningJobs > 0 && (
               <button className="pill jobs" onClick={() => setJobsOpen(true)} title="Background jobs">
-                ⏳ {runningJobs} running
+                <Loader2 size={13} className="spin" /> {runningJobs} running
               </button>
             )}
             {filterSource && (
@@ -847,11 +847,6 @@ export default function App() {
                 ✕ unclassified
               </button>
             )}
-            {mode === "vault" && (
-              <button className="pill filter" onClick={() => { setMode("news"); setNoteReader(null); }}>
-                ✕ News
-              </button>
-            )}
           </div>
         )}
         <div className="topbar-actions">
@@ -869,7 +864,6 @@ export default function App() {
               stage={vaultStage}
               onStage={setVaultStage}
               onOpenNote={(id) => void openNote(id)}
-              onOpenArticle={(id) => void openArticle(id)}
               onClose={() => setMode("news")}
               notify={notify}
             />

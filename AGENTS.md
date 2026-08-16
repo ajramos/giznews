@@ -73,3 +73,10 @@ Everything must be green before committing.
   in Spanish: `docs/`, comments, `keys.ts`, component strings, toasts, palette
   hints, and `AGENTS.md`-level notes. Spanish is only allowed when talking to
   the user, never in the repo.
+
+## Icons
+
+- **No emojis as UI icons.** Use the `lucide-react` line-icon set (same visual
+  language as the Heroicons giztui uses). Import the icon component and render
+  it with a `size` prop. Emojis are only acceptable inside user-authored note
+  *content*, never in chrome/status/buttons/tabs.

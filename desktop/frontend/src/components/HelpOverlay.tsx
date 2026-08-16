@@ -38,7 +38,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <div className="help-note">
-          <strong>Scroll:</strong> j/k · ↑/↓ · PageUp/PageDown. <strong>Legend:</strong> ★ = importance (0-3, ★★☆/★★★ = relevant or key) · ● = unread · <span className="star-badge">★</span> = starred · 🗄/strikethrough = archived.
+          <strong>Scroll:</strong> j/k · ↑/↓ · PageUp/PageDown. <strong>Legend:</strong> ★ = importance (0-3, ★★☆/★★★ = relevant or key) · ● = unread · <span className="star-badge">★</span> = starred · strikethrough = archived.
           <br /><strong>Archiving is logical:</strong> articles are never physically deleted; everything is recoverable from the archived view or the undo toast.
         </div>
       </div>
