@@ -208,6 +208,18 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
 
+/* native selects: drop the OS chrome for a consistent dark look */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b96a8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+select option { background: var(--bg-panel); color: var(--fg); }
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
@@ -746,7 +758,7 @@ kbd {
 .modal-head h2 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
 .modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .field label { display: block; font-size: 12px; color: var(--fg-dim); margin-bottom: 4px; }
-.field input, .field select { width: 100%; }
+.field input:not([type="checkbox"]):not([type="radio"]), .field select { width: 100%; }
 .type-seg { display: flex; gap: 4px; }
 .type-seg button { flex: 1; font-size: 12px; padding: 5px 6px; }
 .type-seg button.active { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; }
