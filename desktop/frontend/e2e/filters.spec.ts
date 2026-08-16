@@ -31,6 +31,19 @@ test.describe("classification filters", () => {
     await expect(page.locator(".category-picker")).toHaveCount(0);
   });
 
+  test("←/→ cycle the category filter", async ({ page }) => {
+    await gotoApp(page);
+    await expect(page.locator(".article-row")).toHaveCount(7);
+    await press(page, "ArrowRight"); // → models
+    await expect(page.locator(".article-row")).toHaveCount(2);
+    await press(page, "ArrowRight"); // → research
+    await expect(page.locator(".article-row")).toHaveCount(2);
+    await press(page, "ArrowLeft"); // back to models
+    await expect(page.locator(".article-row")).toHaveCount(2);
+    await press(page, "ArrowLeft"); // back to All
+    await expect(page.locator(".article-row")).toHaveCount(7);
+  });
+
   test(":flow shows the pipeline with counts", async ({ page }) => {
     await gotoApp(page);
     await press(page, ":");

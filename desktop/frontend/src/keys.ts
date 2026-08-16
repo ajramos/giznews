@@ -62,6 +62,7 @@ export const HELP: HelpCategory[] = [
     title: "Filters (classification)",
     rows: [
       { keys: ";", label: "Filter by category (All / Unclassified / models / research / …)" },
+      { keys: "← / →", label: "Cycle the category filter (news) or tag filter (vault)" },
       { keys: "[ / ]", label: "Importance filter (any → ≥1★ → ≥2★ → ≥3★)" },
       { keys: "chips", label: "Click the chips under the list to filter (category + importance)" },
     ],
@@ -108,6 +109,7 @@ export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
     { key: "m", label: "star" },
     { key: ";", label: "filter" },
     { key: "[/]", label: "importance" },
+    { key: "←/→", label: "category" },
     { key: "s", label: "search" },
     { key: "g", label: "graph" },
     { key: ":", label: "cmd" },
@@ -141,6 +143,7 @@ export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
   vault: [
     { key: "h/l", label: "stage" },
     { key: "j/k", label: "items" },
+    { key: "←/→", label: "tag" },
     { key: "Enter", label: "open" },
     { key: "L", label: "links" },
     { key: "f/u", label: "news" },

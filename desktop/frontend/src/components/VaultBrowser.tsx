@@ -50,9 +50,10 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
   }, [notes]);
 
   const items: NoteDTO[] = useMemo(() => {
-    let list = (notes ?? []).filter((n) => n.type === stage);
-    if (tagFilter) list = list.filter((n) => (n.tags ?? []).includes(tagFilter));
-    return list;
+    // A tag is transversal: it cuts across the three stages, so its count in
+    // the bar always matches the filtered list.
+    if (tagFilter) return (notes ?? []).filter((n) => (n.tags ?? []).includes(tagFilter));
+    return (notes ?? []).filter((n) => n.type === stage);
   }, [notes, stage, tagFilter]);
   const selected: NoteDTO | undefined = items[sel];
 
@@ -87,13 +88,14 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
 
   useEffect(() => { setSel(0); }, [stage, tagFilter]);
 
-  // auto-load the first note of the stage so the reader never lands empty.
+  // auto-load the first note of the stage (or tag) so the reader never lands empty.
   useEffect(() => {
     if (!notes || items.length === 0) return;
-    if (autoLoaded.current === stage) return;
-    autoLoaded.current = stage;
+    const key = tagFilter ? `tag:${tagFilter}` : `stage:${stage}`;
+    if (autoLoaded.current === key) return;
+    autoLoaded.current = key;
     onOpenNote(items[0].id);
-  }, [stage, notes, items, onOpenNote]);
+  }, [stage, tagFilter, notes, items, onOpenNote]);
 
   // keyboard (capture phase): h/l stage · j/k items · g/G extremes · Enter open
   // · L links · f back to news. Esc closes the links overlay only. Inactive
@@ -102,14 +104,24 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
     if (!active || linksOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "f") { e.preventDefault(); e.stopPropagation(); onClose(); return; }
-      if (e.key === "h" || e.key === "ArrowLeft") {
+      if (e.key === "h") {
         e.preventDefault(); e.stopPropagation();
         onStage(STAGES[Math.max(0, STAGES.findIndex((x) => x.key === stage) - 1)].key);
         return;
       }
-      if (e.key === "l" || e.key === "ArrowRight") {
+      if (e.key === "l") {
         e.preventDefault(); e.stopPropagation();
         onStage(STAGES[Math.min(STAGES.length - 1, STAGES.findIndex((x) => x.key === stage) + 1)].key);
+        return;
+      }
+      // ←/→ cycle the tag filter (transversal taxonomy).
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        e.preventDefault(); e.stopPropagation();
+        const tags = allTags.map(([t]) => t);
+        const seq = [null, ...tags];
+        const i = seq.indexOf(tagFilter);
+        const next = e.key === "ArrowRight" ? (i + 1) % seq.length : (i - 1 + seq.length) % seq.length;
+        setTagFilter(seq[next]);
         return;
       }
       if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setSel((s) => Math.min(s + 1, Math.max(0, items.length - 1))); return; }
@@ -129,7 +141,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [active, stage, sel, items, selected, linksOpen, onClose, onOpenNote, onFocus, onStage]);
+  }, [active, stage, sel, items, selected, linksOpen, tagFilter, allTags, onClose, onOpenNote, onFocus, onStage]);
 
   if (notes === null) {
     return (
@@ -143,11 +155,11 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
     <div className="vault-browser">
       <div className="vb-head"><FolderOpen size={14} /> Vault</div>
 
-      <div className="vault-tabs">
+      <div className={`vault-tabs ${tagFilter ? "dimmed" : ""}`}>
         {STAGES.map((s) => {
           const Icon = s.icon;
           return (
-            <button key={s.key} className={`vault-tab ${stage === s.key ? "active" : ""}`} onClick={() => onStage(s.key)}>
+            <button key={s.key} className={`vault-tab ${stage === s.key ? "active" : ""}`} onClick={() => { onStage(s.key); setTagFilter(null); }}>
               <Icon size={13} /> {s.label} <span className="vault-count">{counts[s.key]}</span>
             </button>
           );
@@ -166,7 +178,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
       )}
 
       <div className="vault-list">
-        {items.length === 0 && <div className="palette-empty">{tagFilter ? `No notes tagged #${tagFilter} in this stage.` : "No notes in this stage."}</div>}
+        {items.length === 0 && <div className="palette-empty">{tagFilter ? `No notes tagged #${tagFilter}.` : "No notes in this stage."}</div>}
         {items.map((it, i) => {
           const Icon = STAGES.find((s) => s.key === it.type)?.icon ?? FileText;
           return (

@@ -281,7 +281,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .swatch[data-theme-swatch="light"] { background: linear-gradient(135deg, #0969da, #f6f8fa); }
 
 /* ---- layout ---- */
-.layout { flex: 1; display: grid; grid-template-columns: 320px minmax(0, 1fr) auto; min-height: 0; }
+.layout { flex: 1; display: grid; grid-template-columns: 340px 4px minmax(0, 1fr) auto; min-height: 0; }
 .col { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .sources-col { border-right: 1px solid var(--border); background: var(--bg-panel); }
 .list-col { border-right: 1px solid var(--border); }
@@ -676,6 +676,7 @@ kbd {
 .tag-chip:hover { color: var(--fg); }
 .tag-chip.active { color: var(--accent); border-color: var(--accent-dim); background: var(--sel-bg); }
 .tag-count { color: var(--fg-dim); font-family: var(--font-mono); }
+.vault-tabs.dimmed { opacity: .5; }
 .vault-detail { overflow-y: auto; padding: 12px 14px; }
 .vd-head { display: flex; align-items: center; gap: 8px; }
 .vd-head h2 { margin: 0; font-size: 14px; }

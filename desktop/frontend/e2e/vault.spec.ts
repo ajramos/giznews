@@ -61,16 +61,16 @@ test.describe("vault flow", () => {
     await expect(page.locator(".vault-browser")).toHaveCount(0);
   });
 
-  test("tags filter the notes (transversal taxonomy)", async ({ page }) => {
+  test("tags filter across stages (transversal taxonomy)", async ({ page }) => {
     await gotoApp(page);
     await press(page, "f"); // vault at Atoms
     await expect(page.locator(".vb-tags")).toBeVisible();
-    await expect(page.locator(".vb-tags .tag-chip", { hasText: "ai" })).toBeVisible();
-    // clicking a tag filters the atom list
-    await page.locator(".vb-tags .tag-chip", { hasText: "deepseek" }).click();
-    await expect(page.locator(".vault-list .palette-item")).toHaveCount(1);
-    await expect(page.locator(".vault-list .palette-item").first()).toContainText("DeepSeek");
+    // "ai" spans electron + atom + molecule in the mock (count 3)
+    await expect(page.locator(".vb-tags .tag-chip", { hasText: "ai" })).toContainText("3");
+    await page.locator(".vb-tags .tag-chip", { hasText: "ai" }).click();
+    // transversal: it shows all 3 notes, not just the atoms stage
+    await expect(page.locator(".vault-list .palette-item")).toHaveCount(3);
     await page.locator(".vb-tags .tag-chip", { hasText: "All" }).click();
-    await expect(page.locator(".vault-list .palette-item")).toHaveCount(1); // only 1 atom in mock
+    await expect(page.locator(".vault-list .palette-item")).toHaveCount(1); // atoms only
   });
 });

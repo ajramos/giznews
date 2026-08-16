@@ -26,7 +26,7 @@ import { ThemePicker } from "./components/ThemePicker";
 import { ThemeModal } from "./components/ThemeModal";
 import { SourcePicker } from "./components/SourcePicker";
 import { JobsPanel } from "./components/JobsPanel";
-import { CategoryPicker } from "./components/CategoryPicker";
+import { CategoryPicker, CATEGORIES } from "./components/CategoryPicker";
 import { FlowPanel } from "./components/FlowPanel";
 import { LogsPanel } from "./components/LogsPanel";
 import { PromptModal } from "./components/PromptModal";
@@ -792,6 +792,9 @@ export default function App() {
         if (k === "t") { toggleReadRange(count); return; }
         if (k === "m") { void toggleStar(); return; }
         if (k === "O" || k === "o") { openExternal(); return; }
+        // ←/→ cycle the category filter through All → models → … → general.
+        if (k === "ArrowRight") { setFilterCategory((c) => { const seq = [null, ...CATEGORIES]; const i = seq.indexOf(c); return seq[(i + 1) % seq.length]; }); return; }
+        if (k === "ArrowLeft") { setFilterCategory((c) => { const seq = [null, ...CATEGORIES]; const i = seq.indexOf(c); return seq[(i - 1 + seq.length) % seq.length]; }); return; }
       }
       if (k === "s") {
         setPanel((p) => (p === "search" ? "none" : "search"));
@@ -934,7 +937,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="layout" style={{ gridTemplateColumns: `${listWidth}px minmax(0, 1fr) auto` }}>
+      <main className="layout" style={{ gridTemplateColumns: `${listWidth}px 4px minmax(0, 1fr) auto` }}>
         <section className="col list-col">
           {mode === "vault" ? (
             <VaultBrowser
