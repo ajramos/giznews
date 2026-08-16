@@ -60,4 +60,17 @@ test.describe("vault flow", () => {
     await press(page, "f");
     await expect(page.locator(".vault-browser")).toHaveCount(0);
   });
+
+  test("tags filter the notes (transversal taxonomy)", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "f"); // vault at Atoms
+    await expect(page.locator(".vb-tags")).toBeVisible();
+    await expect(page.locator(".vb-tags .tag-chip", { hasText: "ai" })).toBeVisible();
+    // clicking a tag filters the atom list
+    await page.locator(".vb-tags .tag-chip", { hasText: "deepseek" }).click();
+    await expect(page.locator(".vault-list .palette-item")).toHaveCount(1);
+    await expect(page.locator(".vault-list .palette-item").first()).toContainText("DeepSeek");
+    await page.locator(".vb-tags .tag-chip", { hasText: "All" }).click();
+    await expect(page.locator(".vault-list .palette-item")).toHaveCount(1); // only 1 atom in mock
+  });
 });

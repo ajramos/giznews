@@ -30,6 +30,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
   const [notes, setNotes] = useState<NoteDTO[] | null>(null);
   const [sel, setSel] = useState(0);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const autoLoaded = useRef<string | null>(null);
 
   useEffect(() => {
@@ -39,7 +40,20 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
   const bySlug = useMemo(() => new Map((notes ?? []).map((n) => [n.slug, n])), [notes]);
   const byId = useMemo(() => new Map((notes ?? []).map((n) => [n.id, n])), [notes]);
 
-  const items: NoteDTO[] = useMemo(() => (notes ?? []).filter((n) => n.type === stage), [notes, stage]);
+  // the transversal taxonomy: distinct tags across the whole vault, with counts.
+  const allTags = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of notes ?? []) {
+      for (const t of n.tags ?? []) m.set(t, (m.get(t) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [notes]);
+
+  const items: NoteDTO[] = useMemo(() => {
+    let list = (notes ?? []).filter((n) => n.type === stage);
+    if (tagFilter) list = list.filter((n) => (n.tags ?? []).includes(tagFilter));
+    return list;
+  }, [notes, stage, tagFilter]);
   const selected: NoteDTO | undefined = items[sel];
 
   const links: LinkItem[] = useMemo(() => {
@@ -71,7 +85,7 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
     return c;
   }, [notes]);
 
-  useEffect(() => { setSel(0); }, [stage]);
+  useEffect(() => { setSel(0); }, [stage, tagFilter]);
 
   // auto-load the first note of the stage so the reader never lands empty.
   useEffect(() => {
@@ -140,8 +154,19 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
         })}
       </div>
 
+      {allTags.length > 0 && (
+        <div className="vb-tags">
+          <button className={`tag-chip ${tagFilter === null ? "active" : ""}`} onClick={() => setTagFilter(null)}>All</button>
+          {allTags.map(([tag, count]) => (
+            <button key={tag} className={`tag-chip ${tagFilter === tag ? "active" : ""}`} onClick={() => setTagFilter(tagFilter === tag ? null : tag)}>
+              #{tag} <span className="tag-count">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="vault-list">
-        {items.length === 0 && <div className="palette-empty">No notes in this stage.</div>}
+        {items.length === 0 && <div className="palette-empty">{tagFilter ? `No notes tagged #${tagFilter} in this stage.` : "No notes in this stage."}</div>}
         {items.map((it, i) => {
           const Icon = STAGES.find((s) => s.key === it.type)?.icon ?? FileText;
           return (

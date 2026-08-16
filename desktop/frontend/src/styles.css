@@ -662,6 +662,20 @@ kbd {
 
 /* vault note titles read like content (sans), not data (mono) */
 .vault-list .cmd-name { font-family: var(--font-sans); }
+
+/* vault taxonomy: transversal tag filter */
+.vb-tags {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 12px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0; max-height: 84px; overflow-y: auto;
+}
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--fs-xs); padding: 2px 7px; border-radius: 5px;
+  border: 1px solid var(--border); background: transparent; color: var(--fg-dim); cursor: pointer;
+}
+.tag-chip:hover { color: var(--fg); }
+.tag-chip.active { color: var(--accent); border-color: var(--accent-dim); background: var(--sel-bg); }
+.tag-count { color: var(--fg-dim); font-family: var(--font-mono); }
 .vault-detail { overflow-y: auto; padding: 12px 14px; }
 .vd-head { display: flex; align-items: center; gap: 8px; }
 .vd-head h2 { margin: 0; font-size: 14px; }
