@@ -20,8 +20,8 @@ test.describe("panels", () => {
     await gotoApp(page);
     await press(page, "g"); // single g → graph after the 300ms window
     await expect(page.locator(".graph-panel")).toBeVisible({ timeout: 4000 });
-    // mock has 3 notes (atom + electron + molecule) and 1 wikilink edge
-    await expect(page.locator(".graph-node")).toHaveCount(3, { timeout: 6000 });
+    // mock has 6 notes (atoms + electrons + molecule) and wikilink edges
+    await expect(page.locator(".graph-node")).toHaveCount(6, { timeout: 6000 });
     await expect(page.locator(".links path")).not.toHaveCount(0);
     await expect(page.locator(".graph-legend")).toContainText("atom");
     await shot(page, "08-graph");
@@ -33,7 +33,7 @@ test.describe("panels", () => {
   test("clicking a graph node opens the note", async ({ page }) => {
     await gotoApp(page);
     await press(page, "g");
-    await expect(page.locator(".graph-node")).toHaveCount(3, { timeout: 6000 });
+    await expect(page.locator(".graph-node")).toHaveCount(6, { timeout: 6000 });
     await page.waitForTimeout(1200); // let the force layout + fit-zoom settle
     await page.locator(".graph-node circle").first().click({ force: true });
     await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });

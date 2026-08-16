@@ -253,9 +253,6 @@ export default function App() {
       // Reading a note means being in the knowledge world: the vault browser
       // becomes the master list (articles are no longer shown).
       setMode("vault");
-      if (n.type === "atom" || n.type === "electron" || n.type === "molecule") {
-        setVaultStage(n.type as StageKey);
-      }
     } catch (e) { notify(String(e)); }
   }, [notify]);
 

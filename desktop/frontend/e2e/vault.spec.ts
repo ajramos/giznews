@@ -65,12 +65,23 @@ test.describe("vault flow", () => {
     await gotoApp(page);
     await press(page, "f"); // vault at Atoms
     await expect(page.locator(".vb-tags")).toBeVisible();
-    // "ai" spans electron + atom + molecule in the mock (count 3)
-    await expect(page.locator(".vb-tags .tag-chip", { hasText: "ai" })).toContainText("3");
+    // "ai" spans all 6 notes in the mock
+    await expect(page.locator(".vb-tags .tag-chip", { hasText: "ai" })).toContainText("6");
     await page.locator(".vb-tags .tag-chip", { hasText: "ai" }).click();
-    // transversal: it shows all 3 notes, not just the atoms stage
-    await expect(page.locator(".vault-list .palette-item")).toHaveCount(3);
+    await expect(page.locator(".vault-list .palette-item")).toHaveCount(6);
     await page.locator(".vb-tags .tag-chip", { hasText: "All" }).click();
-    await expect(page.locator(".vault-list .palette-item")).toHaveCount(1); // atoms only
+    await expect(page.locator(".vault-list .palette-item")).toHaveCount(3); // atoms only
+  });
+
+  test("j/k navigate the vault list and the reader follows", async ({ page }) => {
+    await gotoApp(page);
+    await press(page, "n"); // atoms (3 notes in mock)
+    await expect(page.locator(".vault-browser .palette-item")).toHaveCount(3);
+    const first = await page.locator(".vault-browser .palette-item.selected .cmd-name").innerText();
+    await press(page, "j");
+    await expect(page.locator(".vault-browser .palette-item.selected .cmd-name")).not.toHaveText(first);
+    // the reader follows the cursor (master-detail)
+    const selTitle = await page.locator(".vault-browser .palette-item.selected .cmd-name").innerText();
+    await expect(page.locator(".reader-head h1")).toHaveText(selTitle, { timeout: 6000 });
   });
 });

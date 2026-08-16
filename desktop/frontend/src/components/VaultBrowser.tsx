@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GitBranch, FileText, FlaskConical, Loader2, FolderOpen, type LucideIcon } from "lucide-react";
 import { api } from "../api";
 import type { NoteDTO } from "../types";
@@ -31,7 +31,6 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
   const [sel, setSel] = useState(0);
   const [linksOpen, setLinksOpen] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const autoLoaded = useRef<string | null>(null);
 
   useEffect(() => {
     api.listNotes("").then(setNotes).catch((e) => { notify(String(e)); setNotes([]); });
@@ -88,14 +87,14 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
 
   useEffect(() => { setSel(0); }, [stage, tagFilter]);
 
-  // auto-load the first note of the stage (or tag) so the reader never lands empty.
+  // Master-detail: the reader follows the cursor. Whenever the selection (or
+  // the stage/tag filter) changes, open the highlighted note (debounced), so
+  // j/k navigation updates the detail pane like the news world does.
   useEffect(() => {
-    if (!notes || items.length === 0) return;
-    const key = tagFilter ? `tag:${tagFilter}` : `stage:${stage}`;
-    if (autoLoaded.current === key) return;
-    autoLoaded.current = key;
-    onOpenNote(items[0].id);
-  }, [stage, tagFilter, notes, items, onOpenNote]);
+    if (!selected) return;
+    const t = window.setTimeout(() => onOpenNote(selected.id), 120);
+    return () => window.clearTimeout(t);
+  }, [selected, onOpenNote]);
 
   // keyboard (capture phase): h/l stage · j/k items · g/G extremes · Enter open
   // · L links · f back to news. Esc closes the links overlay only. Inactive
