@@ -45,6 +45,7 @@ test.describe("vim keyboard grammar", () => {
     await gotoApp(page);
     const before = await page.locator(".article-row").count();
     await press(page, "a");
+    await press(page, "a"); // aa = archive 1 (range verb + complete)
     await expect(page.locator(".article-row")).toHaveCount(before - 1);
     await expect(page.locator(".toast")).toContainText("archived");
     await shot(page, "04-archive-undo");
@@ -57,9 +58,10 @@ test.describe("vim keyboard grammar", () => {
     await expect(page.locator(".article-row")).toHaveCount(2);
   });
 
-  test("count prefix: 3a archives 3", async ({ page }) => {
+  test("a3a archives 3", async ({ page }) => {
     await gotoApp(page);
     const before = await page.locator(".article-row").count();
+    await press(page, "a");
     await press(page, "3");
     await press(page, "a");
     await expect(page.locator(".article-row")).toHaveCount(before - 3);
@@ -69,11 +71,13 @@ test.describe("vim keyboard grammar", () => {
     await gotoApp(page);
     await expect(page.locator(".article-row")).toHaveCount(7);
     await press(page, "t");
+    await press(page, "t"); // tt = toggle read 1
     // selected article becomes read → leaves the unread view
     await expect(page.locator(".article-row")).toHaveCount(6);
     // read view now has 2 (the mock's read one + the one just read)
     await press(page, "r");
     await expect(page.locator(".article-row")).toHaveCount(2);
+    await press(page, "t");
     await press(page, "t");
     await expect(page.locator(".article-row")).toHaveCount(1);
   });
@@ -81,7 +85,11 @@ test.describe("vim keyboard grammar", () => {
   test("m stars the article", async ({ page }) => {
     await gotoApp(page);
     await press(page, "m");
-    await expect(page.locator(".article-row.selected .star-badge")).toBeVisible();
+    await press(page, "m"); // mm = star 1
+    await expect(page.locator(".article-row")).toHaveCount(6); // starred article leaves unread
+    await press(page, "*"); // starred view
+    await expect(page.locator(".article-row")).toHaveCount(1);
+    await expect(page.locator(".article-row .star-badge")).toBeVisible();
   });
 
   test("views: r shows read, u unread, x archived, * starred", async ({ page }) => {
@@ -97,13 +105,17 @@ test.describe("vim keyboard grammar", () => {
 
     // archive one then view archived
     await press(page, "a");
+    await press(page, "a");
     await press(page, "x");
     await expect(page.locator(".view-tab.active")).toContainText("Archived");
     await expect(page.locator(".article-row")).toHaveCount(1);
 
     // star one and view starred
     await press(page, "u");
+    await expect(page.locator(".article-row")).toHaveCount(6); // wait for unread reload
     await press(page, "m");
+    await press(page, "m");
+    await expect(page.locator(".article-row")).toHaveCount(5); // starred leaves unread
     await press(page, "*");
     await expect(page.locator(".view-tab.active")).toContainText("Starred");
     await expect(page.locator(".article-row")).toHaveCount(1);

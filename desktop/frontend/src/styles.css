@@ -819,7 +819,7 @@ kbd {
 .statusbar kbd { min-width: 0; padding: 0 5px; font-size: 11px; }
 .statusbar .sb-right { display: flex; gap: 10px; align-items: center; }
 .statusbar .count-badge { color: var(--warn); font-family: var(--font-mono); font-size: 12px; }
-
+.statusbar .range-badge { color: var(--accent); font-family: var(--font-mono); font-size: 12px; }
 /* ---- misc ---- */
 .empty { padding: 26px 22px; color: var(--fg-dim); font-size: 13px; text-align: center; }
 .empty.with-icon { display: flex; flex-direction: column; align-items: center; gap: 10px; }

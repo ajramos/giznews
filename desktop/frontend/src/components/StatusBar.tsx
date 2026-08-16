@@ -13,6 +13,7 @@ export function StatusBar({
   modeLabel,
   filter,
   count,
+  rangeStatus,
   bulk,
   bulkCount,
   autoRefresh,
@@ -25,6 +26,7 @@ export function StatusBar({
   modeLabel: string;
   filter?: string;
   count?: number;
+  rangeStatus?: string;
   bulk: boolean;
   bulkCount: number;
   autoRefresh: boolean;
@@ -43,6 +45,7 @@ export function StatusBar({
           <span className="mode">{modeLabel}</span>
         )}
         {filter && <span className="muted">· {filter}</span>}
+        {rangeStatus && <span className="range-badge">{rangeStatus}</span>}
         {count !== undefined && <span className="count-badge">{count}</span>}
       </div>
       <div className="sb-keys">

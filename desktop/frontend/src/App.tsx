@@ -90,6 +90,7 @@ export default function App() {
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [countBuf, setCountBuf] = useState("");
+  const [rangeStatus, setRangeStatus] = useState("");
   const [welcome, setWelcome] = useState(() => {
     try { return !localStorage.getItem("giznews-welcomed"); } catch { return false; }
   });
@@ -128,6 +129,11 @@ export default function App() {
   const searchIndexedRef = useRef(false);
   const articlesRef = useRef(articles);
   articlesRef.current = articles;
+
+  // giztui-style range prefix: press a verb (y/a/t/m), then digits, then the
+  // verb again ({op}{digits}{op}); a short timeout applies it as a single op.
+  const rangeState = useRef<{ op: string; count: number } | null>(null);
+  const rangeTimer = useRef<number | null>(null);
 
   const notify = useCallback((msg: string, undo?: () => void) => {
     setToast({ msg, undo });
@@ -289,15 +295,14 @@ export default function App() {
 
   const selected = articles[selectedIndex] ?? null;
 
-  // apply an async action to count consecutive articles from the selection.
-  const applyRange = useCallback(async (count: number, fn: (a: ArticleDTO) => Promise<void>, after?: () => void) => {
-    const n = Math.max(1, count);
-    const batch = articles.slice(selectedIndex, selectedIndex + n);
-    if (batch.length === 0) return;
-    await Promise.all(batch.map((a) => fn(a)));
-    after?.();
-    void loadStatus();
-  }, [articles, selectedIndex, loadStatus]);
+  // Re-fetch the open article so the reader reflects classification/summary.
+  const refreshReader = useCallback(async () => {
+    if (!reader) return;
+    try {
+      const full = await api.getArticleContent(reader.id);
+      setReader(full);
+    } catch { /* ignore */ }
+  }, [reader]);
 
   const exitBulk = useCallback(() => { setBulk(false); setBulkSel(new Set()); }, []);
 
@@ -338,11 +343,89 @@ export default function App() {
   }, [articles, selectedIndex, archiveIds]);
 
   const toggleReadRange = useCallback((count: number) => {
-    void applyRange(count, async (a) => {
-      if (a.status === "archived") return;
-      await api.setArticleStatus(a.id, a.status === "read" ? "unread" : "read");
-    }, () => void loadArticles());
-  }, [applyRange, loadArticles]);
+    const batch = articles.slice(selectedIndex, selectedIndex + Math.max(1, count));
+    const targets = batch.filter((a) => a.status !== "archived");
+    if (targets.length === 0) return;
+    const toRead = targets[0].status !== "read";
+    void (async () => {
+      try {
+        await Promise.all(targets.map((a) => api.setArticleStatus(a.id, toRead ? "read" : "unread")));
+        notify(toRead ? `Marked read (${targets.length})` : `Marked unread (${targets.length})`);
+        void loadArticles();
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [articles, selectedIndex, notify, loadArticles]);
+
+  const toggleStarRange = useCallback((count: number) => {
+    const batch = articles.slice(selectedIndex, selectedIndex + Math.max(1, count));
+    const targets = batch.filter((a) => a.status !== "archived");
+    if (targets.length === 0) return;
+    const starring = targets[0].status !== "starred";
+    void (async () => {
+      try {
+        await Promise.all(targets.map((a) => api.setArticleStatus(a.id, starring ? "starred" : "unread")));
+        notify(starring ? `Starred (${targets.length})` : `Unstarred (${targets.length})`);
+        void loadArticles();
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [articles, selectedIndex, notify, loadArticles]);
+
+  const summarizeRange = useCallback((count: number) => {
+    const batch = articles.slice(selectedIndex, selectedIndex + Math.max(1, count));
+    if (batch.length === 0) return;
+    void (async () => {
+      try {
+        await Promise.all(batch.map((a) => api.summarizeArticle(a.id)));
+        notify(`Summarized ${batch.length}`);
+        void loadArticles();
+        void refreshReader();
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [articles, selectedIndex, notify, loadArticles, refreshReader]);
+
+  // ---- giztui-style range prefix ({op}{digits}{op}) ----
+  const RANGE_VERBS = ["y", "a", "t", "m"];
+  const executeRange = useCallback((op: string, count: number) => {
+    const n = Math.max(1, count);
+    if (op === "t") toggleReadRange(n);
+    else if (op === "a") archiveRange(n);
+    else if (op === "m") toggleStarRange(n);
+    else if (op === "y") summarizeRange(n);
+  }, [toggleReadRange, archiveRange, toggleStarRange, summarizeRange]);
+
+  const startRange = useCallback((op: string) => {
+    rangeState.current = { op, count: 0 };
+    setRangeStatus(`${op}…`);
+    setCountBuf("");
+    if (rangeTimer.current != null) window.clearTimeout(rangeTimer.current);
+    rangeTimer.current = window.setTimeout(() => {
+      const st = rangeState.current;
+      rangeState.current = null;
+      setRangeStatus("");
+      if (st) executeRange(st.op, st.count > 0 ? st.count : 1);
+    }, 800);
+  }, [executeRange]);
+
+  const completeRange = useCallback((op: string) => {
+    const st = rangeState.current;
+    rangeState.current = null;
+    if (rangeTimer.current != null) window.clearTimeout(rangeTimer.current);
+    setRangeStatus("");
+    executeRange(op, st && st.count > 0 ? st.count : 1);
+  }, [executeRange]);
+
+  const appendRangeDigit = useCallback((d: number) => {
+    if (!rangeState.current) return;
+    rangeState.current.count = rangeState.current.count * 10 + d;
+    setRangeStatus(`${rangeState.current.op}${rangeState.current.count}…`);
+  }, []);
+
+  const cancelRange = useCallback(() => {
+    if (rangeState.current == null) return;
+    rangeState.current = null;
+    if (rangeTimer.current != null) window.clearTimeout(rangeTimer.current);
+    setRangeStatus("");
+  }, []);
 
   // classify the bulk selection as a background job (priority over the queue).
   const classifySelected = useCallback(() => {
@@ -359,9 +442,10 @@ export default function App() {
         setFilterUnclassified(false);
         await loadArticles();
         await loadStatus();
+        void refreshReader();
       } catch (e) { notify(String(e)); }
     })();
-  }, [bulkIds, exitBulk, notify, loadArticles, loadStatus]);
+  }, [bulkIds, exitBulk, notify, loadArticles, loadStatus, refreshReader]);
 
   // materialize knowledge notes for the bulk selection (kb build for these).
   const processSelected = useCallback(() => {
@@ -610,12 +694,13 @@ export default function App() {
       await reloadAll();
       await api.classify(500);
       await loadArticles();
+      void refreshReader();
       await api.kbuild();
       await loadStatus();
       await api.searchIndex();
       notify("Process completed");
     } catch (e) { notify(String(e)); }
-  }, [reloadAll, loadArticles, loadStatus, notify]);
+  }, [reloadAll, loadArticles, loadStatus, notify, refreshReader]);
 
   const addByURL = useCallback(async (url: string) => {
     try {
@@ -641,6 +726,7 @@ export default function App() {
       void runCmd(async () => {
         const c = await api.classify(200);
         await loadArticles();
+        void refreshReader();
         notify(`${c.classified} classified (${c.byRules} rules · ${c.byLLM} LLM)`);
       });
     } },
@@ -672,7 +758,7 @@ export default function App() {
     { name: "theme", hint: "Choose theme", run: () => setThemeModalOpen(true) },
     { name: "open vault", hint: "Open vault in Obsidian", run: () => void api.openVault() },
     { name: "quit", hint: "Quit GizNews", run: () => void api.quit() },
-  ], [runCmd, runProcess, generateDigest, reloadAll, loadArticles, loadStatus, theme, autoRefresh]);
+  ], [runCmd, runProcess, generateDigest, reloadAll, loadArticles, loadStatus, refreshReader, theme, autoRefresh]);
 
   // ---- keyboard (vim grammar) ----
   useEffect(() => {
@@ -700,6 +786,11 @@ export default function App() {
         return;
       }
       if (e.altKey) return;
+
+      // A pending range op is cancelled by any key that doesn't continue it.
+      if (rangeState.current && !(k >= "0" && k <= "9") && !RANGE_VERBS.includes(k)) {
+        cancelRange();
+      }
 
       if (k === "Escape") {
         if (noteLinks) { setNoteLinks(null); return; }
@@ -778,6 +869,7 @@ export default function App() {
 
       // count prefix
       if (k >= "0" && k <= "9") {
+        if (rangeState.current) { appendRangeDigit(Number(k)); return; }
         if (countBuf.length < 2) setCountBuf((c) => c + k);
         return;
       }
@@ -832,10 +924,12 @@ export default function App() {
         }
         if (k === "G") { setSelectedIndex(n); return; }
         if (k === "Enter") { if (selected) { void openArticle(selected.id); setPaneFocus("reader"); } return; }
-        if (k === "y") { void summarize(); return; }
-        if (k === "a") { archiveRange(count); return; }
-        if (k === "t") { toggleReadRange(count); return; }
-        if (k === "m") { void toggleStar(); return; }
+        // range verbs: {op} starts a count sequence, {op}{digits}{op} applies it.
+        if (RANGE_VERBS.includes(k)) {
+          if (rangeState.current?.op === k) completeRange(k);
+          else startRange(k);
+          return;
+        }
         if (k === "O" || k === "o") { openExternal(); return; }
         // ←/→ cycle the category filter through All → models → … → general.
         if (k === "ArrowRight") { setFilterCategory((c) => { const seq = [null, ...CATEGORIES]; const i = seq.indexOf(c); return seq[(i + 1) % seq.length]; }); return; }
@@ -867,7 +961,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, summarize, archiveRange, toggleReadRange, toggleStar, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, toggleBulkId, bulkAction, classifySelected, processSelected, summarizeSelected, zoomBy, zoomReset]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, toggleBulkId, bulkAction, classifySelected, processSelected, summarizeSelected, executeRange, startRange, completeRange, appendRangeDigit, cancelRange, zoomBy, zoomReset]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -1130,6 +1224,7 @@ export default function App() {
         modeLabel={modeLabel}
         filter={filterLabel}
         count={countBuf ? parseInt(countBuf, 10) : undefined}
+        rangeStatus={rangeStatus}
         bulk={bulk}
         bulkCount={bulkIds.length}
         autoRefresh={autoRefresh}

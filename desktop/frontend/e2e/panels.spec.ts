@@ -240,8 +240,9 @@ test.describe("workflows", () => {
 
   test("archive runs as a bulk background job", async ({ page }) => {
     await gotoApp(page);
-    await page.keyboard.press("5"); // count prefix
-    await page.keyboard.press("a"); // archive 5
+    await page.keyboard.press("a"); // range verb
+    await page.keyboard.press("5"); // count
+    await page.keyboard.press("a"); // apply → archive 5
     await page.keyboard.press("z"); // open jobs panel
     await expect(page.locator(".jobs-picker")).toBeVisible();
     await expect(page.locator(".job-item", { hasText: "Mark 5 archived" })).toHaveCount(1, { timeout: 6000 });
