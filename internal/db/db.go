@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -300,4 +300,26 @@ WHERE n.note_type = 'atom';
 UPDATE concepts SET mentions = (
 	SELECT COUNT(*) FROM concept_mentions m WHERE m.concept_slug = concepts.slug
 );
+`
+
+// schemaV8 lets one concept answer to several spellings.
+//
+// The news stream names the same thing many ways — "OpenAI" and "Open AI",
+// "GPT-5" and "GPT5" — and each spelling used to become its own concept, so a
+// topic's mentions were split across near-duplicate slugs and none of them
+// reached the promotion threshold. canon_key is the slug with its separators
+// removed, which collapses those variants automatically; concept_aliases holds
+// the merges that no rule can derive, made explicit by the user.
+const schemaV8 = `
+ALTER TABLE concepts ADD COLUMN canon_key TEXT NOT NULL DEFAULT '';
+UPDATE concepts SET canon_key = replace(
+	CASE WHEN slug LIKE '%-concept' THEN substr(slug, 1, length(slug) - 8) ELSE slug END, '-', '');
+CREATE INDEX IF NOT EXISTS idx_concepts_canon ON concepts(canon_key);
+
+CREATE TABLE IF NOT EXISTS concept_aliases (
+	alias      TEXT PRIMARY KEY,               -- slug that redirects
+	canonical  TEXT NOT NULL,                  -- slug it redirects to
+	created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_concept_aliases_canonical ON concept_aliases(canonical);
 `

@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 7 {
-		t.Fatalf("user_version = %d, want 7", version)
+	if version != 8 {
+		t.Fatalf("user_version = %d, want 8", version)
 	}
 }
 
@@ -63,6 +63,7 @@ func TestMigrateFromV1(t *testing.T) {
 		"DROP TABLE IF EXISTS kb_links;",
 		"DROP TABLE IF EXISTS concepts;",
 		"DROP TABLE IF EXISTS concept_mentions;",
+		"DROP TABLE IF EXISTS concept_aliases;",
 	} {
 		if _, err := d.sql.Exec(stmt); err != nil {
 			t.Fatal(err)
@@ -82,8 +83,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 7 {
-		t.Fatalf("user_version after reopen = %d, want 7", version)
+	if version != 8 {
+		t.Fatalf("user_version after reopen = %d, want 8", version)
 	}
 	// Columns must exist now.
 	var n int
@@ -125,6 +126,7 @@ func TestMigrateV7BackfillsGraph(t *testing.T) {
 		"DROP TABLE IF EXISTS kb_links;",
 		"DROP TABLE IF EXISTS concepts;",
 		"DROP TABLE IF EXISTS concept_mentions;",
+		"DROP TABLE IF EXISTS concept_aliases;",
 	} {
 		if _, err := d.sql.Exec(stmt); err != nil {
 			t.Fatal(err)

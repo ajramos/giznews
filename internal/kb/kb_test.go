@@ -3,10 +3,12 @@ package kb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ajramos/giznews/internal/db"
 )
@@ -469,5 +471,169 @@ func TestGraphNeighborsUseConcepts(t *testing.T) {
 	}
 	if titles["Chip supply update"] {
 		t.Fatalf("unrelated note pulled in by structural tags: %v", titles)
+	}
+}
+
+// Spellings of the same concept must not split its mentions in two.
+func TestConceptSpellingsFold(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t) // MinOccurrences = 2
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "Open AI ships something", []string{"open-ai"})
+	classifiedArticle(t, d, srcID, "OpenAI ships something else", []string{"openai"})
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ConceptsTracked != 1 {
+		t.Fatalf("tracked %d concepts, want 1 (open-ai and openai are one)", res.ConceptsTracked)
+	}
+	if res.ElectronsCreated != 1 {
+		t.Fatalf("created %d electrons, want 1", res.ElectronsCreated)
+	}
+
+	conceptRepo := db.NewConceptRepo(d)
+	c, err := conceptRepo.Get(ctx, "open-ai")
+	if err != nil {
+		t.Fatalf("concept: %v", err)
+	}
+	if c.Mentions != 2 {
+		t.Fatalf("mentions = %d, want 2", c.Mentions)
+	}
+	// Both atoms link to the same electron.
+	repo := db.NewKBRepo(d)
+	for _, slug := range []string{"open-ai-ships-something", "openai-ships-something-else"} {
+		n, err := repo.GetBySlug(ctx, slug)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(n.Wikilinks) != 1 || n.Wikilinks[0] != "open-ai" {
+			t.Fatalf("%s links = %v, want [open-ai]", slug, n.Wikilinks)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(vaultRoot, "01-Electrons", "openai.md")); err == nil {
+		t.Fatal("a second electron was written for the same concept")
+	}
+}
+
+// Merging moves mentions and rewrites the notes that pointed at the old slug,
+// in the database and on disk.
+func TestMergeConcepts(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "Retrieval augmented generation explained", []string{"retrieval-augmented-generation"})
+	classifiedArticle(t, d, srcID, "RAG in production", []string{"rag"})
+	classifiedArticle(t, d, srcID, "RAG at the edge", []string{"rag"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.MergeConcepts(ctx, "retrieval-augmented-generation", "rag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.NotesRelinked != 1 {
+		t.Fatalf("relinked %d notes, want 1", res.NotesRelinked)
+	}
+	if res.Mentions != 3 {
+		t.Fatalf("mentions = %d, want 3", res.Mentions)
+	}
+
+	conceptRepo := db.NewConceptRepo(d)
+	if _, err := conceptRepo.Get(ctx, "retrieval-augmented-generation"); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("merged concept still exists: %v", err)
+	}
+	// The old spelling now resolves to the surviving concept.
+	got, err := conceptRepo.Resolve(ctx, "retrieval-augmented-generation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "rag" {
+		t.Fatalf("resolve = %q, want rag", got)
+	}
+
+	// The relinked atom points at the survivor, in the row and in the file.
+	repo := db.NewKBRepo(d)
+	note, err := repo.GetBySlug(ctx, "retrieval-augmented-generation-explained")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(note.Wikilinks) != 1 || note.Wikilinks[0] != "rag" {
+		t.Fatalf("links = %v, want [rag]", note.Wikilinks)
+	}
+	onDisk, err := os.ReadFile(note.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(onDisk), "[[retrieval-augmented-generation]]") {
+		t.Fatalf("atom file still links to the merged slug:\n%s", onDisk)
+	}
+	// And the electron lists all three atoms.
+	electron, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "rag.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(electron), "[["); got != 3 {
+		t.Fatalf("electron has %d backlinks, want 3:\n%s", got, electron)
+	}
+}
+
+// Every build leaves the vault with a way in.
+func TestBuildWritesVaultIndex(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "Agents everywhere", []string{"agents"})
+	classifiedArticle(t, d, srcID, "Agents at work", []string{"agents"})
+	classifiedArticle(t, d, srcID, "A lonely topic", []string{"quantum"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	index, err := os.ReadFile(filepath.Join(vaultRoot, "Index.md"))
+	if err != nil {
+		t.Fatalf("index: %v", err)
+	}
+	for _, want := range []string{"# AI knowledge index", "3 atoms", "[[agents]]", "## By category", "[[agents-everywhere]]"} {
+		if !strings.Contains(string(index), want) {
+			t.Fatalf("index missing %q:\n%s", want, index)
+		}
+	}
+
+	// "quantum" has one mention: it is listed as pending, not as an electron.
+	unresolved, err := os.ReadFile(filepath.Join(vaultRoot, "Unresolved concepts.md"))
+	if err != nil {
+		t.Fatalf("unresolved: %v", err)
+	}
+	if !strings.Contains(string(unresolved), "[[quantum]]") {
+		t.Fatalf("unresolved is missing quantum:\n%s", unresolved)
+	}
+	if strings.Contains(string(unresolved), "[[agents]]") {
+		t.Fatalf("promoted concept listed as unresolved:\n%s", unresolved)
+	}
+
+	day := time.Now().UTC().Format("2006-01-02")
+	daily, err := os.ReadFile(filepath.Join(vaultRoot, "00-Inbox", day+".md"))
+	if err != nil {
+		t.Fatalf("daily note: %v", err)
+	}
+	if !strings.Contains(string(daily), "## Notes added today") || !strings.Contains(string(daily), "[[agents-everywhere]]") {
+		t.Fatalf("daily note:\n%s", daily)
+	}
+	// Atoms and the concepts they promoted are listed apart.
+	if !strings.Contains(string(daily), "## Concepts that earned a note") || !strings.Contains(string(daily), "[[agents]]") {
+		t.Fatalf("daily note is missing the concepts section:\n%s", daily)
+	}
+
+	// The generated views must stay out of the graph.
+	notes, err := db.NewKBRepo(d).List(ctx, "", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range notes {
+		if n.Slug == "Index" || n.Slug == "Unresolved concepts" || n.Slug == day {
+			t.Fatalf("generated view %q was stored as a note", n.Slug)
+		}
 	}
 }

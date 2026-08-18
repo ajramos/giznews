@@ -93,23 +93,42 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	// electron will use, before any atom is written. An article titled exactly
 	// like a concept ("Mamba") would otherwise take that slug and get its note
 	// overwritten when the electron is upserted.
-	concepts := map[string]*conceptAgg{} // keyed by the raw concept slug
+	// Spellings are folded first: "Open AI" and "OpenAI" are one concept, and so
+	// is anything the user merged by hand.
+	concepts := map[string]*conceptAgg{} // keyed by the concept's canonical slug
+	canonical := map[string]string{}     // slug derived from an article -> that key
+	byCanonKey := map[string]string{}    // canonical key -> the spelling this run kept
 	for _, a := range articles {
 		for _, raw := range s.conceptSlugs(a) {
-			if _, ok := concepts[raw]; !ok {
-				concepts[raw] = &conceptAgg{Name: s.conceptName(a, raw)}
+			key, ok := canonical[raw]
+			if !ok {
+				key, err = conceptRepo.Resolve(ctx, raw)
+				if err != nil {
+					return nil, fmt.Errorf("kb: resolve concept %q: %w", raw, err)
+				}
+				// Resolve only knows the concepts already stored; two spellings
+				// arriving in the same batch must fold too, first one winning.
+				if kept, seen := byCanonKey[db.CanonKey(key)]; seen {
+					key = kept
+				} else {
+					byCanonKey[db.CanonKey(key)] = key
+				}
+				canonical[raw] = key
+			}
+			if _, ok := concepts[key]; !ok {
+				concepts[key] = &conceptAgg{Name: s.conceptName(a, raw)}
 			}
 		}
 	}
-	rawSlugs := make([]string, 0, len(concepts))
-	for raw := range concepts {
-		rawSlugs = append(rawSlugs, raw)
+	conceptKeys := make([]string, 0, len(concepts))
+	for key := range concepts {
+		conceptKeys = append(conceptKeys, key)
 	}
-	sort.Strings(rawSlugs)
+	sort.Strings(conceptKeys)
 	reserved := make(map[string]bool, len(concepts))
-	for _, raw := range rawSlugs {
-		agg := concepts[raw]
-		agg.Slug = s.electronSlugFor(ctx, kbRepo, raw, reserved)
+	for _, key := range conceptKeys {
+		agg := concepts[key]
+		agg.Slug = s.electronSlugFor(ctx, kbRepo, key, reserved)
 		reserved[agg.Slug] = true
 	}
 
@@ -118,7 +137,7 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		raws := s.conceptSlugs(a)
 		links := make([]string, 0, len(raws))
 		for _, raw := range raws {
-			links = appendUnique(links, concepts[raw].Slug)
+			links = appendUnique(links, concepts[canonical[raw]].Slug)
 		}
 		sort.Strings(links)
 
@@ -134,7 +153,7 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		}
 
 		for _, raw := range raws {
-			agg := concepts[raw]
+			agg := concepts[canonical[raw]]
 			agg.Refs = append(agg.Refs, atomRef{Slug: slug, Title: a.Title, NoteID: note.ID})
 		}
 		res.AtomsCreated++
@@ -143,8 +162,8 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	// Electrons for concepts mentioned often enough. Mentions are counted over
 	// the concept's whole history, not just this run, so a topic that surfaces
 	// once a day graduates like one that surfaces five times in an afternoon.
-	for _, raw := range rawSlugs {
-		agg := concepts[raw]
+	for _, key := range conceptKeys {
+		agg := concepts[key]
 		if len(agg.Refs) == 0 {
 			continue
 		}
@@ -176,6 +195,13 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		case electronUpdated:
 			res.ElectronsUpdated++
 		}
+	}
+
+	// The vault's entry points are a view over what the build just wrote; a
+	// failure here leaves the notes themselves intact, so it is logged, not
+	// returned.
+	if _, err := s.BuildIndex(ctx); err != nil && s.logger != nil {
+		s.logger.Printf("kb: index refresh failed: %v", err)
 	}
 
 	if s.logger != nil {
@@ -423,11 +449,18 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 		return nil, err
 	}
 
+	conceptRepo := db.NewConceptRepo(s.db)
 	reserved := map[string]bool{}
 	var links []string
+	names := map[string]string{}
 	for _, raw := range s.conceptSlugs(art) {
-		resolved := s.electronSlugFor(ctx, kbRepo, raw, reserved)
+		key, err := conceptRepo.Resolve(ctx, raw)
+		if err != nil {
+			return nil, err
+		}
+		resolved := s.electronSlugFor(ctx, kbRepo, key, reserved)
 		reserved[resolved] = true
+		names[resolved] = s.conceptName(art, raw)
 		links = appendUnique(links, resolved)
 	}
 	sort.Strings(links)
@@ -439,9 +472,8 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 	}
 	// A note materialized on demand still counts towards its concepts, so the
 	// graph panel does not build a parallel history the next run ignores.
-	conceptRepo := db.NewConceptRepo(s.db)
 	for _, link := range links {
-		if _, err := conceptRepo.Touch(ctx, link, s.conceptName(art, link), note.ID); err != nil {
+		if _, err := conceptRepo.Touch(ctx, link, names[link], note.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -534,6 +566,103 @@ func (s *Service) summarizeCategory(ctx context.Context, category string, refs [
 		return "", err
 	}
 	return strings.TrimSpace(resp.Content), nil
+}
+
+// MergeResult reports what a concept merge changed.
+type MergeResult struct {
+	NotesRelinked int  `json:"notes_relinked"`
+	Mentions      int  `json:"mentions"`
+	Redirected    bool `json:"redirected"`
+}
+
+// MergeConcepts folds one concept into another — "open-ai" into "openai",
+// "gpt4" into "gpt-5" — moving its mentions and rewriting every note that
+// linked to it, in the database and in the vault. The merged concept's own note
+// becomes a redirect rather than disappearing.
+func (s *Service) MergeConcepts(ctx context.Context, from, to string) (*MergeResult, error) {
+	kbRepo := db.NewKBRepo(s.db)
+	conceptRepo := db.NewConceptRepo(s.db)
+
+	source, err := conceptRepo.Get(ctx, from)
+	if err != nil {
+		return nil, fmt.Errorf("kb: merge source %q: %w", from, err)
+	}
+	sourceNoteID := source.NoteID
+	sourceName := source.Name
+
+	affected, err := conceptRepo.Merge(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &MergeResult{}
+	for _, id := range affected {
+		if id == sourceNoteID {
+			continue // rewritten as the redirect below
+		}
+		note, err := kbRepo.Get(ctx, id)
+		if err != nil {
+			continue
+		}
+		note.Content = strings.ReplaceAll(note.Content, "[["+from+"]]", "[["+to+"]]")
+		note.Wikilinks = replaceInSlice(note.Wikilinks, from, to)
+		if err := kbRepo.Update(ctx, note); err != nil {
+			return nil, err
+		}
+		if _, err := s.vault.Write(string(note.Type), note.Slug, note.Content); err != nil {
+			return nil, err
+		}
+		res.NotesRelinked++
+	}
+
+	target, err := conceptRepo.Get(ctx, to)
+	if err != nil {
+		return nil, err
+	}
+	res.Mentions = target.Mentions
+
+	if sourceNoteID != 0 {
+		if note, err := kbRepo.Get(ctx, sourceNoteID); err == nil {
+			note.Content = BuildRedirect(sourceName, target.Name, to)
+			note.Wikilinks = []string{to}
+			if err := kbRepo.Update(ctx, note); err != nil {
+				return nil, err
+			}
+			if _, err := s.vault.Write(string(note.Type), note.Slug, note.Content); err != nil {
+				return nil, err
+			}
+			res.Redirected = true
+		}
+	}
+
+	// The surviving concept is rewritten from its now larger mention list.
+	if target.NoteID != 0 || target.Mentions >= s.opts.MinOccurrences {
+		sources, err := s.conceptSources(ctx, conceptRepo, &conceptAgg{Slug: to, Name: target.Name})
+		if err != nil {
+			return nil, err
+		}
+		outcome, note, err := s.upsertElectron(ctx, kbRepo, to, target.Name, sources)
+		if err != nil {
+			return nil, err
+		}
+		if outcome == electronCreated {
+			if err := conceptRepo.Promote(ctx, to, note.ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return res, nil
+}
+
+func replaceInSlice(list []string, from, to string) []string {
+	var out []string
+	for _, s := range list {
+		if s == from {
+			s = to
+		}
+		out = appendUnique(out, s)
+	}
+	return out
 }
 
 // ListNotes returns notes, optionally filtered by type.

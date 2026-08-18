@@ -257,6 +257,44 @@ func (r *KBRepo) BySharedTag(ctx context.Context, selfID int64, tags []string, l
 	return scanKBNotes(rows)
 }
 
+// Categories returns the distinct categories atoms declare in their
+// frontmatter, alphabetically.
+func (r *KBRepo) Categories(ctx context.Context) ([]string, error) {
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT DISTINCT json_extract(frontmatter, '$.category') AS category
+		FROM kb_notes
+		WHERE note_type = 'atom' AND category IS NOT NULL AND category != ''
+		ORDER BY category`)
+	if err != nil {
+		return nil, fmt.Errorf("kb categories: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// CreatedOn returns the notes created on the given YYYY-MM-DD day.
+func (r *KBRepo) CreatedOn(ctx context.Context, day string, limit int) ([]*KBNote, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	rows, err := r.db.sql.QueryContext(ctx, kbNoteColumns+`
+		WHERE substr(created_at, 1, 10) = ?
+		ORDER BY created_at DESC LIMIT ?`, day, limit)
+	if err != nil {
+		return nil, fmt.Errorf("kb created on: %w", err)
+	}
+	defer rows.Close()
+	return scanKBNotes(rows)
+}
+
 // ByCategory returns notes whose frontmatter declares the given category.
 func (r *KBRepo) ByCategory(ctx context.Context, category string, limit int) ([]*KBNote, error) {
 	rows, err := r.db.sql.QueryContext(ctx, `

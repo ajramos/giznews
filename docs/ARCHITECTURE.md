@@ -41,6 +41,8 @@ classify ──► reglas deterministas ⚡ → LLM en batch (categoría, import
    │
 kb build ──► atoms (artículos) + electrons (conceptos, promovidos al superar N
              menciones históricas) + molecules (síntesis) en el vault
+   │         y refresca las puertas de entrada: Index.md, Unresolved concepts.md
+   │         y la nota del día en 00-Inbox (vistas generadas, no notas del grafo)
    │
 digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digests`, uno por día)
    │
@@ -78,6 +80,9 @@ incrementales por `PRAGMA user_version` en `internal/db/db.go`:
 7. `kb_links` + `concepts`/`concept_mentions` (grafo relacional: una fila por
    arista y un concepto con sus menciones acumuladas entre ejecuciones; la
    migración rellena ambas desde los `wikilinks` ya escritos)
+8. `concepts.canon_key` + `concept_aliases` (una misma idea escrita de varias
+   formas —"Open AI"/"OpenAI"— es un solo concepto; los alias explícitos
+   cubren lo que la regla no deduce)
 
 ## Desktop (Wails)
 

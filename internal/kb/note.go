@@ -157,6 +157,24 @@ func BuildMolecule(title, summary string, refs []atomRef) string {
 	return b.String()
 }
 
+// BuildRedirect rewrites a merged concept's note into a pointer at the concept
+// it was folded into. The file stays in the vault so links already written to
+// it — in generated notes and in whatever the user wrote by hand — still land
+// somewhere useful.
+func BuildRedirect(title, targetName, targetSlug string) string {
+	fm := frontmatter{
+		Type:    "electron",
+		Created: time.Now().Format("2006-01-02 15:04"),
+		Status:  "merged",
+		Tags:    []string{"ai", "concept"},
+	}
+	var b strings.Builder
+	b.WriteString(fm.render())
+	b.WriteString("\n# " + title + "\n\n")
+	b.WriteString("Merged into [[" + targetSlug + "]] — " + targetName + ".\n")
+	return b.String()
+}
+
 func excerpt(s string, n int) string {
 	r := []rune(strings.TrimSpace(s))
 	if len(r) <= n {

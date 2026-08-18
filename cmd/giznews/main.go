@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/ajramos/giznews/internal/config"
 )
@@ -84,6 +85,26 @@ Global options:
 func loadConfig(args []string) (*config.Config, error) {
 	fs := flag.NewFlagSet("giznews", flag.ContinueOnError)
 	configPath := fs.String("config", "", "path to config JSON")
-	_ = fs.Parse(args)
+	_ = fs.Parse(flagArgs(args))
 	return config.LoadConfig(*configPath)
+}
+
+// flagArgs keeps only the flags out of a subcommand's arguments. Go's flag
+// package stops at the first positional argument, so without this
+// `kb merge a b --config=x` would silently fall back to the default config.
+func flagArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		out = append(out, a)
+		// "--config path" carries its value in the next argument.
+		if !strings.Contains(a, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+			i++
+			out = append(out, args[i])
+		}
+	}
+	return out
 }

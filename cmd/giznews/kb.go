@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/ajramos/giznews/internal/db"
 	"github.com/ajramos/giznews/internal/kb"
 	"github.com/ajramos/giznews/internal/llm"
 )
@@ -12,7 +13,7 @@ import (
 // runKB manages the knowledge graph: build, list, synth.
 func runKB(args []string, logger *log.Logger) {
 	if len(args) == 0 {
-		logger.Fatal("usage: giznews kb <build|list|synth> [category]")
+		logger.Fatal("usage: giznews kb <build|list|synth|index|concepts|merge|alias> [args]")
 	}
 
 	cfg, d, ctx := loadAndOpenDB(args[1:], logger)
@@ -82,8 +83,55 @@ func runKB(args []string, logger *log.Logger) {
 			fmt.Printf("molecule created for %q in vault\n", args[1])
 		}
 
+	case "index":
+		res, err := svc.BuildIndex(ctx)
+		if err != nil {
+			logger.Fatalf("kb index: %v", err)
+		}
+		fmt.Printf("vault index refreshed: %d concepts listed, %d unresolved, %d daily note(s)\n",
+			res.TopConcepts, res.Dangling, res.DailyNotes)
+
+	case "concepts":
+		concepts, err := db.NewConceptRepo(d).Top(ctx, 50)
+		if err != nil {
+			logger.Fatalf("kb concepts: %v", err)
+		}
+		for _, c := range concepts {
+			state := "electron"
+			if c.NoteID == 0 {
+				state = "pending"
+			}
+			fmt.Printf("%4d  %-8s  %-30s  %s\n", c.Mentions, state, truncate(c.Slug, 30), c.Name)
+		}
+		if len(concepts) == 0 {
+			fmt.Println("no concepts yet — run `giznews kb build`")
+		}
+
+	case "merge":
+		if len(args) < 3 {
+			logger.Fatal("usage: giznews kb merge <from-slug> <into-slug>")
+		}
+		res, err := svc.MergeConcepts(ctx, args[1], args[2])
+		if err != nil {
+			logger.Fatalf("kb merge: %v", err)
+		}
+		fmt.Printf("merged %q into %q: %d note(s) relinked, %d mention(s) total\n",
+			args[1], args[2], res.NotesRelinked, res.Mentions)
+		if res.Redirected {
+			fmt.Printf("the old note now redirects to [[%s]]\n", args[2])
+		}
+
+	case "alias":
+		if len(args) < 3 {
+			logger.Fatal("usage: giznews kb alias <alias-slug> <canonical-slug>")
+		}
+		if err := db.NewConceptRepo(d).Alias(ctx, args[1], args[2]); err != nil {
+			logger.Fatalf("kb alias: %v", err)
+		}
+		fmt.Printf("%q now resolves to %q\n", args[1], args[2])
+
 	default:
-		logger.Fatalf("unknown kb subcommand %q (expected build|list|synth)", args[0])
+		logger.Fatalf("unknown kb subcommand %q (expected build|list|synth|index|concepts|merge|alias)", args[0])
 	}
 	_ = context.Background
 }

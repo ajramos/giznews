@@ -23,6 +23,8 @@ func FolderFor(noteType string) string {
 		return "01-Electrons"
 	case "molecule":
 		return "03-Molecules"
+	case "map":
+		return "" // Index.md and Dangling.md sit at the vault root
 	default:
 		return "00-Inbox"
 	}
