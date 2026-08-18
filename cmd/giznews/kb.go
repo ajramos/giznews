@@ -49,8 +49,8 @@ func runKB(args []string, logger *log.Logger) {
 		if err != nil {
 			logger.Fatalf("kb build: %v", err)
 		}
-		fmt.Printf("kb build: %d atoms, %d electrons created, %d updated, %d articles skipped\n",
-			res.AtomsCreated, res.ElectronsCreated, res.ElectronsUpdated, res.ArticlesSkipped)
+		fmt.Printf("kb build: %d atoms, %d concepts tracked, %d electrons created, %d updated, %d articles skipped\n",
+			res.AtomsCreated, res.ConceptsTracked, res.ElectronsCreated, res.ElectronsUpdated, res.ArticlesSkipped)
 
 	case "list":
 		noteType := "atom"

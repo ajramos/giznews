@@ -33,6 +33,9 @@ type BuildResult struct {
 	// ArticlesSkipped counts articles that were selected for the graph but did
 	// not produce an atom (a vault write or insert failed).
 	ArticlesSkipped int `json:"articles_skipped"`
+	// ConceptsTracked counts the distinct concepts this run recorded mentions
+	// for, promoted to an electron or not.
+	ConceptsTracked int `json:"concepts_tracked"`
 }
 
 // Service maintains the knowledge graph.
@@ -79,6 +82,7 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	artRepo := db.NewArticleRepo(s.db)
 	kbRepo := db.NewKBRepo(s.db)
 	ingestRepo := db.NewIngestRepo(s.db)
+	conceptRepo := db.NewConceptRepo(s.db)
 
 	articles, err := artRepo.ListForKB(ctx, s.opts.ImportanceThreshold, s.opts.AgeDays, s.opts.Limit)
 	if err != nil {
@@ -119,7 +123,8 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		sort.Strings(links)
 
 		slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(a.Title)), reserved)
-		if _, err := s.writeAtom(ctx, kbRepo, ingestRepo, a, slug, links); err != nil {
+		note, err := s.writeAtom(ctx, kbRepo, ingestRepo, a, slug, links)
+		if err != nil {
 			// One unwritable article must not abort the whole run.
 			if s.logger != nil {
 				s.logger.Printf("kb: skipping article #%d: %v", a.ID, err)
@@ -130,25 +135,44 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 
 		for _, raw := range raws {
 			agg := concepts[raw]
-			agg.Refs = append(agg.Refs, atomRef{Slug: slug, Title: a.Title})
+			agg.Refs = append(agg.Refs, atomRef{Slug: slug, Title: a.Title, NoteID: note.ID})
 		}
 		res.AtomsCreated++
 	}
 
-	// Electrons for concepts cited by enough atoms. The threshold gates creation
-	// only: once a concept has its own note, every later mention must reach it.
+	// Electrons for concepts mentioned often enough. Mentions are counted over
+	// the concept's whole history, not just this run, so a topic that surfaces
+	// once a day graduates like one that surfaces five times in an afternoon.
 	for _, raw := range rawSlugs {
 		agg := concepts[raw]
 		if len(agg.Refs) == 0 {
 			continue
 		}
-		outcome, err := s.upsertElectron(ctx, kbRepo, agg.Slug, agg)
+		concept, err := s.recordMentions(ctx, conceptRepo, agg)
+		if err != nil {
+			return nil, err
+		}
+		res.ConceptsTracked++
+
+		promoted := concept.NoteID != 0
+		if !promoted && concept.Mentions < s.opts.MinOccurrences {
+			continue
+		}
+
+		sources, err := s.conceptSources(ctx, conceptRepo, agg)
+		if err != nil {
+			return nil, err
+		}
+		outcome, note, err := s.upsertElectron(ctx, kbRepo, agg.Slug, agg.Name, sources)
 		if err != nil {
 			return nil, err
 		}
 		switch outcome {
 		case electronCreated:
 			res.ElectronsCreated++
+			if err := conceptRepo.Promote(ctx, agg.Slug, note.ID); err != nil {
+				return nil, err
+			}
 		case electronUpdated:
 			res.ElectronsUpdated++
 		}
@@ -158,6 +182,42 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		s.logger.Printf("kb build: %d atoms, %d electrons", res.AtomsCreated, res.ElectronsCreated+res.ElectronsUpdated)
 	}
 	return res, nil
+}
+
+// recordMentions persists this run's mentions of a concept and returns its
+// accumulated state.
+func (s *Service) recordMentions(ctx context.Context, repo *db.ConceptRepo, agg *conceptAgg) (*db.Concept, error) {
+	var (
+		concept *db.Concept
+		err     error
+	)
+	for _, ref := range agg.Refs {
+		concept, err = repo.Touch(ctx, agg.Slug, agg.Name, ref.NoteID)
+		if err != nil {
+			return nil, fmt.Errorf("kb: record concept %q: %w", agg.Slug, err)
+		}
+	}
+	if concept == nil {
+		return repo.Touch(ctx, agg.Slug, agg.Name, 0)
+	}
+	return concept, nil
+}
+
+// conceptSources returns every note mentioning the concept, so an electron
+// always lists its full history and not only the atoms of the current run.
+func (s *Service) conceptSources(ctx context.Context, repo *db.ConceptRepo, agg *conceptAgg) ([]atomRef, error) {
+	notes, err := repo.MentionedBy(ctx, agg.Slug, 500)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]atomRef, 0, len(notes))
+	for _, n := range notes {
+		out = append(out, atomRef{Slug: n.Slug, Title: n.Title, NoteID: n.ID})
+	}
+	if len(out) == 0 {
+		out = agg.Refs
+	}
+	return out, nil
 }
 
 // writeAtom renders an article as an Atom note, writes it to the vault, mirrors
@@ -197,41 +257,23 @@ const (
 	electronSkipped
 )
 
-// upsertElectron creates an electron once a concept is cited by MinOccurrences
-// atoms, or recomputes an existing one's content from every atom that links to
-// it. A slug owned by a note of another type is left untouched — overwriting it
-// would destroy that note.
-func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug string, agg *conceptAgg) (electronOutcome, error) {
+// upsertElectron writes the Electron note for a concept: it creates the note or
+// rewrites an existing one from the given sources. A slug owned by a note of
+// another type is left untouched — overwriting it would destroy that note.
+func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug, name string, sources []atomRef) (electronOutcome, *db.KBNote, error) {
 	existing, err := repo.GetBySlug(ctx, slug)
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
-		return electronSkipped, err
+		return electronSkipped, nil, err
 	}
 	if existing != nil && existing.Type != db.NoteElectron {
 		if s.logger != nil {
 			s.logger.Printf("kb: electron %q skipped, slug owned by %s note #%d", slug, existing.Type, existing.ID)
 		}
-		return electronSkipped, nil
-	}
-	if existing == nil && len(agg.Refs) < s.opts.MinOccurrences {
-		return electronSkipped, nil
+		return electronSkipped, nil, nil
 	}
 
-	sources := make([]atomRef, 0, len(agg.Refs))
-	if existing != nil {
-		// Recompute from all current incoming atoms, not just this run's.
-		incoming, err := repo.Incoming(ctx, slug, 500)
-		if err != nil {
-			return electronSkipped, err
-		}
-		for _, n := range incoming {
-			sources = append(sources, atomRef{Slug: n.Slug, Title: n.Title})
-		}
-	} else {
-		sources = agg.Refs
-	}
-
-	content := BuildElectron(agg.Name, sources)
-	fm, _ := json.Marshal(map[string]any{"type": "electron", "name": agg.Name, "tags": []string{"ai", "concept"}})
+	content := BuildElectron(name, sources)
+	fm, _ := json.Marshal(map[string]any{"type": "electron", "name": name, "tags": []string{"ai", "concept"}})
 	tags := []string{"ai", "concept"}
 	links := make([]string, 0, len(sources))
 	for _, src := range sources {
@@ -242,28 +284,30 @@ func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug stri
 	// Obsidian, so it must carry the same backlinks as the database row.
 	path, err := s.vault.Write("electron", slug, content)
 	if err != nil {
-		return electronSkipped, err
+		return electronSkipped, nil, err
 	}
 
 	if existing != nil {
+		existing.Title = name
 		existing.Content = content
 		existing.Frontmatter = string(fm)
 		existing.Tags = tags
 		existing.Wikilinks = links
 		if err := repo.Update(ctx, existing); err != nil {
-			return electronSkipped, err
+			return electronSkipped, nil, err
 		}
-		return electronUpdated, nil
+		return electronUpdated, existing, nil
 	}
 
-	if _, err := repo.Create(ctx, db.NewKBNote{
-		Type: db.NoteElectron, Title: agg.Name, Slug: slug, Path: path,
+	note, err := repo.Create(ctx, db.NewKBNote{
+		Type: db.NoteElectron, Title: name, Slug: slug, Path: path,
 		Frontmatter: string(fm), Content: content, Tags: tags, Wikilinks: links,
-	}); err != nil {
+	})
+	if err != nil {
 		_ = os.Remove(path)
-		return electronSkipped, err
+		return electronSkipped, nil, err
 	}
-	return electronCreated, nil
+	return electronCreated, note, nil
 }
 
 // conceptSlugs returns the electron slugs an article links out to.
@@ -389,7 +433,19 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 	sort.Strings(links)
 
 	slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(art.Title)), reserved)
-	return s.writeAtom(ctx, kbRepo, ingestRepo, art, slug, links)
+	note, err := s.writeAtom(ctx, kbRepo, ingestRepo, art, slug, links)
+	if err != nil {
+		return nil, err
+	}
+	// A note materialized on demand still counts towards its concepts, so the
+	// graph panel does not build a parallel history the next run ignores.
+	conceptRepo := db.NewConceptRepo(s.db)
+	for _, link := range links {
+		if _, err := conceptRepo.Touch(ctx, link, s.conceptName(art, link), note.ID); err != nil {
+			return nil, err
+		}
+	}
+	return note, nil
 }
 
 // Synthesize creates (or updates) a Molecule note summarizing a category by
@@ -490,8 +546,14 @@ func (s *Service) GetNote(ctx context.Context, id int64) (*db.KBNote, error) {
 	return db.NewKBRepo(s.db).Get(ctx, id)
 }
 
-// GraphNeighbors returns notes connected to the given note via wikilinks or
-// shared tags.
+// genericTags are structural: every atom carries "atom" and "ai", every
+// electron "concept". Expanding the graph on them would make every note a
+// neighbour of every other note, which is the same as having no graph.
+var genericTags = map[string]bool{"ai": true, "atom": true, "concept": true, "synthesis": true}
+
+// GraphNeighbors returns the notes connected to the given one: what it links
+// to, what links to it, what shares a concept with it, and finally what shares
+// a meaningful tag.
 func (s *Service) GraphNeighbors(ctx context.Context, id int64, limit int) ([]*db.KBNote, error) {
 	repo := db.NewKBRepo(s.db)
 	note, err := repo.Get(ctx, id)
@@ -524,10 +586,24 @@ func (s *Service) GraphNeighbors(ctx context.Context, id int64, limit int) ([]*d
 			add(n)
 		}
 	}
-	// Shared tags.
-	if shared, err := repo.BySharedTag(ctx, note.ID, note.Tags, limit); err == nil {
-		for _, n := range shared {
+	// Siblings: notes citing at least one of the same concepts.
+	if siblings, err := repo.CoMentioned(ctx, note.ID, limit); err == nil {
+		for _, n := range siblings {
 			add(n)
+		}
+	}
+	// Shared tags, ignoring the ones every note of a type carries.
+	var tags []string
+	for _, t := range note.Tags {
+		if !genericTags[t] {
+			tags = append(tags, t)
+		}
+	}
+	if len(tags) > 0 {
+		if shared, err := repo.BySharedTag(ctx, note.ID, tags, limit); err == nil {
+			for _, n := range shared {
+				add(n)
+			}
 		}
 	}
 

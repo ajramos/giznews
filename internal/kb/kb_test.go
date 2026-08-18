@@ -366,3 +366,108 @@ func TestBuildResultSkippedCount(t *testing.T) {
 		t.Fatalf("res = %+v, want 2 atoms and 0 skipped", res)
 	}
 }
+
+// The promotion threshold counts a concept's whole history: one mention per run
+// must graduate exactly like several mentions in a single run.
+func TestConceptGraduatesAcrossRuns(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t) // MinOccurrences = 2
+	ctx := context.Background()
+	conceptRepo := db.NewConceptRepo(d)
+
+	classifiedArticle(t, d, srcID, "Mamba enters the arena", []string{"mamba"})
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ElectronsCreated != 0 {
+		t.Fatalf("run 1 created %d electrons, want 0 (one mention)", res.ElectronsCreated)
+	}
+	if res.ConceptsTracked != 1 {
+		t.Fatalf("run 1 tracked %d concepts, want 1", res.ConceptsTracked)
+	}
+	// The mention is remembered even though nothing was promoted.
+	c, err := conceptRepo.Get(ctx, "mamba")
+	if err != nil {
+		t.Fatalf("concept after run 1: %v", err)
+	}
+	if c.Mentions != 1 || c.NoteID != 0 {
+		t.Fatalf("concept = %+v, want 1 mention and no note", c)
+	}
+	dangling, err := conceptRepo.Dangling(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dangling) != 1 || dangling[0].Slug != "mamba" {
+		t.Fatalf("dangling = %+v, want mamba", dangling)
+	}
+
+	// A second run, a single new article: the second mention graduates it.
+	classifiedArticle(t, d, srcID, "Mamba two years on", []string{"mamba"})
+	res, err = svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ElectronsCreated != 1 {
+		t.Fatalf("run 2 created %d electrons, want 1", res.ElectronsCreated)
+	}
+
+	c, err = conceptRepo.Get(ctx, "mamba")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Mentions != 2 || c.NoteID == 0 {
+		t.Fatalf("concept = %+v, want 2 mentions and a promoted note", c)
+	}
+	// The electron lists both atoms, including the one from the earlier run.
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "mamba.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"[[mamba-enters-the-arena]]", "[[mamba-two-years-on]]"} {
+		if !strings.Contains(string(onDisk), want) {
+			t.Fatalf("electron missing %s:\n%s", want, onDisk)
+		}
+	}
+	dangling, err = conceptRepo.Dangling(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dangling) != 0 {
+		t.Fatalf("dangling after promotion = %+v, want none", dangling)
+	}
+}
+
+// Two atoms citing the same concept are neighbours even before that concept has
+// a note of its own, and structural tags never expand the graph.
+func TestGraphNeighborsUseConcepts(t *testing.T) {
+	svc, d, _, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "Sparse attention at scale", []string{"sparse-attention"})
+	classifiedArticle(t, d, srcID, "Attention is still all you need", []string{"sparse-attention"})
+	// An unrelated article: same structural tags (atom, ai), no shared concept.
+	classifiedArticle(t, d, srcID, "Chip supply update", []string{"hardware"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := db.NewKBRepo(d)
+	first, err := repo.GetBySlug(ctx, "sparse-attention-at-scale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	neighbors, err := svc.GraphNeighbors(ctx, first.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := map[string]bool{}
+	for _, n := range neighbors {
+		titles[n.Title] = true
+	}
+	if !titles["Attention is still all you need"] {
+		t.Fatalf("sibling citing the same concept is missing: %v", titles)
+	}
+	if titles["Chip supply update"] {
+		t.Fatalf("unrelated note pulled in by structural tags: %v", titles)
+	}
+}

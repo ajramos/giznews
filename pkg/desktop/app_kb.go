@@ -31,6 +31,7 @@ type KBResult struct {
 	ElectronsUpdated int `json:"electrons_updated"`
 	MoleculesCreated int `json:"molecules_created"`
 	ArticlesSkipped  int `json:"articles_skipped"`
+	ConceptsTracked  int `json:"concepts_tracked"`
 }
 
 // KBuild ingests pending articles into the knowledge graph.
@@ -51,6 +52,7 @@ func (a *App) KBuild(ctx context.Context) (*KBResult, error) {
 			ElectronsUpdated: res.ElectronsUpdated,
 			MoleculesCreated: res.MoleculesCreated,
 			ArticlesSkipped:  res.ArticlesSkipped,
+			ConceptsTracked:  res.ConceptsTracked,
 		}
 		p.Message(fmt.Sprintf("%d atoms · %d electrons", res.AtomsCreated, res.ElectronsCreated))
 		return nil

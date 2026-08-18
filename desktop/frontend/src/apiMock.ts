@@ -329,13 +329,13 @@ export const mockBackend: APIShape = {
     const id = beginJob("Build knowledge graph", "kb");
     await delay(60);
     finishJob(id);
-    return { atomsCreated: 5, electronsCreated: 2, electronsUpdated: 0, moleculesCreated: 0, articlesSkipped: 12 };
+    return { atomsCreated: 5, electronsCreated: 2, electronsUpdated: 0, moleculesCreated: 0, articlesSkipped: 0, conceptsTracked: 18 };
   },
   ksynthesize: async (_category: string): Promise<KBResult> => {
     const id = beginJob("Synthesize category", "kb");
     await delay(60);
     finishJob(id);
-    return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, articlesSkipped: 0 };
+    return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, articlesSkipped: 0, conceptsTracked: 0 };
   },
   ensureArticleNote: async (articleID: number): Promise<NoteDTO> => {
     await delay(60);

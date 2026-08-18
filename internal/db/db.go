@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -229,4 +229,75 @@ CREATE TABLE IF NOT EXISTS digests (
 	created_at TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_digests_date ON digests(date);
+`
+
+// schemaV7 turns the knowledge graph into first-class relational data.
+//
+// Until now edges lived inside the kb_notes.wikilinks JSON blob, which could
+// only be queried with substring LIKE (imprecise, unindexed), and concepts had
+// no existence of their own: a build aggregated them in memory and forgot them,
+// so a concept mentioned once per run never reached the promotion threshold.
+//
+// kb_links stores one row per edge; concepts and concept_mentions accumulate
+// every mention across runs. The backfill recovers both from what the vault
+// already wrote — including the concepts that were only ever dangling links,
+// which is where the lost mentions were hiding.
+const schemaV7 = `
+CREATE TABLE IF NOT EXISTS kb_links (
+	from_note  INTEGER NOT NULL REFERENCES kb_notes(id) ON DELETE CASCADE,
+	to_slug    TEXT    NOT NULL,               -- may not exist yet (dangling link)
+	kind       TEXT    NOT NULL DEFAULT 'wikilink',
+	created_at TEXT    NOT NULL,
+	PRIMARY KEY (from_note, to_slug)
+);
+CREATE INDEX IF NOT EXISTS idx_kb_links_to ON kb_links(to_slug);
+
+CREATE TABLE IF NOT EXISTS concepts (
+	slug       TEXT    PRIMARY KEY,
+	name       TEXT    NOT NULL,
+	note_id    INTEGER REFERENCES kb_notes(id) ON DELETE SET NULL, -- electron once promoted
+	mentions   INTEGER NOT NULL DEFAULT 0,
+	first_seen TEXT    NOT NULL,
+	last_seen  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_concepts_mentions ON concepts(mentions DESC);
+
+CREATE TABLE IF NOT EXISTS concept_mentions (
+	concept_slug TEXT    NOT NULL,
+	note_id      INTEGER NOT NULL REFERENCES kb_notes(id) ON DELETE CASCADE,
+	created_at   TEXT    NOT NULL,
+	PRIMARY KEY (concept_slug, note_id)
+);
+CREATE INDEX IF NOT EXISTS idx_concept_mentions_slug ON concept_mentions(concept_slug);
+
+-- Backfill: every wikilink already stored becomes an edge.
+INSERT OR IGNORE INTO kb_links (from_note, to_slug, kind, created_at)
+SELECT n.id, je.value, 'wikilink', n.created_at
+FROM kb_notes n, json_each(n.wikilinks) je
+WHERE je.value != '';
+
+-- Backfill: existing electrons are promoted concepts.
+INSERT OR IGNORE INTO concepts (slug, name, note_id, mentions, first_seen, last_seen)
+SELECT n.slug, n.title, n.id, 0, n.created_at, n.updated_at
+FROM kb_notes n WHERE n.note_type = 'electron';
+
+-- Backfill: a link to a slug no note owns is a concept that never graduated.
+INSERT OR IGNORE INTO concepts (slug, name, note_id, mentions, first_seen, last_seen)
+SELECT l.to_slug, l.to_slug, NULL, 0, MIN(l.created_at), MAX(l.created_at)
+FROM kb_links l
+LEFT JOIN kb_notes n ON n.slug = l.to_slug
+WHERE n.id IS NULL
+GROUP BY l.to_slug;
+
+-- Backfill: mentions are the atoms pointing at each concept.
+INSERT OR IGNORE INTO concept_mentions (concept_slug, note_id, created_at)
+SELECT l.to_slug, l.from_note, l.created_at
+FROM kb_links l
+JOIN concepts c ON c.slug = l.to_slug
+JOIN kb_notes n ON n.id = l.from_note
+WHERE n.note_type = 'atom';
+
+UPDATE concepts SET mentions = (
+	SELECT COUNT(*) FROM concept_mentions m WHERE m.concept_slug = concepts.slug
+);
 `

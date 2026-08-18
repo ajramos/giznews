@@ -39,7 +39,8 @@ fetch ──► normalize + dedupe (simhash/URL) ──► SQLite
    │
 classify ──► reglas deterministas ⚡ → LLM en batch (categoría, importancia, tags, entidades, resumen)
    │
-kb build ──► atoms (artículos) + electrons (conceptos) + molecules (síntesis) en el vault
+kb build ──► atoms (artículos) + electrons (conceptos, promovidos al superar N
+             menciones históricas) + molecules (síntesis) en el vault
    │
 digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digests`, uno por día)
    │
@@ -74,6 +75,9 @@ incrementales por `PRAGMA user_version` en `internal/db/db.go`:
 4. `sources.hidden` (borrado lógico de fuentes)
 5. `articles.extracted` (extracción en batch)
 6. `digests` (digest diario persistido, uno por fecha)
+7. `kb_links` + `concepts`/`concept_mentions` (grafo relacional: una fila por
+   arista y un concepto con sus menciones acumuladas entre ejecuciones; la
+   migración rellena ambas desde los `wikilinks` ya escritos)
 
 ## Desktop (Wails)
 

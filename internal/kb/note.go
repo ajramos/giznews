@@ -60,8 +60,9 @@ func (f frontmatter) render() string {
 
 // atomRef is a link from an electron back to an atom.
 type atomRef struct {
-	Slug  string
-	Title string
+	Slug   string
+	Title  string
+	NoteID int64
 }
 
 // BuildAtom produces the Atom note for an article.

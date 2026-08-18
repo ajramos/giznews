@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
-		t.Fatalf("user_version = %d, want 6", version)
+	if version != 7 {
+		t.Fatalf("user_version = %d, want 7", version)
 	}
 }
 
@@ -59,6 +59,15 @@ func TestMigrateFromV1(t *testing.T) {
 	if _, err := d.sql.Exec("DROP TABLE IF EXISTS digests;"); err != nil {
 		t.Fatal(err)
 	}
+	for _, stmt := range []string{
+		"DROP TABLE IF EXISTS kb_links;",
+		"DROP TABLE IF EXISTS concepts;",
+		"DROP TABLE IF EXISTS concept_mentions;",
+	} {
+		if _, err := d.sql.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +82,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
-		t.Fatalf("user_version after reopen = %d, want 6", version)
+	if version != 7 {
+		t.Fatalf("user_version after reopen = %d, want 7", version)
 	}
 	// Columns must exist now.
 	var n int
@@ -90,6 +99,106 @@ func TestMigrateFromV1(t *testing.T) {
 		t.Fatalf("digests table missing after migration: %v", err)
 	} else {
 		rows.Close()
+	}
+	if rows, err := d2.sql.Query("SELECT from_note, to_slug FROM kb_links"); err != nil {
+		t.Fatalf("kb_links table missing after migration: %v", err)
+	} else {
+		rows.Close()
+	}
+	if rows, err := d2.sql.Query("SELECT slug, mentions FROM concepts"); err != nil {
+		t.Fatalf("concepts table missing after migration: %v", err)
+	} else {
+		rows.Close()
+	}
+}
+
+// The v7 migration must recover the graph from what earlier versions had
+// already written into kb_notes.wikilinks — including the concepts that never
+// became notes, whose mentions were previously unrecoverable.
+func TestMigrateV7BackfillsGraph(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v6.db")
+	d, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		"DROP TABLE IF EXISTS kb_links;",
+		"DROP TABLE IF EXISTS concepts;",
+		"DROP TABLE IF EXISTS concept_mentions;",
+	} {
+		if _, err := d.sql.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Three atoms citing "rag" (never promoted) and an existing "mamba" electron
+	// cited by one of them, written the way pre-v7 builds did: JSON only.
+	notes := []struct {
+		id       int
+		noteType string
+		title    string
+		slug     string
+		links    string
+	}{
+		{1, "atom", "A one", "a-one", `["rag","mamba"]`},
+		{2, "atom", "A two", "a-two", `["rag"]`},
+		{3, "atom", "A three", "a-three", `["rag"]`},
+		{4, "electron", "Mamba", "mamba", `["a-one"]`},
+	}
+	for _, n := range notes {
+		if _, err := d.sql.Exec(`
+			INSERT INTO kb_notes (id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, created_at, updated_at)
+			VALUES (?, ?, ?, ?, 'p', '{}', '', '[]', ?, '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')`,
+			n.id, n.noteType, n.title, n.slug, n.links); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.sql.Exec("PRAGMA user_version = 6;"); err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+
+	d2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d2.Close()
+
+	var links int
+	if err := d2.sql.QueryRow("SELECT COUNT(*) FROM kb_links").Scan(&links); err != nil {
+		t.Fatal(err)
+	}
+	if links != 5 {
+		t.Fatalf("kb_links = %d, want 5", links)
+	}
+
+	repo := NewConceptRepo(d2)
+	ctx := context.Background()
+
+	// "rag" was only ever a dangling link; its three mentions are recovered.
+	rag, err := repo.Get(ctx, "rag")
+	if err != nil {
+		t.Fatalf("concept rag: %v", err)
+	}
+	if rag.Mentions != 3 || rag.NoteID != 0 {
+		t.Fatalf("rag = %+v, want 3 mentions and no note", rag)
+	}
+
+	// "mamba" already had an electron: it is promoted, with its real name.
+	mamba, err := repo.Get(ctx, "mamba")
+	if err != nil {
+		t.Fatalf("concept mamba: %v", err)
+	}
+	if mamba.NoteID != 4 || mamba.Name != "Mamba" || mamba.Mentions != 1 {
+		t.Fatalf("mamba = %+v, want note 4, name Mamba, 1 mention", mamba)
+	}
+
+	// The electron's own outgoing link is not a mention of a concept.
+	dangling, err := repo.Dangling(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dangling) != 1 || dangling[0].Slug != "rag" {
+		t.Fatalf("dangling = %+v, want only rag", dangling)
 	}
 }
 

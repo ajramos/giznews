@@ -71,6 +71,9 @@ func (r *KBRepo) Create(ctx context.Context, nn NewKBNote) (*KBNote, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kb note last insert id: %w", err)
 	}
+	if err := r.SetLinks(ctx, id, nn.Wikilinks); err != nil {
+		return nil, err
+	}
 	return r.Get(ctx, id)
 }
 
@@ -104,15 +107,7 @@ func (r *KBRepo) List(ctx context.Context, noteType NoteType, limit int) ([]*KBN
 		return nil, fmt.Errorf("list kb notes: %w", err)
 	}
 	defer rows.Close()
-	var out []*KBNote
-	for rows.Next() {
-		n, err := scanKBNote(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, n)
-	}
-	return out, rows.Err()
+	return scanKBNotes(rows)
 }
 
 // Update persists content and metadata for an existing note. The embedding is
@@ -128,7 +123,31 @@ func (r *KBRepo) Update(ctx context.Context, n *KBNote) error {
 	if err != nil {
 		return fmt.Errorf("update kb note: %w", err)
 	}
-	return checkAffected(res, "update kb note")
+	if err := checkAffected(res, "update kb note"); err != nil {
+		return err
+	}
+	return r.SetLinks(ctx, n.ID, n.Wikilinks)
+}
+
+// SetLinks replaces a note's outgoing edges in kb_links. The JSON column stays
+// the note's own record of its links; kb_links is the queryable graph, and both
+// are written together so they cannot drift.
+func (r *KBRepo) SetLinks(ctx context.Context, noteID int64, slugs []string) error {
+	if _, err := r.db.sql.ExecContext(ctx, "DELETE FROM kb_links WHERE from_note = ?", noteID); err != nil {
+		return fmt.Errorf("clear kb links: %w", err)
+	}
+	now := Now()
+	for _, slug := range slugs {
+		if slug == "" {
+			continue
+		}
+		if _, err := r.db.sql.ExecContext(ctx, `
+			INSERT OR IGNORE INTO kb_links (from_note, to_slug, kind, created_at)
+			VALUES (?, ?, 'wikilink', ?)`, noteID, slug, now); err != nil {
+			return fmt.Errorf("insert kb link: %w", err)
+		}
+	}
+	return nil
 }
 
 // SetEmbedding stores the semantic-search vector for a note.
@@ -173,43 +192,44 @@ func (r *KBRepo) Count(ctx context.Context, noteType NoteType) (int, error) {
 	return n, nil
 }
 
-// Incoming returns notes whose wikilinks reference the given slug (incoming
-// graph edges). The LIKE clause is only a prefilter over the JSON blob — it
-// matches substrings, so "gpt-5" would also hit a note linking to "gpt-5-turbo"
-// — and every candidate is confirmed against the parsed link list.
+// Incoming returns the notes linking to the given slug (incoming graph edges),
+// newest first.
 func (r *KBRepo) Incoming(ctx context.Context, slug string, limit int) ([]*KBNote, error) {
+	if limit <= 0 {
+		limit = 500
+	}
 	rows, err := r.db.sql.QueryContext(ctx, `
-		SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, created_at, updated_at
-		FROM kb_notes WHERE wikilinks LIKE ?
-		ORDER BY created_at DESC`, `%`+slug+`%`)
+		SELECT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.created_at, n.updated_at
+		FROM kb_links l
+		JOIN kb_notes n ON n.id = l.from_note
+		WHERE l.to_slug = ?
+		ORDER BY n.created_at DESC LIMIT ?`, slug, limit)
 	if err != nil {
 		return nil, fmt.Errorf("kb incoming: %w", err)
 	}
 	defer rows.Close()
-	var out []*KBNote
-	for rows.Next() {
-		n, err := scanKBNote(rows)
-		if err != nil {
-			return nil, err
-		}
-		if !containsString(n.Wikilinks, slug) {
-			continue
-		}
-		out = append(out, n)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, rows.Err()
+	return scanKBNotes(rows)
 }
 
-func containsString(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
+// CoMentioned returns notes that link to at least one slug the given note also
+// links to. Two atoms citing the same concept are neighbours in the graph even
+// when neither links to the other.
+func (r *KBRepo) CoMentioned(ctx context.Context, noteID int64, limit int) ([]*KBNote, error) {
+	if limit <= 0 {
+		limit = 50
 	}
-	return false
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT DISTINCT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.created_at, n.updated_at
+		FROM kb_links mine
+		JOIN kb_links theirs ON theirs.to_slug = mine.to_slug AND theirs.from_note != mine.from_note
+		JOIN kb_notes n ON n.id = theirs.from_note
+		WHERE mine.from_note = ?
+		ORDER BY n.created_at DESC LIMIT ?`, noteID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("kb co-mentioned: %w", err)
+	}
+	defer rows.Close()
+	return scanKBNotes(rows)
 }
 
 // BySharedTag returns notes (excluding self) that share any of tags, capped at
@@ -234,15 +254,7 @@ func (r *KBRepo) BySharedTag(ctx context.Context, selfID int64, tags []string, l
 		return nil, fmt.Errorf("kb shared tags: %w", err)
 	}
 	defer rows.Close()
-	var out []*KBNote
-	for rows.Next() {
-		n, err := scanKBNote(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, n)
-	}
-	return out, rows.Err()
+	return scanKBNotes(rows)
 }
 
 // ByCategory returns notes whose frontmatter declares the given category.
@@ -256,6 +268,11 @@ func (r *KBRepo) ByCategory(ctx context.Context, category string, limit int) ([]
 		return nil, fmt.Errorf("kb by category: %w", err)
 	}
 	defer rows.Close()
+	return scanKBNotes(rows)
+}
+
+// scanKBNotes drains a note result set selecting the kbNoteColumns columns.
+func scanKBNotes(rows *sql.Rows) ([]*KBNote, error) {
 	var out []*KBNote
 	for rows.Next() {
 		n, err := scanKBNote(rows)
