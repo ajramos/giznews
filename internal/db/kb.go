@@ -115,11 +115,14 @@ func (r *KBRepo) List(ctx context.Context, noteType NoteType, limit int) ([]*KBN
 	return out, rows.Err()
 }
 
-// Update persists content and metadata for an existing note.
+// Update persists content and metadata for an existing note. The embedding is
+// dropped because it describes the previous content; the next search index run
+// recomputes it.
 func (r *KBRepo) Update(ctx context.Context, n *KBNote) error {
 	res, err := r.db.sql.ExecContext(ctx, `
 		UPDATE kb_notes SET
-			title = ?, frontmatter = ?, content = ?, tags = ?, wikilinks = ?, updated_at = ?
+			title = ?, frontmatter = ?, content = ?, tags = ?, wikilinks = ?,
+			embedding = NULL, updated_at = ?
 		WHERE id = ?`,
 		n.Title, n.Frontmatter, n.Content, marshalStrings(n.Tags), marshalStrings(n.Wikilinks), Now(), n.ID)
 	if err != nil {
@@ -171,12 +174,14 @@ func (r *KBRepo) Count(ctx context.Context, noteType NoteType) (int, error) {
 }
 
 // Incoming returns notes whose wikilinks reference the given slug (incoming
-// graph edges).
+// graph edges). The LIKE clause is only a prefilter over the JSON blob — it
+// matches substrings, so "gpt-5" would also hit a note linking to "gpt-5-turbo"
+// — and every candidate is confirmed against the parsed link list.
 func (r *KBRepo) Incoming(ctx context.Context, slug string, limit int) ([]*KBNote, error) {
 	rows, err := r.db.sql.QueryContext(ctx, `
 		SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, created_at, updated_at
 		FROM kb_notes WHERE wikilinks LIKE ?
-		ORDER BY created_at DESC LIMIT ?`, `%`+slug+`%`, limit)
+		ORDER BY created_at DESC`, `%`+slug+`%`)
 	if err != nil {
 		return nil, fmt.Errorf("kb incoming: %w", err)
 	}
@@ -187,9 +192,24 @@ func (r *KBRepo) Incoming(ctx context.Context, slug string, limit int) ([]*KBNot
 		if err != nil {
 			return nil, err
 		}
+		if !containsString(n.Wikilinks, slug) {
+			continue
+		}
 		out = append(out, n)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 	}
 	return out, rows.Err()
+}
+
+func containsString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 // BySharedTag returns notes (excluding self) that share any of tags, capped at

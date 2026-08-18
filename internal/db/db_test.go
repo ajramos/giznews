@@ -265,3 +265,54 @@ func TestArticleSimhash(t *testing.T) {
 		t.Fatal("expected simhash to not exist")
 	}
 }
+
+func TestKBIncomingIsExact(t *testing.T) {
+	d := openTestDB(t)
+	ctx := context.Background()
+	repo := NewKBRepo(d)
+
+	if _, err := repo.Create(ctx, NewKBNote{Type: NoteAtom, Title: "Turbo", Slug: "a1", Path: "p1",
+		Wikilinks: []string{"gpt-5-turbo"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Create(ctx, NewKBNote{Type: NoteAtom, Title: "Plain", Slug: "a2", Path: "p2",
+		Wikilinks: []string{"gpt-5"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := repo.Incoming(ctx, "gpt-5", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Slug != "a2" {
+		t.Fatalf("incoming(gpt-5) = %v, want only a2 (a1 links to gpt-5-turbo)", got)
+	}
+}
+
+func TestKBUpdateDropsEmbedding(t *testing.T) {
+	d := openTestDB(t)
+	ctx := context.Background()
+	repo := NewKBRepo(d)
+
+	n, err := repo.Create(ctx, NewKBNote{Type: NoteElectron, Title: "E", Slug: "e", Path: "p", Content: "old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetEmbedding(ctx, n.ID, []float32{0.1, 0.2}); err != nil {
+		t.Fatal(err)
+	}
+
+	n.Content = "new"
+	if err := repo.Update(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+
+	// The stale vector must be gone so the next index run recomputes it.
+	emb, err := repo.GetEmbedding(ctx, n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(emb) != 0 {
+		t.Fatalf("embedding = %v, want none after update", emb)
+	}
+}

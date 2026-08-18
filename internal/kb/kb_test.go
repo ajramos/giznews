@@ -218,3 +218,151 @@ func TestSynthesize(t *testing.T) {
 		t.Fatalf("molecule links = %v, want 2", note.Wikilinks)
 	}
 }
+
+// buildFixture wires a service over a fresh db + vault and returns both.
+func buildFixture(t *testing.T) (*Service, *db.DB, string, int64) {
+	t.Helper()
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	vaultRoot := filepath.Join(t.TempDir(), "vault")
+	svc, err := NewService(d, vaultRoot, Options{
+		ImportanceThreshold: 2, MinOccurrences: 2, AgeDays: 30, UseLLM: false,
+	}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := db.NewSourceRepo(d).Create(context.Background(), db.NewSource{
+		Name: "HN", Type: db.SourceHackerNews, URL: "u",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc, d, vaultRoot, src.ID
+}
+
+// classifiedArticle inserts an article already carrying a classification.
+func classifiedArticle(t *testing.T, d *db.DB, srcID int64, title string, tags []string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	repo := db.NewArticleRepo(d)
+	id, _, err := repo.Upsert(ctx, db.NewArticle{
+		SourceID: srcID, GUID: title, Title: title, Status: db.StatusUnread,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ApplyClassification(ctx, id, "models", "summary", tags, nil, 3); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// An electron created in one run and extended in the next must have its vault
+// file rewritten — Obsidian reads the file, not the database row.
+func TestElectronFileFollowsUpdates(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "First rag piece", []string{"rag"})
+	classifiedArticle(t, d, srcID, "Second rag piece", []string{"rag"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	classifiedArticle(t, d, srcID, "Third rag piece", []string{"rag"})
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ElectronsUpdated != 1 {
+		t.Fatalf("electrons updated = %d, want 1", res.ElectronsUpdated)
+	}
+
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "rag.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(onDisk), "[["); got != 3 {
+		t.Fatalf("electron file has %d backlinks, want 3:\n%s", got, onDisk)
+	}
+	note, err := db.NewKBRepo(d).GetBySlug(ctx, "rag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(note.Wikilinks) != 3 {
+		t.Fatalf("note wikilinks = %v, want 3", note.Wikilinks)
+	}
+}
+
+// An article titled exactly like a concept must not lose its note to that
+// concept's electron.
+func TestConceptSlugNeverOverwritesAtom(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "Mamba", []string{"mamba"})
+	classifiedArticle(t, d, srcID, "State space models are back", []string{"mamba"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := db.NewKBRepo(d)
+	electron, err := repo.GetBySlug(ctx, "mamba")
+	if err != nil {
+		t.Fatalf("electron: %v", err)
+	}
+	if electron.Type != db.NoteElectron {
+		t.Fatalf("slug mamba owned by %s, want electron", electron.Type)
+	}
+
+	atoms, err := repo.List(ctx, db.NoteAtom, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titled *db.KBNote
+	for _, n := range atoms {
+		if n.Title == "Mamba" {
+			titled = n
+		}
+	}
+	if titled == nil {
+		t.Fatal("atom for the article titled Mamba is gone")
+	}
+	if !strings.Contains(titled.Content, "type: atom") {
+		t.Fatalf("atom content was overwritten:\n%s", titled.Content)
+	}
+	// Both notes exist as separate files, each in its own vault folder.
+	if _, err := os.Stat(filepath.Join(vaultRoot, "01-Electrons", "mamba.md")); err != nil {
+		t.Fatalf("electron file: %v", err)
+	}
+	if _, err := os.Stat(titled.Path); err != nil {
+		t.Fatalf("atom file: %v", err)
+	}
+	// Its sibling links to the electron, not to the same-named atom.
+	sibling, err := repo.GetBySlug(ctx, "state-space-models-are-back")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sibling.Wikilinks) != 1 || sibling.Wikilinks[0] != "mamba" {
+		t.Fatalf("sibling links = %v, want [mamba]", sibling.Wikilinks)
+	}
+}
+
+// ArticlesSkipped counts what did NOT become an atom.
+func TestBuildResultSkippedCount(t *testing.T) {
+	svc, d, _, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "One", nil)
+	classifiedArticle(t, d, srcID, "Two", nil)
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.AtomsCreated != 2 || res.ArticlesSkipped != 0 {
+		t.Fatalf("res = %+v, want 2 atoms and 0 skipped", res)
+	}
+}

@@ -3,8 +3,10 @@ package kb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
@@ -28,7 +30,9 @@ type BuildResult struct {
 	ElectronsCreated int `json:"electrons_created"`
 	ElectronsUpdated int `json:"electrons_updated"`
 	MoleculesCreated int `json:"molecules_created"`
-	ArticlesSkipped  int `json:"articles_skipped"`
+	// ArticlesSkipped counts articles that were selected for the graph but did
+	// not produce an atom (a vault write or insert failed).
+	ArticlesSkipped int `json:"articles_skipped"`
 }
 
 // Service maintains the knowledge graph.
@@ -61,8 +65,10 @@ func NewService(database *db.DB, vaultRoot string, opts Options, prov llm.Provid
 	return &Service{db: database, vault: vault, opts: opts, prov: prov, logger: logger}, nil
 }
 
+// conceptAgg accumulates, for one concept, the atoms citing it during a build.
 type conceptAgg struct {
 	Name string
+	Slug string // slug its electron uses; may differ from the raw concept slug
 	Refs []atomRef
 }
 
@@ -78,64 +84,72 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kb: list articles: %w", err)
 	}
-	res.ArticlesSkipped = len(articles)
 
-	concepts := map[string]*conceptAgg{}
-
+	// Pass 1: collect the concepts of the whole batch and reserve the slug each
+	// electron will use, before any atom is written. An article titled exactly
+	// like a concept ("Mamba") would otherwise take that slug and get its note
+	// overwritten when the electron is upserted.
+	concepts := map[string]*conceptAgg{} // keyed by the raw concept slug
 	for _, a := range articles {
-		slugs := s.conceptSlugs(a)
-		content := BuildAtom(a, slugs)
-		slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(a.Title)))
-
-		path, err := s.vault.Write("atom", slug, content)
-		if err != nil {
-			return nil, err
-		}
-		fm, _ := json.Marshal(map[string]any{
-			"type": "atom", "category": a.Category, "source": a.SourceName,
-			"url": a.URL, "rating": a.Importance, "tags": a.Tags,
-		})
-		note, err := kbRepo.Create(ctx, db.NewKBNote{
-			Type: db.NoteAtom, Title: a.Title, Slug: slug, Path: path,
-			Frontmatter: string(fm), Content: content,
-			Tags: append([]string{"atom", "ai"}, a.Tags...), Wikilinks: slugs,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("kb: create atom: %w", err)
-		}
-		if err := ingestRepo.Record(ctx, "article", fmt.Sprintf("%d", a.ID), note.ID, "processed"); err != nil {
-			return nil, err
-		}
-
-		for _, c := range slugs {
-			agg, ok := concepts[c]
-			if !ok {
-				agg = &conceptAgg{Name: s.conceptName(a, c)}
-				concepts[c] = agg
+		for _, raw := range s.conceptSlugs(a) {
+			if _, ok := concepts[raw]; !ok {
+				concepts[raw] = &conceptAgg{Name: s.conceptName(a, raw)}
 			}
+		}
+	}
+	rawSlugs := make([]string, 0, len(concepts))
+	for raw := range concepts {
+		rawSlugs = append(rawSlugs, raw)
+	}
+	sort.Strings(rawSlugs)
+	reserved := make(map[string]bool, len(concepts))
+	for _, raw := range rawSlugs {
+		agg := concepts[raw]
+		agg.Slug = s.electronSlugFor(ctx, kbRepo, raw, reserved)
+		reserved[agg.Slug] = true
+	}
+
+	// Pass 2: one atom per article, linking to the resolved concept slugs.
+	for _, a := range articles {
+		raws := s.conceptSlugs(a)
+		links := make([]string, 0, len(raws))
+		for _, raw := range raws {
+			links = appendUnique(links, concepts[raw].Slug)
+		}
+		sort.Strings(links)
+
+		slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(a.Title)), reserved)
+		if _, err := s.writeAtom(ctx, kbRepo, ingestRepo, a, slug, links); err != nil {
+			// One unwritable article must not abort the whole run.
+			if s.logger != nil {
+				s.logger.Printf("kb: skipping article #%d: %v", a.ID, err)
+			}
+			res.ArticlesSkipped++
+			continue
+		}
+
+		for _, raw := range raws {
+			agg := concepts[raw]
 			agg.Refs = append(agg.Refs, atomRef{Slug: slug, Title: a.Title})
 		}
 		res.AtomsCreated++
 	}
 
-	// Electrons for concepts cited by enough atoms.
-	names := make([]string, 0, len(concepts))
-	for k := range concepts {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	for _, slug := range names {
-		agg := concepts[slug]
-		if len(agg.Refs) < s.opts.MinOccurrences {
+	// Electrons for concepts cited by enough atoms. The threshold gates creation
+	// only: once a concept has its own note, every later mention must reach it.
+	for _, raw := range rawSlugs {
+		agg := concepts[raw]
+		if len(agg.Refs) == 0 {
 			continue
 		}
-		created, err := s.upsertElectron(ctx, kbRepo, slug, agg)
+		outcome, err := s.upsertElectron(ctx, kbRepo, agg.Slug, agg)
 		if err != nil {
 			return nil, err
 		}
-		if created {
+		switch outcome {
+		case electronCreated:
 			res.ElectronsCreated++
-		} else {
+		case electronUpdated:
 			res.ElectronsUpdated++
 		}
 	}
@@ -146,12 +160,60 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	return res, nil
 }
 
-// upsertElectron creates an electron if missing, or recomputes its content from
-// every atom that links to it.
-func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug string, agg *conceptAgg) (created bool, err error) {
+// writeAtom renders an article as an Atom note, writes it to the vault, mirrors
+// it in SQLite and marks the article ingested. A failed insert removes the file
+// again so the vault never keeps a note the database does not know about.
+func (s *Service) writeAtom(ctx context.Context, kbRepo *db.KBRepo, ingestRepo *db.IngestRepo, a *db.Article, slug string, links []string) (*db.KBNote, error) {
+	content := BuildAtom(a, links)
+	path, err := s.vault.Write("atom", slug, content)
+	if err != nil {
+		return nil, err
+	}
+	fm, _ := json.Marshal(map[string]any{
+		"type": "atom", "category": a.Category, "source": a.SourceName,
+		"url": a.URL, "rating": a.Importance, "tags": a.Tags,
+	})
+	note, err := kbRepo.Create(ctx, db.NewKBNote{
+		Type: db.NoteAtom, Title: a.Title, Slug: slug, Path: path,
+		Frontmatter: string(fm), Content: content,
+		Tags: append([]string{"atom", "ai"}, a.Tags...), Wikilinks: links,
+	})
+	if err != nil {
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("kb: create atom: %w", err)
+	}
+	if err := ingestRepo.Record(ctx, "article", fmt.Sprintf("%d", a.ID), note.ID, "processed"); err != nil {
+		return nil, err
+	}
+	return note, nil
+}
+
+// electronOutcome reports what upsertElectron did with one concept.
+type electronOutcome int
+
+const (
+	electronCreated electronOutcome = iota
+	electronUpdated
+	electronSkipped
+)
+
+// upsertElectron creates an electron once a concept is cited by MinOccurrences
+// atoms, or recomputes an existing one's content from every atom that links to
+// it. A slug owned by a note of another type is left untouched — overwriting it
+// would destroy that note.
+func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug string, agg *conceptAgg) (electronOutcome, error) {
 	existing, err := repo.GetBySlug(ctx, slug)
-	if err != nil && err != db.ErrNotFound {
-		return false, err
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return electronSkipped, err
+	}
+	if existing != nil && existing.Type != db.NoteElectron {
+		if s.logger != nil {
+			s.logger.Printf("kb: electron %q skipped, slug owned by %s note #%d", slug, existing.Type, existing.ID)
+		}
+		return electronSkipped, nil
+	}
+	if existing == nil && len(agg.Refs) < s.opts.MinOccurrences {
+		return electronSkipped, nil
 	}
 
 	sources := make([]atomRef, 0, len(agg.Refs))
@@ -159,7 +221,7 @@ func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug stri
 		// Recompute from all current incoming atoms, not just this run's.
 		incoming, err := repo.Incoming(ctx, slug, 500)
 		if err != nil {
-			return false, err
+			return electronSkipped, err
 		}
 		for _, n := range incoming {
 			sources = append(sources, atomRef{Slug: n.Slug, Title: n.Title})
@@ -171,37 +233,37 @@ func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug stri
 	content := BuildElectron(agg.Name, sources)
 	fm, _ := json.Marshal(map[string]any{"type": "electron", "name": agg.Name, "tags": []string{"ai", "concept"}})
 	tags := []string{"ai", "concept"}
+	links := make([]string, 0, len(sources))
+	for _, src := range sources {
+		links = append(links, src.Slug)
+	}
+
+	// The vault file is rewritten on every upsert: it is what the user reads in
+	// Obsidian, so it must carry the same backlinks as the database row.
+	path, err := s.vault.Write("electron", slug, content)
+	if err != nil {
+		return electronSkipped, err
+	}
 
 	if existing != nil {
 		existing.Content = content
 		existing.Frontmatter = string(fm)
 		existing.Tags = tags
-		existing.Wikilinks = nil
-		for _, s := range sources {
-			existing.Wikilinks = append(existing.Wikilinks, s.Slug)
-		}
+		existing.Wikilinks = links
 		if err := repo.Update(ctx, existing); err != nil {
-			return false, err
+			return electronSkipped, err
 		}
-		return false, nil
+		return electronUpdated, nil
 	}
 
-	path, err := s.vault.Write("electron", slug, content)
-	if err != nil {
-		return false, err
-	}
-	links := make([]string, 0, len(sources))
-	for _, s := range sources {
-		links = append(links, s.Slug)
-	}
-	_, err = repo.Create(ctx, db.NewKBNote{
+	if _, err := repo.Create(ctx, db.NewKBNote{
 		Type: db.NoteElectron, Title: agg.Name, Slug: slug, Path: path,
 		Frontmatter: string(fm), Content: content, Tags: tags, Wikilinks: links,
-	})
-	if err != nil {
-		return false, err
+	}); err != nil {
+		_ = os.Remove(path)
+		return electronSkipped, err
 	}
-	return true, nil
+	return electronCreated, nil
 }
 
 // conceptSlugs returns the electron slugs an article links out to.
@@ -249,16 +311,54 @@ func (s *Service) conceptName(a *db.Article, slug string) string {
 	return slug
 }
 
-func (s *Service) uniqueSlug(ctx context.Context, repo *db.KBRepo, base string) string {
-	slug := base
-	for i := 2; ; i++ {
-		if _, err := repo.GetBySlug(ctx, slug); err == db.ErrNotFound {
-			return slug
-		} else if err != nil {
-			return base
+// uniqueSlug returns a free slug derived from base, avoiding both the slugs
+// already in the database and the ones this run reserved for electrons.
+func (s *Service) uniqueSlug(ctx context.Context, repo *db.KBRepo, base string, reserved map[string]bool) string {
+	const maxAttempts = 50
+	for i := 1; i <= maxAttempts; i++ {
+		slug := base
+		if i > 1 {
+			slug = fmt.Sprintf("%s-%d", base, i)
 		}
-		slug = fmt.Sprintf("%s-%d", base, i)
+		if reserved[slug] {
+			continue
+		}
+		if _, err := repo.GetBySlug(ctx, slug); errors.Is(err, db.ErrNotFound) {
+			return slug
+		}
 	}
+	return fmt.Sprintf("%s-%d", base, maxAttempts+1)
+}
+
+// electronSlugFor picks the slug an electron for concept may live at. The plain
+// concept slug is preferred so [[wikilinks]] stay readable, but a slug already
+// owned by an atom or a molecule is never reused — the electron is suffixed
+// instead. The rule is deterministic, so later runs resolve the same concept to
+// the same slug.
+func (s *Service) electronSlugFor(ctx context.Context, repo *db.KBRepo, concept string, reserved map[string]bool) string {
+	candidates := []string{concept, concept + "-concept"}
+	for i := 2; i <= 10; i++ {
+		candidates = append(candidates, fmt.Sprintf("%s-concept-%d", concept, i))
+	}
+	for _, cand := range candidates {
+		if reserved[cand] {
+			continue
+		}
+		n, err := repo.GetBySlug(ctx, cand)
+		if errors.Is(err, db.ErrNotFound) || (err == nil && n.Type == db.NoteElectron) {
+			return cand
+		}
+	}
+	return concept + "-concept"
+}
+
+func appendUnique(list []string, s string) []string {
+	for _, existing := range list {
+		if existing == s {
+			return list
+		}
+	}
+	return append(list, s)
 }
 
 // EnsureArticleNote creates (if missing) an Atom note for a single article,
@@ -279,29 +379,17 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 		return nil, err
 	}
 
-	slugs := s.conceptSlugs(art)
-	content := BuildAtom(art, slugs)
-	slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(art.Title)))
-	path, err := s.vault.Write("atom", slug, content)
-	if err != nil {
-		return nil, err
+	reserved := map[string]bool{}
+	var links []string
+	for _, raw := range s.conceptSlugs(art) {
+		resolved := s.electronSlugFor(ctx, kbRepo, raw, reserved)
+		reserved[resolved] = true
+		links = appendUnique(links, resolved)
 	}
-	fm, _ := json.Marshal(map[string]any{
-		"type": "atom", "category": art.Category, "source": art.SourceName,
-		"url": art.URL, "rating": art.Importance, "tags": art.Tags,
-	})
-	note, err := kbRepo.Create(ctx, db.NewKBNote{
-		Type: db.NoteAtom, Title: art.Title, Slug: slug, Path: path,
-		Frontmatter: string(fm), Content: content,
-		Tags: append([]string{"atom", "ai"}, art.Tags...), Wikilinks: slugs,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := ingestRepo.Record(ctx, "article", refID, note.ID, "processed"); err != nil {
-		return nil, err
-	}
-	return note, nil
+	sort.Strings(links)
+
+	slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(art.Title)), reserved)
+	return s.writeAtom(ctx, kbRepo, ingestRepo, art, slug, links)
 }
 
 // Synthesize creates (or updates) a Molecule note summarizing a category by
