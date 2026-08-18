@@ -14,7 +14,7 @@ import type {
   StatusDTO,
 } from "./types";
 import { SourceForm } from "./components/SourceForm";
-import { ArticleList, type ViewFilter } from "./components/ArticleList";
+import { ArticleList } from "./components/ArticleList";
 import { Reader } from "./components/Reader";
 import { DigestView } from "./components/DigestView";
 import { SearchPanel } from "./components/SearchPanel";
@@ -55,10 +55,12 @@ export default function App() {
   const [articles, setArticles] = useState<ArticleDTO[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loadingList, setLoadingList] = useState(false);
-  const [view, setView] = useState<ViewFilter>("unread");
+  const [archived, setArchived] = useState(false); // false = Active (unread+read)
+  const [starredFilter, setStarredFilter] = useState<boolean | null>(null); // null = any
+  const [readFilter, setReadFilter] = useState<"all" | "unread" | "read">("all"); // sub-filter of Active
   const [filterSource, setFilterSource] = useState<number | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
-  const [filterImportance, setFilterImportance] = useState(0); // 0 = any
+  const [importanceExact, setImportanceExact] = useState<number | null>(null); // null = any, 0-3
   const [filterUnclassified, setFilterUnclassified] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
@@ -85,6 +87,7 @@ export default function App() {
   const [mode, setMode] = useState<"news" | "vault">("news");
   const [vaultStage, setVaultStage] = useState<StageKey>("atom");
   const [contextOpen, setContextOpen] = useState(false);
+  const [noteRevision, setNoteRevision] = useState(0); // bumps when a note is materialized
   const [listWidth, setListWidth] = useState(340);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [noteLinks, setNoteLinks] = useState<LinkItem[] | null>(null);
@@ -153,10 +156,18 @@ export default function App() {
     setLoadingList(true);
     try {
       const list = await api.listArticles({
-        status: view,
         limit: 400,
+        ...(starredFilter === true
+          ? { starred: true }
+          : archived
+            ? { status: "archived" }
+            : readFilter === "unread"
+              ? { status: "unread" }
+              : readFilter === "read"
+                ? { status: "read" }
+                : { unarchived: true }),
         ...(filterCategory ? { category: filterCategory } : {}),
-        ...(filterImportance > 0 ? { importanceMin: filterImportance } : {}),
+        ...(importanceExact != null ? { importanceExact } : {}),
         ...(filterUnclassified ? { unclassified: true } : {}),
         ...(filterQuery ? { query: filterQuery } : {}),
         ...opts,
@@ -168,7 +179,7 @@ export default function App() {
     } finally {
       setLoadingList(false);
     }
-  }, [view, notify, filterCategory, filterImportance, filterUnclassified, filterQuery]);
+  }, [notify, archived, starredFilter, readFilter, filterCategory, importanceExact, filterUnclassified, filterQuery]);
 
   const reloadAll = useCallback(() => {
     void loadSources();
@@ -176,7 +187,7 @@ export default function App() {
     void loadStatus();
   }, [loadSources, loadArticles, loadStatus]);
 
-  // load once on mount; view changes reload articles via the effect below.
+  // load once on mount; the list reloads whenever its filter state changes.
   useEffect(() => {
     void loadSources();
     void loadArticles();
@@ -184,7 +195,7 @@ export default function App() {
     void loadDigestHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { void loadArticles(); }, [view, loadArticles]);
+  useEffect(() => { void loadArticles(); }, [loadArticles]);
 
   // Poll the jobs registry to drive the topbar "running" indicator.
   useEffect(() => {
@@ -216,14 +227,21 @@ export default function App() {
     await loadArticles(id ? { sourceId: id } : {});
   }, [loadArticles]);
 
-  const switchView = useCallback(async (v: ViewFilter) => {
-    setView(v);
+  const goNews = useCallback(() => {
     setDigestOpen(false);
     setPanel("none");
     setMode("news");
     setNoteReader(null);
     setPaneFocus("list");
   }, []);
+
+  // Active (unread+read) vs Archived, with a unread/read sub-filter on Active.
+  const goActive = useCallback(() => { setArchived(false); setStarredFilter(null); setReadFilter("all"); goNews(); }, [goNews]);
+  const goUnread = useCallback(() => { setArchived(false); setStarredFilter(null); setReadFilter("unread"); goNews(); }, [goNews]);
+  const goRead = useCallback(() => { setArchived(false); setStarredFilter(null); setReadFilter("read"); goNews(); }, [goNews]);
+  const goArchived = useCallback(() => { setArchived(true); setStarredFilter(null); goNews(); }, [goNews]);
+  // Starred view shows starred articles regardless of read/archived status.
+  const toggleStarred = useCallback(() => { setArchived(false); setStarredFilter((v) => (v === true ? null : true)); }, []);
 
   // ---- article actions ----
   // apply an async action to an explicit set of article ids.
@@ -360,10 +378,10 @@ export default function App() {
     const batch = articles.slice(selectedIndex, selectedIndex + Math.max(1, count));
     const targets = batch.filter((a) => a.status !== "archived");
     if (targets.length === 0) return;
-    const starring = targets[0].status !== "starred";
+    const starring = !targets[0].starred;
     void (async () => {
       try {
-        await Promise.all(targets.map((a) => api.setArticleStatus(a.id, starring ? "starred" : "unread")));
+        await Promise.all(targets.map((a) => api.setArticleStarred(a.id, starring)));
         notify(starring ? `Starred (${targets.length})` : `Unstarred (${targets.length})`);
         void loadArticles();
       } catch (e) { notify(String(e)); }
@@ -427,12 +445,10 @@ export default function App() {
     setRangeStatus("");
   }, []);
 
-  // classify the bulk selection as a background job (priority over the queue).
-  const classifySelected = useCallback(() => {
-    if (bulkIds.length === 0) return;
-    const ids = bulkIds;
+  // classify an explicit set of articles as a background job.
+  const classifyIds = useCallback((ids: number[]) => {
+    if (ids.length === 0) return;
     setJobsOpen(true);
-    exitBulk();
     void (async () => {
       try {
         const r = await api.classifyArticles(ids);
@@ -445,21 +461,37 @@ export default function App() {
         void refreshReader();
       } catch (e) { notify(String(e)); }
     })();
-  }, [bulkIds, exitBulk, notify, loadArticles, loadStatus, refreshReader]);
+  }, [notify, loadArticles, loadStatus, refreshReader]);
+
+  // classify the bulk selection (priority over the queue).
+  const classifySelected = useCallback(() => {
+    if (bulkIds.length === 0) return;
+    const ids = bulkIds;
+    exitBulk();
+    classifyIds(ids);
+  }, [bulkIds, exitBulk, classifyIds]);
+
+  // materialize knowledge notes for a set of articles (atom note each).
+  const materializeArticles = useCallback((ids: number[]) => {
+    if (ids.length === 0) return;
+    void (async () => {
+      try {
+        await Promise.all(ids.map((id) => api.ensureArticleNote(id)));
+        notify(ids.length === 1 ? "Note created — run :kb build for concepts" : `${ids.length} note(s) created — run :kb build for concepts`);
+        setNoteRevision((r) => r + 1);
+        setGraphRefresh((r) => r + 1);
+        void loadStatus();
+      } catch (e) { notify(String(e)); }
+    })();
+  }, [notify, loadStatus]);
 
   // materialize knowledge notes for the bulk selection (kb build for these).
   const processSelected = useCallback(() => {
     if (bulkIds.length === 0) return;
     const ids = bulkIds;
     exitBulk();
-    void (async () => {
-      try {
-        await Promise.all(ids.map((id) => api.ensureArticleNote(id)));
-        notify(`${ids.length} note(s) created`);
-        void loadStatus();
-      } catch (e) { notify(String(e)); }
-    })();
-  }, [bulkIds, exitBulk, notify, loadStatus]);
+    materializeArticles(ids);
+  }, [bulkIds, exitBulk, materializeArticles]);
 
   // summarize the bulk selection (each article gets its own background job).
   const summarizeSelected = useCallback(() => {
@@ -488,7 +520,7 @@ export default function App() {
       } else {
         void applyToIds(bulkIds, async (a) => {
           if (a.status === "archived") return;
-          await api.setArticleStatus(a.id, a.status === "starred" ? "unread" : "starred");
+          await api.setArticleStarred(a.id, !a.starred);
         }, () => void loadArticles());
       }
       exitBulk();
@@ -497,24 +529,37 @@ export default function App() {
     return false;
   }, [bulk, bulkIds, archiveIds, applyToIds, exitBulk, loadArticles]);
 
-  const toggleStar = useCallback(async () => {
-    if (!selected) return;
-    const next = selected.status === "starred" ? "unread" : "starred";    await api.setArticleStatus(selected.id, next);
-    setArticles((prev) => prev.map((a) => (a.id === selected.id ? { ...a, status: next } : a)));
-    notify(next === "starred" ? "Starred" : "Unstarred");
-  }, [selected, notify]);
+  const starReader = useCallback(async () => {
+    if (!reader) return;
+    const next = !reader.starred;
+    await api.setArticleStarred(reader.id, next);
+    setReader((r) => (r && r.id === reader.id ? { ...r, starred: next } : r));
+    setArticles((prev) => prev.map((a) => (a.id === reader.id ? { ...a, starred: next } : a)));
+    notify(next ? "Starred" : "Unstarred");
+  }, [reader, notify]);
+
+  const archiveReader = useCallback(async () => {
+    if (!reader) return;
+    const toArchived = reader.status !== "archived";
+    await api.setArticleStatus(reader.id, toArchived ? "archived" : "unread");
+    const status = toArchived ? "archived" : "unread";
+    setReader((r) => (r && r.id === reader.id ? { ...r, status } : r));
+    setArticles((prev) => prev.map((a) => (a.id === reader.id ? { ...a, status } : a)));
+    notify(toArchived ? "Archived" : "Unarchived");
+    void loadStatus();
+  }, [reader, notify, loadStatus]);
 
   const summarize = useCallback(async () => {
-    if (!selected || busyRef.current) return;
+    if (!reader || busyRef.current) return;
     busyRef.current = true; setSummarizing(true);
     try {
-      const updated = await api.summarizeArticle(selected.id);
+      const updated = await api.summarizeArticle(reader.id);
       setReader(updated);
       setArticles((prev) => prev.map((a) => (a.id === updated.id ? { ...a, summary: updated.summary } : a)));
       notify("Summary generated");
     } catch (e) { notify(String(e)); }
     finally { busyRef.current = false; setSummarizing(false); }
-  }, [selected, notify]);
+  }, [reader, notify]);
 
   const openExternal = useCallback(() => {
     const url = reader?.url || selected?.url;
@@ -657,13 +702,9 @@ export default function App() {
   }, [selected, openGraph, notify]);
 
   // create a note for a specific article (from the context pane).
-  const createNoteForArticle = useCallback(async (articleId: number) => {
-    try {
-      await api.ensureArticleNote(articleId);
-      notify("Note created");
-      setGraphRefresh((r) => r + 1);
-    } catch (e) { notify(String(e)); }
-  }, [notify]);
+  const createNoteForArticle = useCallback((articleId: number) => {
+    materializeArticles([articleId]);
+  }, [materializeArticles]);
 
   // open the graph focused on a specific note (from the context pane).
   const openGraphForNote = useCallback((noteId: number | null) => {
@@ -793,28 +834,38 @@ export default function App() {
       }
 
       if (k === "Escape") {
-        if (noteLinks) { setNoteLinks(null); return; }
-        if (bulk) { exitBulk(); return; }
-        if (paletteOpen) { setPaletteOpen(false); return; }
-        if (helpOpen) { setHelpOpen(false); return; }
-        if (themeModalOpen) { setThemeModalOpen(false); return; }
-        if (sourcePickerOpen) { setSourcePickerOpen(false); return; }
-        if (jobsOpen) { setJobsOpen(false); return; }
-        if (categoryPickerOpen) { setCategoryPickerOpen(false); return; }
-        if (flowOpen) { setFlowOpen(false); return; }
-        if (logsOpen) { setLogsOpen(false); return; }
-        if (rulesPickerOpen) { setRulesPickerOpen(false); return; }
-        if (ruleForm) { setRuleForm(null); return; }
-        if (synthPrompt) { setSynthPrompt(false); return; }
-        if (urlPrompt) { setUrlPrompt(false); return; }
-        if (statusOpen) { setStatusOpen(false); return; }
-        if (sourceForm) { setSourceForm(null); return; }
-        if (deleteSource) { setDeleteSource(null); return; }
-        if (panel !== "none") { setPanel("none"); return; }
-        if (digestOpen) { setDigestOpen(false); return; }
-        if (noteReader) { setNoteReader(null); return; }
-        if (paneFocus === "reader") { setPaneFocus("list"); return; }
-        if (paneFocus === "context") { setPaneFocus("list"); return; }
+        // Close the topmost in-app layer first. Only when something is actually
+        // closed do we consume the key (preventDefault) — otherwise a bare
+        // Escape (nothing open) falls through to the native macOS fullscreen
+        // exit, so the second Escape "un-maximizes".
+        const closed =
+          noteLinks ? (setNoteLinks(null), true) :
+          bulk ? (exitBulk(), true) :
+          paletteOpen ? (setPaletteOpen(false), true) :
+          helpOpen ? (setHelpOpen(false), true) :
+          themeModalOpen ? (setThemeModalOpen(false), true) :
+          sourcePickerOpen ? (setSourcePickerOpen(false), true) :
+          jobsOpen ? (setJobsOpen(false), true) :
+          categoryPickerOpen ? (setCategoryPickerOpen(false), true) :
+          flowOpen ? (setFlowOpen(false), true) :
+          logsOpen ? (setLogsOpen(false), true) :
+          rulesPickerOpen ? (setRulesPickerOpen(false), true) :
+          ruleForm ? (setRuleForm(null), true) :
+          synthPrompt ? (setSynthPrompt(false), true) :
+          urlPrompt ? (setUrlPrompt(false), true) :
+          statusOpen ? (setStatusOpen(false), true) :
+          sourceForm ? (setSourceForm(null), true) :
+          deleteSource ? (setDeleteSource(null), true) :
+          panel !== "none" ? (setPanel("none"), true) :
+          digestOpen ? (setDigestOpen(false), true) :
+          noteReader ? (setNoteReader(null), true) :
+          paneFocus === "reader" ? (setPaneFocus("list"), true) :
+          paneFocus === "context" ? (setPaneFocus("list"), true) :
+          false;
+        if (closed) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         return;
       }
       if (typing) return; // inputs handle their own keys
@@ -931,6 +982,8 @@ export default function App() {
           return;
         }
         if (k === "O" || k === "o") { openExternal(); return; }
+        if (k === "c") { if (selected) classifyIds([selected.id]); return; }
+        if (k === "p") { if (selected) materializeArticles([selected.id]); return; }
         // ←/→ cycle the category filter through All → models → … → general.
         if (k === "ArrowRight") { setFilterCategory((c) => { const seq = [null, ...CATEGORIES]; const i = seq.indexOf(c); return seq[(i + 1) % seq.length]; }); return; }
         if (k === "ArrowLeft") { setFilterCategory((c) => { const seq = [null, ...CATEGORIES]; const i = seq.indexOf(c); return seq[(i - 1 + seq.length) % seq.length]; }); return; }
@@ -948,20 +1001,20 @@ export default function App() {
       if (k === "z") { setJobsOpen(true); return; }
       if (k === ";") { setCategoryPickerOpen(true); return; }
       if (k === "/") { document.querySelector<HTMLInputElement>(".list-search input")?.focus(); return; }
-      if (k === "c") { setContextOpen((v) => !v); return; }
-      if (k === "[") { setFilterImportance((v) => (v + 3) % 4); return; }
-      if (k === "]") { setFilterImportance((v) => (v + 1) % 4); return; }
+      if (k === "C") { setContextOpen((v) => !v); return; }
+      if (k === "[") { setImportanceExact((v) => { const seq = [null, 0, 1, 2, 3]; const i = seq.indexOf(v); return seq[(i - 1 + seq.length) % seq.length]; }); return; }
+      if (k === "]") { setImportanceExact((v) => { const seq = [null, 0, 1, 2, 3]; const i = seq.indexOf(v); return seq[(i + 1) % seq.length]; }); return; }
       if (k === "d") { void generateDigest(); return; }
       if (k === ":") { setPaletteOpen(true); return; }
       if (k === "?") { setHelpOpen(true); return; }
-      if (k === "u" && !e.ctrlKey) { void switchView("unread"); return; }
-      if (k === "r") { void switchView("read"); return; }
-      if (k === "x") { void switchView("archived"); return; }
-      if (k === "*") { void switchView("starred"); return; }
+      if (k === "u" && !e.ctrlKey) { goUnread(); return; }
+      if (k === "r") { goRead(); return; }
+      if (k === "x") { goArchived(); return; }
+      if (k === "*") { toggleStarred(); return; }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, openExternal, openGraph, switchView, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, toggleBulkId, bulkAction, classifySelected, processSelected, summarizeSelected, executeRange, startRange, completeRange, appendRangeDigit, cancelRange, zoomBy, zoomReset]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, openExternal, openGraph, goUnread, goRead, goArchived, toggleStarred, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, toggleBulkId, bulkAction, classifyIds, classifySelected, materializeArticles, processSelected, summarizeSelected, executeRange, startRange, completeRange, appendRangeDigit, cancelRange, zoomBy, zoomReset]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -1069,9 +1122,9 @@ export default function App() {
                 ✕ {filterCategory}
               </button>
             )}
-            {filterImportance > 0 && (
-              <button className="pill filter" onClick={() => setFilterImportance(0)}>
-                ✕ ≥{filterImportance}★
+            {importanceExact != null && (
+              <button className="pill filter" onClick={() => setImportanceExact(null)}>
+                ✕ {importanceExact === 0 ? "0★" : `=${importanceExact}★`}
               </button>
             )}
             {filterUnclassified && (
@@ -1106,18 +1159,23 @@ export default function App() {
               articles={articles}
               selectedIndex={selectedIndex}
               loading={loadingList}
-              view={view}
+              archived={archived}
+              starredFilter={starredFilter}
               hasSources={sources.length > 0}
               bulk={bulk}
               bulkSel={bulkSel}
               unreadCount={status?.unreadArticles ?? 0}
               filterCategory={filterCategory}
-              filterImportance={filterImportance}
+              importanceExact={importanceExact}
               filterUnclassified={filterUnclassified}
               filterQuery={filterQuery}
-              onView={(v) => void switchView(v)}
+              onActive={goActive}
+              onArchived={goArchived}
+              onStarred={toggleStarred}
+              readFilter={readFilter}
+              onReadFilter={setReadFilter}
               onCategory={(c) => setFilterCategory(c)}
-              onImportance={(n) => setFilterImportance(n)}
+              onImportance={(n) => setImportanceExact(n)}
               onUnclassified={(v) => setFilterUnclassified(v)}
               onQuery={(q) => setFilterQuery(q)}
               onToggleBulk={toggleBulkId}
@@ -1196,8 +1254,8 @@ export default function App() {
               contentLoading={contentLoading}
               llmAvailable={!!status?.llmEnabled && !!status?.llmReachable}
               onSummarize={summarize}
-              onArchive={() => archiveRange(1)}
-              onStar={() => void toggleStar()}
+              onArchive={() => void archiveReader()}
+              onStar={() => void starReader()}
               onOpenLink={openExternal}
             />
           )}
@@ -1209,13 +1267,14 @@ export default function App() {
               article={reader}
               note={noteReader}
               active={paneFocus === "context"}
+              revision={noteRevision}
               onOpenNote={(id) => void openNote(id)}
               onCreateNote={createNoteForArticle}
               onOpenGraph={openGraphForNote}
             />
           </section>
         ) : (
-          <div className="context-tab" onClick={() => setContextOpen(true)} title="Context (c)">ctx</div>
+          <div className="context-tab" onClick={() => setContextOpen(true)} title="Context (C)">ctx</div>
         )}
       </main>
 

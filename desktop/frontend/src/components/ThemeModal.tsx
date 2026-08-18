@@ -19,7 +19,7 @@ export function ThemeModal({ value, onChange, onClose }: Props) {
       if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.min(f + 1, THEMES.length - 1)); }
       else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.max(f - 1, 0)); }
       else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); onChange(THEMES[focus].name); onClose(); }
-      else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

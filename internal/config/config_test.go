@@ -21,6 +21,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Classify.BatchSize != 20 {
 		t.Fatalf("batch size = %d, want 20", cfg.Classify.BatchSize)
 	}
+	if cfg.LLM.Language != "en" {
+		t.Fatalf("llm.language = %q, want en", cfg.LLM.Language)
+	}
 }
 
 func TestLenientIntString(t *testing.T) {
@@ -58,6 +61,24 @@ func TestLoadConfigMissingFieldsDefaulted(t *testing.T) {
 	}
 	if cfg.LLM.Model != "llama3.2" {
 		t.Fatalf("model should be defaulted, got %q", cfg.LLM.Model)
+	}
+	if cfg.LLM.Language != "en" {
+		t.Fatalf("language should be defaulted to en, got %q", cfg.LLM.Language)
+	}
+}
+
+func TestLoadConfigCustomLanguage(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"llm":{"language":"es"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.LLM.Language != "es" {
+		t.Fatalf("language = %q, want es", cfg.LLM.Language)
 	}
 }
 

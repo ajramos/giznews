@@ -26,7 +26,7 @@ export function SearchPanel({ query, onQuery, searching, results, focus, onFocus
             if (e.key === "ArrowDown") { e.preventDefault(); onFocus(Math.min(focus + 1, results.length - 1)); }
             else if (e.key === "ArrowUp") { e.preventDefault(); onFocus(Math.max(focus - 1, 0)); }
             else if (e.key === "Enter") { if (results[focus]) onOpen(results[focus]); }
-            else if (e.key === "Escape") onClose();
+            else if (e.key === "Escape") { e.preventDefault(); onClose(); }
           }}
           placeholder="e.g. watermarking, agentic workflows, LoRA…"
         />

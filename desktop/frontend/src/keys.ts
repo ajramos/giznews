@@ -2,7 +2,7 @@
 // Motions: j/k (with count prefix 5j), gg/G, Ctrl+d/u
 // Verbs:  y summarize · a archive · t read · m star · O open · Enter
 // Panels (toggle): s search · g graph · d digest · : palette · ? help
-// Views: u unread · r read · x archived · * starred
+// Views: u unread · r read · x archived · * starred (toggle)
 
 export interface HelpCategory {
   title: string;
@@ -29,6 +29,8 @@ export const HELP: HelpCategory[] = [
       { keys: "j / k", label: "Scroll the reader while focused" },
       { keys: "Space / Shift+Space", label: "Page down / up in the reader" },
       { keys: "y", label: "AI summary" },
+      { keys: "c", label: "Classify (background job, rules + LLM)" },
+      { keys: "p", label: "Materialize into the knowledge base (create a note)" },
       { keys: "a", label: "Archive (5a = archive 5) — undo via toast" },
       { keys: "t", label: "Mark read / unread" },
       { keys: "m", label: "Star" },
@@ -40,6 +42,7 @@ export const HELP: HelpCategory[] = [
     rows: [
       { keys: "s", label: "Semantic search" },
       { keys: "g", label: "Knowledge graph" },
+      { keys: "C", label: "Context pane (KB connections of the current item)" },
       { keys: "f", label: "Knowledge vault (world): electrons → atoms → molecules" },
       { keys: "n", label: "Open the vault at the Atoms stage (quick note browse)" },
       { keys: "z", label: "Background jobs" },
@@ -51,7 +54,7 @@ export const HELP: HelpCategory[] = [
   {
     title: "Worlds (news vs knowledge)",
     rows: [
-      { keys: "u / r / x / *", label: "News world (article list) — also :news" },
+      { keys: "u / r / x / *", label: "News world (article list): Unread / Read / Archived / Starred — also :news" },
       { keys: "f", label: "Toggle vault ↔ news" },
       { keys: "n", label: "Vault, Atoms stage" },
       { keys: "h/l · j/k · Enter", label: "In the vault: switch stage · move item · open (detail on the right)" },
@@ -63,14 +66,18 @@ export const HELP: HelpCategory[] = [
     rows: [
       { keys: ";", label: "Filter by category (All / Unclassified / models / research / …)" },
       { keys: "← / →", label: "Cycle the category filter (news) or tag filter (vault)" },
-      { keys: "[ / ]", label: "Importance filter (any → ≥1★ → ≥2★ → ≥3★)" },
+      { keys: "[ / ]", label: "Importance filter (any → 0★ → 1★ → 2★ → 3★ → any)" },
       { keys: "chips", label: "Click the chips under the list to filter (category + importance)" },
     ],
   },
   {
     title: "List views",
     rows: [
-      { keys: "u / r / x / *", label: "Unread · Read · Archived · Starred" },
+      { keys: "Active tab", label: "All unread + read (default)" },
+      { keys: "u", label: "Unread only" },
+      { keys: "r", label: "Read only" },
+      { keys: "x", label: "Archived" },
+      { keys: "*", label: "Starred (toggle) — independent of read/archived" },
     ],
   },
   {
@@ -105,6 +112,9 @@ export const CONTEXT_KEYS: Record<string, { key: string; label: string }[]> = {
     { key: "j/k", label: "navigate" },
     { key: "Enter", label: "open" },
     { key: "y", label: "summarize" },
+    { key: "c", label: "classify" },
+    { key: "p", label: "kb note" },
+    { key: "C", label: "context" },
     { key: "a", label: "archive" },
     { key: "t", label: "read" },
     { key: "m", label: "star" },

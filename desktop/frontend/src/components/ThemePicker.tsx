@@ -33,7 +33,7 @@ export function ThemePicker({ value, onChange }: Props) {
       if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.min(f + 1, THEMES.length - 1)); }
       else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.max(f - 1, 0)); }
       else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); onChange(THEMES[focus].name); setOpen(false); }
-      else if (e.key === "Escape") { e.stopPropagation(); setOpen(false); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); }
     };
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;

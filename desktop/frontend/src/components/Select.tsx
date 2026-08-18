@@ -40,7 +40,7 @@ export function Select({ value, options, onChange, title, className }: Props) {
       if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.min(f + 1, options.length - 1)); }
       else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setFocus((f) => Math.max(f - 1, 0)); }
       else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); const o = options[focus]; if (o) { onChange(o.value); setOpen(false); } }
-      else if (e.key === "Escape") { e.stopPropagation(); setOpen(false); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setOpen(false); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

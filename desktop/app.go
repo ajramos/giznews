@@ -48,6 +48,9 @@ func (a *App) GetArticleContent(id int64) (*gizdesktop.ArticleDTO, error) {
 func (a *App) SetArticleStatus(id int64, status string) error {
 	return a.api.SetArticleStatus(bg(), id, status)
 }
+func (a *App) SetArticleStarred(id int64, starred bool) error {
+	return a.api.SetArticleStarred(bg(), id, starred)
+}
 func (a *App) SetArticleImportance(id int64, importance int) error {
 	return a.api.SetArticleImportance(bg(), id, importance)
 }

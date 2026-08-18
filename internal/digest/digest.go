@@ -38,6 +38,7 @@ type Options struct {
 	Days                int
 	MaxArticlesPerTheme int
 	UseLLM              bool
+	Language            string // ISO 639-1 for LLM-generated prose
 }
 
 // Service generates digests.
@@ -131,7 +132,7 @@ func (s *Service) enrich(ctx context.Context, d *Digest) error {
 
 	resp, err := s.prov.Complete(ctx, llm.CompletionRequest{
 		Model:       s.opts.Model,
-		Messages:    []llm.Message{{Role: llm.RoleSystem, Content: digestSystemPrompt}, {Role: llm.RoleUser, Content: string(body)}},
+		Messages:    []llm.Message{{Role: llm.RoleSystem, Content: digestSystemPrompt + llm.LanguageInstruction(s.opts.Language)}, {Role: llm.RoleUser, Content: string(body)}},
 		Temperature: 0.2,
 	})
 	if err != nil {

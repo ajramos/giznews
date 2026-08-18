@@ -14,7 +14,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
       else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); el.scrollBy({ top: -40 }); }
       else if (e.key === "PageDown") { e.preventDefault(); e.stopPropagation(); el.scrollBy({ top: el.clientHeight * 0.9 }); }
       else if (e.key === "PageUp") { e.preventDefault(); e.stopPropagation(); el.scrollBy({ top: -el.clientHeight * 0.9 }); }
-      else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -38,7 +38,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <div className="help-note">
-          <strong>Scroll:</strong> j/k · ↑/↓ · PageUp/PageDown. <strong>Legend:</strong> ★ = importance (0-3, ★★☆/★★★ = relevant or key) · ● = unread · <span className="star-badge">★</span> = starred · strikethrough = archived.
+          <strong>Scroll:</strong> j/k · ↑/↓ · PageUp/PageDown. <strong>Legend:</strong> ★ = importance (0-3, ★★☆/★★★ = relevant or key) · ● = unread · ◌ = read · <span className="star-badge">★</span> = starred · strikethrough = archived.
           <br /><strong>Archiving is logical:</strong> articles are never physically deleted; everything is recoverable from the archived view or the undo toast.
         </div>
       </div>

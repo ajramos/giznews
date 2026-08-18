@@ -1,67 +1,78 @@
-import { useEffect, useRef, type ReactNode } from "react";
-import { Inbox, Check, Archive, Star, Search, X } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Inbox, Archive, Star, Search, X } from "lucide-react";
 import type { ArticleDTO } from "../types";
 import { stars, timeAgo, catClass } from "./Markdown";
 import { CATEGORIES } from "./CategoryPicker";
-
-export type ViewFilter = "unread" | "read" | "archived" | "starred";
-
-const VIEWS: { key: ViewFilter; label: string; icon: ReactNode }[] = [
-  { key: "unread", label: "Unread", icon: <Inbox size={12} /> },
-  { key: "read", label: "Read", icon: <Check size={12} /> },
-  { key: "archived", label: "Archived", icon: <Archive size={12} /> },
-  { key: "starred", label: "Starred", icon: <Star size={12} /> },
-];
 
 interface Props {
   articles: ArticleDTO[];
   selectedIndex: number;
   loading: boolean;
-  view: ViewFilter;
+  archived: boolean;
+  starredFilter: boolean | null;
+  readFilter: "all" | "unread" | "read";
   hasSources: boolean;
   bulk: boolean;
   bulkSel: Set<number>;
   unreadCount: number;
   filterCategory: string | null;
-  filterImportance: number;
+  importanceExact: number | null;
   filterUnclassified: boolean;
   filterQuery: string;
-  onView: (v: ViewFilter) => void;
+  onActive: () => void;
+  onArchived: () => void;
+  onStarred: () => void;
+  onReadFilter: (v: "all" | "unread" | "read") => void;
   onCategory: (c: string | null) => void;
-  onImportance: (n: number) => void;
+  onImportance: (n: number | null) => void;
   onUnclassified: (v: boolean) => void;
   onQuery: (q: string) => void;
   onToggleBulk: (id: number) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, view, hasSources, bulk, bulkSel, unreadCount, filterCategory, filterImportance, filterUnclassified, filterQuery, onView, onCategory, onImportance, onUnclassified, onQuery, onToggleBulk, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, archived, starredFilter, readFilter, hasSources, bulk, bulkSel, unreadCount, filterCategory, importanceExact, filterUnclassified, filterQuery, onActive, onArchived, onStarred, onReadFilter, onCategory, onImportance, onUnclassified, onQuery, onToggleBulk, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     containerRef.current?.querySelector(".article-row.selected")?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, articles]);
 
+  const active = !archived && starredFilter == null;
+
   return (
     <div className="list-pane">
       <div className="list-head">
         <div className="view-tabs">
-          {VIEWS.map((v) => (
-            <button
-              key={v.key}
-              className={`view-tab ${view === v.key ? "active" : ""}`}
-              onClick={() => onView(v.key)}
-            >
-              {v.icon} {v.label}{v.key === "unread" && unreadCount > 0 && <span className="view-count">{unreadCount}</span>}
-            </button>
-          ))}
+          <button
+            className={`view-tab ${active ? "active" : ""}`}
+            onClick={onActive}
+            title="Unread + read"
+          >
+            <Inbox size={12} /> Active{unreadCount > 0 && <span className="view-count">{unreadCount}</span>}
+          </button>
+          <button
+            className={`view-tab ${archived ? "active" : ""}`}
+            onClick={onArchived}
+            title="Archived (x)"
+          >
+            <Archive size={12} /> Archived
+          </button>
+          <button
+            className={`view-tab ${starredFilter === true ? "active" : ""}`}
+            onClick={onStarred}
+            title="Starred (*)"
+          >
+            <Star size={12} /> Starred
+          </button>
         </div>
-      </div>
-
-      <div className="list-search">
-        <Search size={13} />
-        <input value={filterQuery} onChange={(e) => onQuery(e.target.value)} placeholder="filter by title or author…" />
-        {filterQuery && <button className="icon-btn" onClick={() => onQuery("")} title="Clear"><X size={13} /></button>}
+        {active && (
+          <div className="read-filter" title="Filter by read state">
+            <button className={readFilter === "all" ? "active" : ""} onClick={() => onReadFilter("all")}>All</button>
+            <button className={readFilter === "unread" ? "active" : ""} onClick={() => onReadFilter("unread")}>Unread</button>
+            <button className={readFilter === "read" ? "active" : ""} onClick={() => onReadFilter("read")}>Read</button>
+          </div>
+        )}
       </div>
 
       <div className="filter-row">
@@ -83,17 +94,30 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
           ))}
         </div>
         <div className="filter-imp">
+          <button
+            className={`chip ${importanceExact == null ? "active" : ""}`}
+            onClick={() => onImportance(null)}
+            title="Any importance"
+          >
+            ★
+          </button>
           {[0, 1, 2, 3].map((n) => (
             <button
               key={n}
-              className={`chip ${filterImportance === n ? "active" : ""}`}
-              onClick={() => onImportance(filterImportance === n ? 0 : n)}
-              title={n === 0 ? "Any importance" : `Importance ≥ ${n}`}
+              className={`chip ${importanceExact === n ? "active" : ""}`}
+              onClick={() => onImportance(importanceExact === n ? null : n)}
+              title={n === 0 ? "Importance = 0" : `Importance = ${n}`}
             >
-              {n === 0 ? "★" : `≥${n}★`}
+              {n === 0 ? "0★" : `${n}★`}
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="list-search">
+        <Search size={13} />
+        <input value={filterQuery} onChange={(e) => onQuery(e.target.value)} placeholder="filter by title or author…" />
+        {filterQuery && <button className="icon-btn" onClick={() => onQuery("")} title="Clear"><X size={13} /></button>}
       </div>
 
       {loading ? (
@@ -121,8 +145,10 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
                 {bulk ? (
                   <span className="bulk-check">{inBulk ? "✓" : ""}</span>
                 ) : (
-                  <span className="article-flag" title={statusTitle(a.status)}>
-                    {a.status === "unread" ? <span className="unread-badge" /> : a.status === "starred" ? <span className="star-badge">★</span> : null}
+                  <span className="article-flag" title={statusTitle(a)}>
+                    {a.status === "unread" && <span className="unread-badge" />}
+                    {a.status === "read" && <span className="read-badge" />}
+                    {a.starred === true && <span className="star-badge">★</span>}
                   </span>
                 )}
                 <span className="article-imp imp" data-level={a.importance} title={`Importance: ${a.importance}/3`}>
@@ -146,12 +172,8 @@ export function ArticleList({ articles, selectedIndex, loading, view, hasSources
   );
 }
 
-function statusTitle(s: string): string {
-  switch (s) {
-    case "unread": return "Unread";
-    case "read": return "Read";
-    case "archived": return "Archived (logical, recoverable)";
-    case "starred": return "Starred";
-    default: return s;
-  }
+function statusTitle(a: ArticleDTO): string {
+  const parts = [a.status === "archived" ? "Archived" : a.status === "read" ? "Read" : "Unread"];
+  if (a.starred === true) parts.push("Starred");
+  return parts.join(" · ");
 }

@@ -21,6 +21,7 @@ func (a *App) kbService() (*kb.Service, error) {
 		ImportanceThreshold: a.cfg.Classify.ImportanceThreshold,
 		Model:               a.cfg.LLM.Model,
 		UseLLM:              a.cfg.LLM.Enabled && prov != nil,
+		Language:            a.cfg.LLM.Language,
 	}, prov, a.logger())
 }
 

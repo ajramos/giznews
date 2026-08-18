@@ -30,6 +30,7 @@ func (a *App) Classify(ctx context.Context, limit int) (*ClassifyResult, error) 
 			Concurrency: a.cfg.Classify.Concurrency,
 			UseLLM:      a.cfg.Classify.UseLLM && prov != nil,
 			Model:       a.cfg.LLM.Model,
+			Language:    a.cfg.LLM.Language,
 			OnProgress: func(phase string, done, total int) {
 				p.Progress(phase, done, total)
 			},
@@ -75,6 +76,7 @@ func (a *App) ClassifyArticles(ctx context.Context, ids []int64) (*ClassifyResul
 			Concurrency: a.cfg.Classify.Concurrency,
 			UseLLM:      a.cfg.Classify.UseLLM && prov != nil,
 			Model:       a.cfg.LLM.Model,
+			Language:    a.cfg.LLM.Language,
 			OnProgress: func(phase string, done, total int) {
 				p.Progress(phase, done, total)
 			},
@@ -121,7 +123,7 @@ func (a *App) SummarizeArticle(ctx context.Context, id int64) (*ArticleDTO, erro
 		if err != nil {
 			return err
 		}
-		summary, err := summarizeOne(jctx, prov, a.cfg.LLM.Model, art)
+		summary, err := summarizeOne(jctx, prov, a.cfg.LLM.Model, a.cfg.LLM.Language, art)
 		if err != nil {
 			return err
 		}
@@ -138,11 +140,11 @@ func (a *App) SummarizeArticle(ctx context.Context, id int64) (*ArticleDTO, erro
 	return out, nil
 }
 
-func summarizeOne(ctx context.Context, prov llm.Provider, model string, art *db.Article) (string, error) {
+func summarizeOne(ctx context.Context, prov llm.Provider, model, language string, art *db.Article) (string, error) {
 	resp, err := prov.Complete(ctx, llm.CompletionRequest{
 		Model: model,
 		Messages: []llm.Message{
-			{Role: llm.RoleSystem, Content: "You summarize AI news articles for a busy professional. Return 2-4 sentences: what happened, who is involved, and why it matters. No markdown, no preamble."},
+			{Role: llm.RoleSystem, Content: "You summarize AI news articles for a busy professional. Return 2-4 sentences: what happened, who is involved, and why it matters. No markdown, no preamble." + llm.LanguageInstruction(language)},
 			{Role: llm.RoleUser, Content: fmt.Sprintf("Title: %s\n\n%s", art.Title, truncateBodyMD(art.ContentMD))},
 		},
 		Temperature: 0.3,
@@ -174,6 +176,7 @@ func (a *App) Digest(ctx context.Context) (*DigestDTO, error) {
 			Days:                7,
 			MaxArticlesPerTheme: a.cfg.Digest.MaxArticlesPerTheme,
 			UseLLM:              a.cfg.LLM.Enabled && prov != nil,
+			Language:            a.cfg.LLM.Language,
 		}, prov, a.logger())
 
 		d, err := svc.Generate(jctx)

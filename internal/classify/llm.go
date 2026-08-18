@@ -13,11 +13,11 @@ import (
 
 // BatchClassify sends a batch of articles to the LLM in one call and returns
 // the parsed classifications, keyed by article ID.
-func BatchClassify(ctx context.Context, provider llm.Provider, model string, batch []*db.Article) (map[int64]*Classification, error) {
+func BatchClassify(ctx context.Context, provider llm.Provider, model, language string, batch []*db.Article) (map[int64]*Classification, error) {
 	resp, err := provider.Complete(ctx, llm.CompletionRequest{
 		Model: model,
 		Messages: []llm.Message{
-			{Role: llm.RoleSystem, Content: classifySystemPrompt},
+			{Role: llm.RoleSystem, Content: classifySystemPrompt + llm.LanguageInstruction(language)},
 			{Role: llm.RoleUser, Content: buildClassifyPrompt(batch)},
 		},
 		Temperature: 0.1,

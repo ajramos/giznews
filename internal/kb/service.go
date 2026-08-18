@@ -20,6 +20,7 @@ type Options struct {
 	MinOccurrences      int // min atoms citing a concept before an electron is created
 	Model               string
 	UseLLM              bool
+	Language            string // ISO 639-1 for LLM-generated synthesis
 }
 
 // BuildResult reports what a build run did.
@@ -262,17 +263,13 @@ func (s *Service) uniqueSlug(ctx context.Context, repo *db.KBRepo, base string) 
 }
 
 // EnsureArticleNote creates (if missing) an Atom note for a single article,
-// regardless of its importance threshold. Used by the graph panel so a specific
-// article can always be materialized into the knowledge graph on demand.
+// regardless of its importance threshold. If the note already exists it is
+// re-rendered from the current article, so a later re-classification is
+// reflected in the vault.
 func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.KBNote, error) {
 	artRepo := db.NewArticleRepo(s.db)
 	kbRepo := db.NewKBRepo(s.db)
 	ingestRepo := db.NewIngestRepo(s.db)
-
-	refID := fmt.Sprintf("%d", articleID)
-	if noteID, _ := ingestRepo.NoteID(ctx, "article", refID); noteID != 0 {
-		return kbRepo.Get(ctx, noteID)
-	}
 
 	art, err := artRepo.Get(ctx, articleID)
 	if err != nil {
@@ -281,19 +278,40 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 
 	slugs := s.conceptSlugs(art)
 	content := BuildAtom(art, slugs)
+	fm, _ := json.Marshal(map[string]any{
+		"type": "atom", "category": art.Category, "source": art.SourceName,
+		"url": art.URL, "rating": art.Importance, "tags": art.Tags,
+	})
+	tags := append([]string{"atom", "ai"}, art.Tags...)
+
+	refID := fmt.Sprintf("%d", articleID)
+	if noteID, _ := ingestRepo.NoteID(ctx, "article", refID); noteID != 0 {
+		existing, err := kbRepo.Get(ctx, noteID)
+		if err != nil {
+			return nil, err
+		}
+		existing.Title = art.Title
+		existing.Frontmatter = string(fm)
+		existing.Content = content
+		existing.Tags = tags
+		existing.Wikilinks = slugs
+		if err := kbRepo.Update(ctx, existing); err != nil {
+			return nil, err
+		}
+		if _, err := s.vault.Write("atom", existing.Slug, content); err != nil {
+			return nil, err
+		}
+		return existing, nil
+	}
+
 	slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(art.Title)))
 	path, err := s.vault.Write("atom", slug, content)
 	if err != nil {
 		return nil, err
 	}
-	fm, _ := json.Marshal(map[string]any{
-		"type": "atom", "category": art.Category, "source": art.SourceName,
-		"url": art.URL, "rating": art.Importance, "tags": art.Tags,
-	})
 	note, err := kbRepo.Create(ctx, db.NewKBNote{
 		Type: db.NoteAtom, Title: art.Title, Slug: slug, Path: path,
-		Frontmatter: string(fm), Content: content,
-		Tags: append([]string{"atom", "ai"}, art.Tags...), Wikilinks: slugs,
+		Frontmatter: string(fm), Content: content, Tags: tags, Wikilinks: slugs,
 	})
 	if err != nil {
 		return nil, err
@@ -381,7 +399,7 @@ func (s *Service) summarizeCategory(ctx context.Context, category string, refs [
 	resp, err := s.prov.Complete(ctx, llm.CompletionRequest{
 		Model: s.opts.Model,
 		Messages: []llm.Message{
-			{Role: llm.RoleSystem, Content: "You synthesize AI-news notes into one insightful paragraph. Return plain text, 3-4 sentences, no markdown."},
+			{Role: llm.RoleSystem, Content: "You synthesize AI-news notes into one insightful paragraph. Return plain text, 3-4 sentences, no markdown." + llm.LanguageInstruction(s.opts.Language)},
 			{Role: llm.RoleUser, Content: "Theme: " + category + "\nNotes:\n" + strings.Join(headlines, "\n")},
 		},
 		Temperature: 0.3,

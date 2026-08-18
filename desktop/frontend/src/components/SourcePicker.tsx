@@ -39,7 +39,7 @@ export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onFil
       else if (e.key === "e") { e.preventDefault(); e.stopPropagation(); const s = sources[focus]; if (s) onEdit(s); }
       else if (e.key === "d") { e.preventDefault(); e.stopPropagation(); const s = sources[focus]; if (s) onDelete(s); }
       else if (e.key === "f") { e.preventDefault(); e.stopPropagation(); const s = sources[focus]; if (s) onFilter(s); }
-      else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

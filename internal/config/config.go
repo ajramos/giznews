@@ -111,6 +111,10 @@ type LLMConfig struct {
 	APIKey string `json:"api_key"`
 	// Timeout for LLM HTTP calls, e.g. "120s".
 	Timeout string `json:"timeout"`
+	// Language is the ISO 639-1 code (e.g. "en", "es") used for LLM-generated
+	// prose: article summaries, digest overviews/themes, classification
+	// summaries/headlines, and KB molecule synthesis. Empty → English.
+	Language string `json:"language"`
 }
 
 // GmailConfig configures newsletter ingestion via the Gmail API.
@@ -189,6 +193,7 @@ func DefaultConfig() *Config {
 			EmbeddingModel: "nomic-embed-text",
 			Endpoint:       "http://localhost:11434",
 			Timeout:        "120s",
+			Language:       "en",
 		},
 		Gmail: GmailConfig{
 			Enabled:         false,

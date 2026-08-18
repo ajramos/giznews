@@ -35,7 +35,7 @@ export function PromptModal({ title, placeholder, initial = "", onSubmit, onClos
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") { e.preventDefault(); submit(); }
-            else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+            else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
           }}
           placeholder={placeholder}
         />

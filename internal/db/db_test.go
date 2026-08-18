@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
-		t.Fatalf("user_version = %d, want 6", version)
+	if version != 7 {
+		t.Fatalf("user_version = %d, want 7", version)
 	}
 }
 
@@ -34,7 +34,7 @@ func TestMigrateFromV1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Strip V2/V3/V4/V5 additions to simulate a V1 db.
+	// Strip V2..V7 additions to simulate a V1 db.
 	if _, err := d.sql.Exec("DROP INDEX IF EXISTS idx_articles_classified;"); err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +59,12 @@ func TestMigrateFromV1(t *testing.T) {
 	if _, err := d.sql.Exec("DROP TABLE IF EXISTS digests;"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := d.sql.Exec("DROP INDEX IF EXISTS idx_articles_starred;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN starred;"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +79,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
-		t.Fatalf("user_version after reopen = %d, want 6", version)
+	if version != 7 {
+		t.Fatalf("user_version after reopen = %d, want 7", version)
 	}
 	// Columns must exist now.
 	var n int
@@ -88,6 +94,11 @@ func TestMigrateFromV1(t *testing.T) {
 	}
 	if rows, err := d2.sql.Query("SELECT date FROM digests"); err != nil {
 		t.Fatalf("digests table missing after migration: %v", err)
+	} else {
+		rows.Close()
+	}
+	if rows, err := d2.sql.Query("SELECT id FROM articles WHERE starred = 0"); err != nil {
+		t.Fatalf("articles.starred missing after migration: %v", err)
 	} else {
 		rows.Close()
 	}

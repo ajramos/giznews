@@ -33,6 +33,7 @@ type ArticleDTO struct {
 	Tags       []string `json:"tags"`
 	Importance int      `json:"importance"`
 	Status     string   `json:"status"`
+	Starred    bool     `json:"starred"`
 	Published  string   `json:"published,omitempty"`
 	FetchedAt  string   `json:"fetched_at"`
 }
@@ -90,15 +91,18 @@ type ClassifyResult struct {
 
 // ListArticlesOptions mirrors db.ListOptions in JSON-friendly form.
 type ListArticlesOptions struct {
-	Status        string `json:"status,omitempty"`
-	Category      string `json:"category,omitempty"`
-	SourceID      int64  `json:"source_id,omitempty"`
-	Group         string `json:"group,omitempty"`
-	ImportanceMin int    `json:"importance_min,omitempty"`
-	Unclassified  bool   `json:"unclassified,omitempty"`
-	Query         string `json:"query,omitempty"`
-	Limit         int    `json:"limit,omitempty"`
-	Offset        int    `json:"offset,omitempty"`
+	Status          string `json:"status,omitempty"`
+	Unarchived      bool   `json:"unarchived,omitempty"`
+	Starred         *bool  `json:"starred,omitempty"`
+	Category        string `json:"category,omitempty"`
+	SourceID        int64  `json:"source_id,omitempty"`
+	Group           string `json:"group,omitempty"`
+	ImportanceMin   int    `json:"importance_min,omitempty"`
+	ImportanceExact *int   `json:"importance_exact,omitempty"`
+	Unclassified    bool   `json:"unclassified,omitempty"`
+	Query           string `json:"query,omitempty"`
+	Limit           int    `json:"limit,omitempty"`
+	Offset          int    `json:"offset,omitempty"`
 }
 
 func toArticleDTO(a *db.Article) *ArticleDTO {
@@ -109,7 +113,7 @@ func toArticleDTO(a *db.Article) *ArticleDTO {
 		ID: a.ID, SourceID: a.SourceID, SourceName: a.SourceName, URL: a.URL,
 		Title: a.Title, Author: a.Author, ContentMD: a.ContentMD, Summary: a.Summary,
 		Category: a.Category, Tags: a.Tags, Importance: a.Importance,
-		Status: string(a.Status), Published: a.Published, FetchedAt: a.FetchedAt,
+		Status: string(a.Status), Starred: a.Starred, Published: a.Published, FetchedAt: a.FetchedAt,
 	}
 }
 

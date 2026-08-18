@@ -23,7 +23,7 @@ func NewArticleRepo(db *DB) *ArticleRepo {
 const articleColumns = `
 	a.id, a.source_id, s.name, a.guid, a.url, a.title, a.author,
 	a.content_html, a.content_md, a.summary, a.category, a.tags, a.entities,
-	a.importance, a.simhash, a.status, a.published, a.fetched_at, a.updated_at`
+	a.importance, a.simhash, a.status, a.starred, a.published, a.fetched_at, a.updated_at`
 
 const articleFrom = `
 	FROM articles a
@@ -45,6 +45,7 @@ type NewArticle struct {
 	Importance  int
 	SimHash     uint64
 	Status      ArticleStatus
+	Starred     bool
 	Published   string
 }
 
@@ -63,11 +64,11 @@ func (r *ArticleRepo) Upsert(ctx context.Context, na NewArticle) (id int64, crea
 		INSERT OR IGNORE INTO articles (
 			source_id, guid, url, title, author, content_html, content_md,
 			summary, category, tags, entities, importance, simhash, status,
-			published, fetched_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			starred, published, fetched_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		na.SourceID, na.GUID, na.URL, na.Title, na.Author, na.ContentHTML, na.ContentMD,
 		na.Summary, na.Category, marshalTags(na.Tags), marshalEntities(na.Entities),
-		na.Importance, int64(na.SimHash), string(na.Status), na.Published, now, now)
+		na.Importance, int64(na.SimHash), string(na.Status), boolToInt(na.Starred), na.Published, now, now)
 	if err != nil {
 		return 0, false, fmt.Errorf("insert article: %w", err)
 	}
@@ -146,10 +147,13 @@ func (r *ArticleRepo) GetByIDs(ctx context.Context, ids []int64) ([]*Article, er
 // ListOptions filters the article list.
 type ListOptions struct {
 	Status        ArticleStatus // empty = all
+	Unarchived    bool          // status IN (unread, read)
+	Starred       *bool         // nil = any
 	Category      string        // empty = all
 	SourceID      int64         // 0 = all
 	Group         string        // source group; empty = all
 	ImportanceMin int           // only articles with importance >= this
+	ImportanceExact *int        // nil = any; 0-3 = exact importance
 	Unclassified  bool          // only articles not yet classified
 	Query         string        // LIKE filter on title/author; empty = all
 	Limit         int           // 0 = default 200
@@ -164,6 +168,13 @@ func (r *ArticleRepo) List(ctx context.Context, opts ListOptions) ([]*Article, e
 	if opts.Status != "" {
 		conds = append(conds, "a.status = ?")
 		args = append(args, string(opts.Status))
+	}
+	if opts.Unarchived {
+		conds = append(conds, "a.status IN ('unread','read')")
+	}
+	if opts.Starred != nil {
+		conds = append(conds, "a.starred = ?")
+		args = append(args, boolToInt(*opts.Starred))
 	}
 	if opts.Category != "" {
 		conds = append(conds, "a.category = ?")
@@ -180,6 +191,10 @@ func (r *ArticleRepo) List(ctx context.Context, opts ListOptions) ([]*Article, e
 	if opts.ImportanceMin > 0 {
 		conds = append(conds, "a.importance >= ?")
 		args = append(args, opts.ImportanceMin)
+	}
+	if opts.ImportanceExact != nil {
+		conds = append(conds, "a.importance = ?")
+		args = append(args, *opts.ImportanceExact)
 	}
 	if opts.Unclassified {
 		conds = append(conds, "a.classified = 0")
@@ -226,6 +241,16 @@ func (r *ArticleRepo) SetStatus(ctx context.Context, id int64, status ArticleSta
 		return fmt.Errorf("set article status: %w", err)
 	}
 	return checkAffected(res, "set article status")
+}
+
+// SetStarred toggles the orthogonal starred flag (independent of status).
+func (r *ArticleRepo) SetStarred(ctx context.Context, id int64, starred bool) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET starred = ?, updated_at = ? WHERE id = ?", boolToInt(starred), Now(), id)
+	if err != nil {
+		return fmt.Errorf("set article starred: %w", err)
+	}
+	return checkAffected(res, "set article starred")
 }
 
 // SetImportance updates the importance score of an article.
@@ -512,11 +537,12 @@ func scanArticle(row scanner) (*Article, error) {
 		tagsRaw string
 		entRaw  string
 		simHash int64 // SQLite stores INTEGER as signed int64
+		starred int
 	)
 	if err := row.Scan(
 		&a.ID, &a.SourceID, &a.SourceName, &a.GUID, &a.URL, &a.Title, &a.Author,
 		&a.ContentHTML, &a.ContentMD, &a.Summary, &a.Category, &tagsRaw, &entRaw,
-		&a.Importance, &simHash, &a.Status, &a.Published, &a.FetchedAt, &a.UpdatedAt,
+		&a.Importance, &simHash, &a.Status, &starred, &a.Published, &a.FetchedAt, &a.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -524,6 +550,7 @@ func scanArticle(row scanner) (*Article, error) {
 		return nil, fmt.Errorf("scan article: %w", err)
 	}
 	a.SimHash = uint64(simHash)
+	a.Starred = starred != 0
 	_ = json.Unmarshal([]byte(tagsRaw), &a.Tags)
 	_ = json.Unmarshal([]byte(entRaw), &a.Entities)
 	if a.Tags == nil {

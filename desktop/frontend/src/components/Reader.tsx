@@ -57,11 +57,19 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
           <button onClick={onSummarize} disabled={summarizing || !llmAvailable} title={llmAvailable ? "AI summary (y)" : "LLM unavailable"}>
             {summarizing ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
           </button>
-          <button onClick={onArchive} title="Archive (a) — reversible">
-            <Archive size={16} />
+          <button
+            className={article.status === "archived" ? "active" : ""}
+            onClick={onArchive}
+            title={article.status === "archived" ? "Unarchive (a)" : "Archive (a) — reversible"}
+          >
+            <Archive size={16} fill={article.status === "archived" ? "currentColor" : "none"} />
           </button>
-          <button onClick={onStar} title="Star (m)">
-            <Star size={16} />
+          <button
+            className={article.starred === true ? "active" : ""}
+            onClick={onStar}
+            title={article.starred === true ? "Unstar (m)" : "Star (m)"}
+          >
+            <Star size={16} fill={article.starred === true ? "currentColor" : "none"} />
           </button>
           <button onClick={onOpenLink} title="Open in browser (O)">
             <ExternalLink size={16} />

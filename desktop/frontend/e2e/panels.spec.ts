@@ -137,7 +137,7 @@ test.describe("sources", () => {
     await expect(page.locator(".article-row")).toHaveCount(1);
     await expect(page.locator(".topbar .pill.filter")).toBeVisible();
     await page.locator(".topbar .pill.filter").click();
-    await expect(page.locator(".article-row")).toHaveCount(7);
+    await expect(page.locator(".article-row")).toHaveCount(8);
   });
 });
 

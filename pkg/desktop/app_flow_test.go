@@ -30,8 +30,45 @@ func TestListArticlesUnclassified(t *testing.T) {
 	}
 }
 
-func TestFlowCounts(t *testing.T) {
+func TestArticleStarredAndFilters(t *testing.T) {
 	app := newTestApp(t)
+	ctx := context.Background()
+
+	s, _ := app.AddSource(ctx, "S", "rss", "https://x.com/rss", "")
+	repo := db.NewArticleRepo(app.db)
+	id, _, _ := repo.Upsert(ctx, db.NewArticle{SourceID: s.ID, GUID: "g", Title: "T", Status: db.StatusRead})
+
+	// star it; status stays read (orthogonal flag)
+	if err := app.SetArticleStarred(ctx, id, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := app.GetArticle(ctx, id)
+	if got.Status != "read" || !got.Starred {
+		t.Fatalf("article = %+v", got)
+	}
+
+	// unarchived + starred → 1; unarchived + not starred → 0
+	starred := true
+	all, _ := app.ListArticles(ctx, ListArticlesOptions{Unarchived: true, Starred: &starred})
+	if len(all) != 1 {
+		t.Fatalf("starred unarchived = %+v", all)
+	}
+	notStarred := false
+	all, _ = app.ListArticles(ctx, ListArticlesOptions{Unarchived: true, Starred: &notStarred})
+	if len(all) != 0 {
+		t.Fatalf("non-starred unarchived = %+v", all)
+	}
+	// archived + starred → 1
+	if err := app.SetArticleStatus(ctx, id, "archived"); err != nil {
+		t.Fatal(err)
+	}
+	all, _ = app.ListArticles(ctx, ListArticlesOptions{Status: "archived", Starred: &starred})
+	if len(all) != 1 {
+		t.Fatalf("archived starred = %+v", all)
+	}
+}
+
+func TestFlowCounts(t *testing.T) {	app := newTestApp(t)
 	ctx := context.Background()
 
 	s, _ := app.AddSource(ctx, "S", "rss", "https://x.com/rss", "")

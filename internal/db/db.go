@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -229,4 +229,13 @@ CREATE TABLE IF NOT EXISTS digests (
 	created_at TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_digests_date ON digests(date);
+`
+
+// schemaV7 makes "starred" an orthogonal triage flag (separate from the
+// unread/read/archived status), so a read article can also be starred. Any
+// existing "starred" rows become "read + starred".
+const schemaV7 = `
+ALTER TABLE articles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0;
+UPDATE articles SET starred = 1, status = 'read' WHERE status = 'starred';
+CREATE INDEX IF NOT EXISTS idx_articles_starred ON articles(starred);
 `
