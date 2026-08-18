@@ -24,6 +24,7 @@ export interface ArticleDTO {
   tags: string[];
   importance: number;
   status: string;
+  starred?: boolean;
   published?: string;
   fetchedAt: string;
 }
@@ -133,10 +134,13 @@ export interface StatusDTO {
 
 export interface ListArticlesOptions {
   status?: string;
+  unarchived?: boolean;
+  starred?: boolean;
   category?: string;
   sourceId?: number;
   group?: string;
   importanceMin?: number;
+  importanceExact?: number;
   unclassified?: boolean;
   query?: string;
   limit?: number;

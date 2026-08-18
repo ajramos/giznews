@@ -39,7 +39,7 @@ export function CommandPalette({ commands, onClose }: Props) {
             if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(s + 1, Math.max(0, filtered.length - 1))); }
             else if (e.key === "ArrowUp") { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
             else if (e.key === "Enter") { e.preventDefault(); run(sel); }
-            else if (e.key === "Escape") onClose();
+            else if (e.key === "Escape") { e.preventDefault(); onClose(); }
           }}
           placeholder="fetch · classify · kb build · search index · digest · theme…"
         />

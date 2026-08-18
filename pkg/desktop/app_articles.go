@@ -18,15 +18,18 @@ func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*Ar
 		limit = 200
 	}
 	articles, err := db.NewArticleRepo(a.db).List(ctx, db.ListOptions{
-		Status:        db.ArticleStatus(opts.Status),
-		Category:      opts.Category,
-		SourceID:      opts.SourceID,
-		Group:         opts.Group,
-		ImportanceMin: opts.ImportanceMin,
-		Unclassified:  opts.Unclassified,
-		Query:         opts.Query,
-		Limit:         limit,
-		Offset:        offset,
+		Status:          db.ArticleStatus(opts.Status),
+		Unarchived:      opts.Unarchived,
+		Starred:         opts.Starred,
+		Category:        opts.Category,
+		SourceID:        opts.SourceID,
+		Group:           opts.Group,
+		ImportanceMin:   opts.ImportanceMin,
+		ImportanceExact: opts.ImportanceExact,
+		Unclassified:    opts.Unclassified,
+		Query:           opts.Query,
+		Limit:           limit,
+		Offset:          offset,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list articles: %w", err)
@@ -98,6 +101,10 @@ func (a *App) GetArticleContent(ctx context.Context, id int64) (*ArticleDTO, err
 
 func (a *App) SetArticleStatus(ctx context.Context, id int64, status string) error {
 	return db.NewArticleRepo(a.db).SetStatus(ctx, id, db.ArticleStatus(status))
+}
+
+func (a *App) SetArticleStarred(ctx context.Context, id int64, starred bool) error {
+	return db.NewArticleRepo(a.db).SetStarred(ctx, id, starred)
 }
 
 func (a *App) SetArticleImportance(ctx context.Context, id int64, importance int) error {

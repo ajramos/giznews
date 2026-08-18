@@ -65,7 +65,7 @@ type BulkResult struct {
 func (a *App) BulkSetStatus(ctx context.Context, ids []int64, status string) (*BulkResult, error) {
 	st := db.ArticleStatus(status)
 	switch st {
-	case db.StatusUnread, db.StatusRead, db.StatusArchived, db.StatusStarred:
+	case db.StatusUnread, db.StatusRead, db.StatusArchived:
 	default:
 		return nil, fmt.Errorf("invalid status: %q", status)
 	}

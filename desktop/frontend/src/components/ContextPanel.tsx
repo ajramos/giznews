@@ -8,6 +8,7 @@ interface Props {
   article: ArticleDTO | null;
   note: NoteDTO | null;
   active: boolean;
+  revision: number;
   onOpenNote: (id: number) => void;
   onCreateNote: (articleId: number) => void;
   onOpenGraph: (noteId: number | null) => void;
@@ -34,7 +35,7 @@ function noteIcon(n: NoteDTO): ReactNode {
 
 // ContextPanel is the third pane: the bridge between an item and the knowledge
 // graph. When focused (Tab), j/k navigate its actions and Enter runs them.
-export function ContextPanel({ article, note, active, onOpenNote, onCreateNote, onOpenGraph }: Props) {
+export function ContextPanel({ article, note, active, revision, onOpenNote, onCreateNote, onOpenGraph }: Props) {
   const [notes, setNotes] = useState<NoteDTO[]>([]);
   const [articleNote, setArticleNote] = useState<NoteDTO | null>(null);
   const [focus, setFocus] = useState(0);
@@ -46,7 +47,7 @@ export function ContextPanel({ article, note, active, onOpenNote, onCreateNote, 
   useEffect(() => {
     if (article) api.getArticleNote(article.id).then((n) => setArticleNote(n ?? null)).catch(() => setArticleNote(null));
     else setArticleNote(null);
-  }, [article]);
+  }, [article, revision]);
 
   const bySlug = useMemo(() => new Map(notes.map((n) => [n.slug, n])), [notes]);
 

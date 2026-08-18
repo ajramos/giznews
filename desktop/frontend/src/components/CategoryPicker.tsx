@@ -46,7 +46,7 @@ export function CategoryPicker({ current, unclassified, onPick, onUnclassified, 
           else onPick(it.cat);
           onClose();
         }
-      } else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      } else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

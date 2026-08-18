@@ -32,7 +32,7 @@ export function RulesPicker({ onEdit, onAdd, onClose, notify }: Props) {
       else if (e.key === "a") { e.preventDefault(); e.stopPropagation(); onAdd(); }
       else if (e.key === "e") { e.preventDefault(); e.stopPropagation(); const r = rules[focus]; if (r) onEdit(r); }
       else if (e.key === "d") { e.preventDefault(); e.stopPropagation(); const r = rules[focus]; if (r) void api.deleteRule(r.id).then(load).catch((err) => notify(String(err))); }
-      else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

@@ -28,7 +28,7 @@ export function LogsPanel({ onClose }: Props) {
       else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); el.scrollBy({ top: -40 }); }
       else if (e.key === "PageDown") { e.preventDefault(); e.stopPropagation(); el.scrollBy({ top: el.clientHeight * 0.9 }); }
       else if (e.key === "PageUp") { e.preventDefault(); e.stopPropagation(); el.scrollBy({ top: -el.clientHeight * 0.9 }); }
-      else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

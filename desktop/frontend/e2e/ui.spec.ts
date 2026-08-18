@@ -8,10 +8,10 @@ test.describe("UI render", () => {
     await shot(page, "01-layout");
 
     await expect(page.locator(".topbar .brand-name")).toHaveText("GizNews");
-    await expect(page.locator(".list-head .view-tab").first()).toContainText("Unread");
+    await expect(page.locator(".list-head .view-tab").first()).toContainText("Active");
     await expect(page.locator(".list-head .view-count").first()).toHaveText("7");
 
-    await expect(page.locator(".article-row")).toHaveCount(7); // 7 unread in mock
+    await expect(page.locator(".article-row")).toHaveCount(8); // 7 unread + 1 read in mock
     // no sources sidebar — sources live in the :sources picker
     await expect(page.locator(".sources-col")).toHaveCount(0);
 

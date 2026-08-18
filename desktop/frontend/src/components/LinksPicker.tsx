@@ -42,7 +42,7 @@ export function LinksPicker({ links, onPick, onClose }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); return; }
       if (e.key === "Tab") { e.preventDefault(); e.stopPropagation(); setFocus((f) => (f === "input" ? "list" : "input")); return; }
       if (e.key === "ArrowDown") {
         e.preventDefault(); e.stopPropagation();

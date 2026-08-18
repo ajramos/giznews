@@ -3,6 +3,7 @@ import { GitBranch, FileText, FlaskConical, Loader2, FolderOpen, type LucideIcon
 import { api } from "../api";
 import type { NoteDTO } from "../types";
 import { LinksPicker, type LinkItem } from "./LinksPicker";
+import { stars, catClass } from "./Markdown";
 
 export type StageKey = "electron" | "atom" | "molecule";
 
@@ -191,6 +192,12 @@ export function VaultBrowser({ stage, onStage, onOpenNote, onFocus, onClose, act
                 <span className="sp-type"><Icon size={13} /></span>
                 <span className="cmd-name">{it.title}</span>
               </span>
+              {(it.category || (it.rating != null && it.rating > 0)) && (
+                <span className="vb-meta">
+                  {it.category && <span className={`cat-chip ${catClass(it.category)}`}>{it.category}</span>}
+                  {it.rating != null && it.rating > 0 && <span className="vb-rating" title={`Importance: ${it.rating}/3`}>{stars(it.rating)}</span>}
+                </span>
+              )}
             </div>
           );
         })}

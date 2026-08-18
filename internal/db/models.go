@@ -59,6 +59,7 @@ type Article struct {
 	Importance  int           `json:"importance"` // 0..3
 	SimHash     uint64        `json:"simhash,omitempty"`
 	Status      ArticleStatus `json:"status"`
+	Starred     bool          `json:"starred"`
 	Published   string        `json:"published,omitempty"` // RFC3339
 	FetchedAt   string        `json:"fetched_at"`
 	UpdatedAt   string        `json:"updated_at"`

@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -231,7 +231,16 @@ CREATE TABLE IF NOT EXISTS digests (
 CREATE INDEX IF NOT EXISTS idx_digests_date ON digests(date);
 `
 
-// schemaV7 turns the knowledge graph into first-class relational data.
+// schemaV7 makes "starred" an orthogonal triage flag (separate from the
+// unread/read/archived status), so a read article can also be starred. Any
+// existing "starred" rows become "read + starred".
+const schemaV7 = `
+ALTER TABLE articles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0;
+UPDATE articles SET starred = 1, status = 'read' WHERE status = 'starred';
+CREATE INDEX IF NOT EXISTS idx_articles_starred ON articles(starred);
+`
+
+// schemaV8 turns the knowledge graph into first-class relational data.
 //
 // Until now edges lived inside the kb_notes.wikilinks JSON blob, which could
 // only be queried with substring LIKE (imprecise, unindexed), and concepts had
@@ -242,7 +251,7 @@ CREATE INDEX IF NOT EXISTS idx_digests_date ON digests(date);
 // every mention across runs. The backfill recovers both from what the vault
 // already wrote — including the concepts that were only ever dangling links,
 // which is where the lost mentions were hiding.
-const schemaV7 = `
+const schemaV8 = `
 CREATE TABLE IF NOT EXISTS kb_links (
 	from_note  INTEGER NOT NULL REFERENCES kb_notes(id) ON DELETE CASCADE,
 	to_slug    TEXT    NOT NULL,               -- may not exist yet (dangling link)
@@ -302,7 +311,7 @@ UPDATE concepts SET mentions = (
 );
 `
 
-// schemaV8 lets one concept answer to several spellings.
+// schemaV9 lets one concept answer to several spellings.
 //
 // The news stream names the same thing many ways — "OpenAI" and "Open AI",
 // "GPT-5" and "GPT5" — and each spelling used to become its own concept, so a
@@ -310,7 +319,7 @@ UPDATE concepts SET mentions = (
 // reached the promotion threshold. canon_key is the slug with its separators
 // removed, which collapses those variants automatically; concept_aliases holds
 // the merges that no rule can derive, made explicit by the user.
-const schemaV8 = `
+const schemaV9 = `
 ALTER TABLE concepts ADD COLUMN canon_key TEXT NOT NULL DEFAULT '';
 UPDATE concepts SET canon_key = replace(
 	CASE WHEN slug LIKE '%-concept' THEN substr(slug, 1, length(slug) - 8) ELSE slug END, '-', '');

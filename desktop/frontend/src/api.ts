@@ -110,6 +110,7 @@ export interface APIShape {
   getArticle: (id: number) => Promise<ArticleDTO>;
   getArticleContent: (id: number) => Promise<ArticleDTO>;
   setArticleStatus: (id: number, status: string) => Promise<void>;
+  setArticleStarred: (id: number, starred: boolean) => Promise<void>;
   setArticleImportance: (id: number, importance: number) => Promise<void>;
   fetch: () => Promise<FetchResult>;
   classify: (limit: number) => Promise<ClassifyResult>;
@@ -165,15 +166,17 @@ const realApi: APIShape = {
     call("GetArticleContent", id).then((v) => normalize<ArticleDTO>(v)),
   setArticleStatus: (id: number, status: string) =>
     call("SetArticleStatus", id, status).then(() => undefined),
+  setArticleStarred: (id: number, starred: boolean) =>
+    call("SetArticleStarred", id, starred).then(() => undefined),
   setArticleImportance: (id: number, importance: number) =>
     call("SetArticleImportance", id, importance).then(() => undefined),
 
-  fetch: () => call<FetchResult>("Fetch"),
-  classify: (limit: number) => call<ClassifyResult>("Classify", limit),
-  classifyArticles: (ids: number[]) => call<ClassifyResult>("ClassifyArticles", ids),
+  fetch: () => call("Fetch").then((v) => normalize<FetchResult>(v)),
+  classify: (limit: number) => call("Classify", limit).then((v) => normalize<ClassifyResult>(v)),
+  classifyArticles: (ids: number[]) => call("ClassifyArticles", ids).then((v) => normalize<ClassifyResult>(v)),
   summarizeArticle: (id: number) =>
     call("SummarizeArticle", id).then((v) => normalize<ArticleDTO>(v)),
-  digest: () => call<DigestDTO>("Digest"),
+  digest: () => call("Digest").then((v) => normalize<DigestDTO>(v)),
   listDigests: () => call("ListDigests").then((v) => arr<DigestMeta>(v)),
   getDigest: (date: string) =>
     call("GetDigest", date).then((v) => (v ? normalize<DigestDTO>(v) : null)),
@@ -190,8 +193,8 @@ const realApi: APIShape = {
   deleteRule: (id: number) =>
     call("DeleteRule", id).then(() => undefined),
 
-  kbuild: () => call<KBResult>("KBuild"),
-  ksynthesize: (category: string) => call<KBResult>("KSynthesize", category),
+  kbuild: () => call("KBuild").then((v) => normalize<KBResult>(v)),
+  ksynthesize: (category: string) => call("KSynthesize", category).then((v) => normalize<KBResult>(v)),
   ensureArticleNote: (articleID: number) =>
     call("EnsureArticleNote", articleID).then((v) => normalize<NoteDTO>(v)),
   getArticleNote: (articleID: number) =>
@@ -200,7 +203,7 @@ const realApi: APIShape = {
   getNote: (id: number) => call("GetNote", id).then((v) => normalize<NoteDTO>(v)),
   graphNeighbors: (id: number) => call("GraphNeighbors", id).then((v) => arr<NoteDTO>(v)),
 
-  searchIndex: () => call<IndexResult>("SearchIndex"),
+  searchIndex: () => call("SearchIndex").then((v) => normalize<IndexResult>(v)),
   search: (query: string, limit: number) =>
     call("Search", query, limit).then((v) => arr<SearchResultDTO>(v)),
 

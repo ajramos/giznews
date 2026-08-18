@@ -19,6 +19,7 @@ type Options struct {
 	AgeDays   int // only articles fetched within this window
 	UseLLM    bool
 	Model     string
+	Language  string // ISO 639-1 for LLM-generated summaries/headlines
 	// OnProgress, when set, reports phase progress ("rules" or "llm").
 	OnProgress func(phase string, done, total int)
 }
@@ -171,7 +172,7 @@ func (s *Service) runBatches(ctx context.Context, articles []*db.Article) (int, 
 				start := time.Now()
 				s.logger.Printf("classifying batch %d/%d (%d articles)", j.idx+1, totalBatches, len(batch))
 
-				results, err := BatchClassify(ctx, s.prov, s.opts.Model, batch)
+				results, err := BatchClassify(ctx, s.prov, s.opts.Model, s.opts.Language, batch)
 				if err != nil {
 					mu.Lock()
 					errs = append(errs, fmt.Sprintf("LLM batch %d: %v", j.idx+1, err))

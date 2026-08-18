@@ -74,7 +74,7 @@ export function JobsPanel({ onClose, notify }: Props) {
       else if (e.key === "d") { e.preventDefault(); e.stopPropagation(); const j = list[focus]; if (j) void api.removeJob(j.id).then(() => setJobs((p) => p.filter((x) => x.id !== j.id))).catch((err) => notify(String(err))); }
       else if (e.key === "c") { e.preventDefault(); e.stopPropagation(); void api.clearFinishedJobs().then(() => setJobs((p) => p.filter((x) => x.status === "running"))).catch((err) => notify(String(err))); }
       else if (e.key === "x") { e.preventDefault(); e.stopPropagation(); const j = list[focus]; if (j && j.status === "running") { void api.cancelJob(j.id).catch((err) => notify(String(err))); notify("Cancel requested"); } }
-      else if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);

@@ -188,6 +188,9 @@ export const mockBackend: APIShape = {
     if (opts.sourceId) list = list.filter((a) => a.sourceId === opts.sourceId);
     if (opts.category) list = list.filter((a) => a.category === opts.category);
     if (opts.unclassified) list = list.filter((a) => !a.category);
+    if (opts.unarchived) list = list.filter((a) => a.status === "unread" || a.status === "read");
+    if (opts.starred != null) list = list.filter((a) => (a.starred === true) === opts.starred);
+    if (opts.importanceExact != null) list = list.filter((a) => a.importance === opts.importanceExact);
     if (opts.query) {
       const q = opts.query.toLowerCase();
       list = list.filter((a) => a.title.toLowerCase().includes(q) || (a.author ?? "").toLowerCase().includes(q));
@@ -216,6 +219,11 @@ export const mockBackend: APIShape = {
     await delay();
     const a = ARTICLES.find((x) => x.id === id);
     if (a) a.status = status as ArticleDTO["status"];
+  },
+  setArticleStarred: async (id: number, starred: boolean): Promise<void> => {
+    await delay();
+    const a = ARTICLES.find((x) => x.id === id);
+    if (a) a.starred = starred;
   },
   setArticleImportance: async (_id: number, _importance: number): Promise<void> => { await delay(); },
 
