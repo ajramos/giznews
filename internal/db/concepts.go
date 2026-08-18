@@ -173,6 +173,27 @@ func (r *ConceptRepo) list(ctx context.Context, query string, args ...any) ([]*C
 	return out, rows.Err()
 }
 
+// Rename sets a concept's display name.
+func (r *ConceptRepo) Rename(ctx context.Context, slug, name string) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE concepts SET name = ? WHERE slug = ?", name, slug)
+	if err != nil {
+		return fmt.Errorf("rename concept: %w", err)
+	}
+	return checkAffected(res, "rename concept")
+}
+
+// RawNamed returns the concepts still carrying their slug as their name — the
+// ones that were first seen through a lowercase tag and never got a better one.
+func (r *ConceptRepo) RawNamed(ctx context.Context, limit int) ([]*Concept, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	return r.list(ctx, `
+		SELECT slug, name, note_id, mentions, first_seen, last_seen FROM concepts
+		WHERE name = slug ORDER BY mentions DESC LIMIT ?`, limit)
+}
+
 // Resolve maps a freshly derived concept slug to the slug that already
 // represents it: an explicit alias wins, then an existing concept sharing its
 // canonical key. Unknown concepts resolve to themselves.

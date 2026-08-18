@@ -197,6 +197,12 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		}
 	}
 
+	// Concepts first seen through a lowercase tag kept it as their name; give
+	// them a readable one now that they can get it.
+	if err := s.repairConceptNames(ctx, kbRepo, conceptRepo); err != nil && s.logger != nil {
+		s.logger.Printf("kb: concept name repair failed: %v", err)
+	}
+
 	// The vault's entry points are a view over what the build just wrote; a
 	// failure here leaves the notes themselves intact, so it is logged, not
 	// returned.
@@ -208,6 +214,37 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		s.logger.Printf("kb build: %d atoms, %d electrons", res.AtomsCreated, res.ElectronsCreated+res.ElectronsUpdated)
 	}
 	return res, nil
+}
+
+// repairConceptNames upgrades the concepts whose name is still their raw slug.
+// A concept named from a tag before this could read "rag" forever, because only
+// a new mention would ever rewrite it; its electron is rebuilt so the vault
+// shows the same name as the index.
+func (s *Service) repairConceptNames(ctx context.Context, kbRepo *db.KBRepo, repo *db.ConceptRepo) error {
+	raw, err := repo.RawNamed(ctx, 500)
+	if err != nil {
+		return err
+	}
+	for _, c := range raw {
+		name := DisplayName(c.Slug)
+		if name == c.Name {
+			continue
+		}
+		if err := repo.Rename(ctx, c.Slug, name); err != nil {
+			return err
+		}
+		if c.NoteID == 0 {
+			continue
+		}
+		sources, err := s.conceptSources(ctx, repo, &conceptAgg{Slug: c.Slug, Name: name})
+		if err != nil {
+			return err
+		}
+		if _, _, err := s.upsertElectron(ctx, kbRepo, c.Slug, name, sources); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // recordMentions persists this run's mentions of a concept and returns its
@@ -367,18 +404,21 @@ func (s *Service) conceptSlugs(a *db.Article) []string {
 	return out
 }
 
+// conceptName is the display name for a concept derived from an article: the
+// entity's own spelling when the model gave one, otherwise the tag or slug
+// expanded into something readable.
 func (s *Service) conceptName(a *db.Article, slug string) string {
 	for _, e := range a.Entities {
 		if Slugify(e.Name) == slug {
-			return e.Name
+			return DisplayName(e.Name)
 		}
 	}
 	for _, t := range a.Tags {
 		if Slugify(t) == slug {
-			return t
+			return DisplayName(t)
 		}
 	}
-	return slug
+	return DisplayName(slug)
 }
 
 // uniqueSlug returns a free slug derived from base, avoiding both the slugs

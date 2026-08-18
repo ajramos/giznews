@@ -637,3 +637,125 @@ func TestBuildWritesVaultIndex(t *testing.T) {
 		}
 	}
 }
+
+func TestDisplayName(t *testing.T) {
+	cases := map[string]string{
+		"rag":                "RAG",
+		"llm":                "LLM",
+		"lora":               "LoRA",
+		"openai":             "OpenAI",
+		"open-ai":            "OpenAI",
+		"hugging-face":       "Hugging Face",
+		"gpt-5":              "GPT-5",
+		"llama-3":            "Llama-3",
+		"state-space-models": "State Space Models",
+		"agents":             "Agents",
+		"ai-regulation":      "AI Regulation",
+		"OpenAI":             "OpenAI", // already cased by the entity extractor
+		"Mixture of Experts": "Mixture of Experts",
+		"":                   "",
+	}
+	for in, want := range cases {
+		if got := DisplayName(in); got != want {
+			t.Errorf("DisplayName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A concept derived from a lowercase tag must still read properly everywhere it
+// is shown: the concept row, the electron note and the vault index.
+func TestConceptNamesAreReadable(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "RAG in production", []string{"rag"})
+	classifiedArticle(t, d, srcID, "RAG at the edge", []string{"rag"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := db.NewConceptRepo(d).Get(ctx, "rag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name != "RAG" {
+		t.Fatalf("concept name = %q, want RAG", c.Name)
+	}
+	note, err := db.NewKBRepo(d).GetBySlug(ctx, "rag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note.Title != "RAG" {
+		t.Fatalf("electron title = %q, want RAG", note.Title)
+	}
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "rag.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(onDisk), "# RAG") {
+		t.Fatalf("electron heading:\n%s", onDisk)
+	}
+	index, err := os.ReadFile(filepath.Join(vaultRoot, "Index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(index), "[[rag]] — RAG") {
+		t.Fatalf("index entry:\n%s", index)
+	}
+	// The slug — the file name and the wikilink — stays lowercase.
+	if note.Slug != "rag" {
+		t.Fatalf("slug = %q, want rag", note.Slug)
+	}
+}
+
+// Concepts stored before display names existed are repaired on the next build,
+// note included.
+func TestRepairsRawConceptNames(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+	conceptRepo := db.NewConceptRepo(d)
+	kbRepo := db.NewKBRepo(d)
+
+	classifiedArticle(t, d, srcID, "Serving models cheaply", []string{"vllm"})
+	classifiedArticle(t, d, srcID, "Serving models fast", []string{"vllm"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Rewind to what an older build would have stored: the slug as the name.
+	if err := conceptRepo.Rename(ctx, "vllm", "vllm"); err != nil {
+		t.Fatal(err)
+	}
+	note, err := kbRepo.GetBySlug(ctx, "vllm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	note.Title = "vllm"
+	note.Content = strings.ReplaceAll(note.Content, "# vLLM", "# vllm")
+	if err := kbRepo.Update(ctx, note); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.vault.Write("electron", "vllm", note.Content); err != nil {
+		t.Fatal(err)
+	}
+
+	// A build with nothing new to ingest still repairs what it finds.
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := conceptRepo.Get(ctx, "vllm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name != "vLLM" {
+		t.Fatalf("concept name = %q, want vLLM", c.Name)
+	}
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "vllm.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(onDisk), "# vLLM") {
+		t.Fatalf("electron was not rewritten:\n%s", onDisk)
+	}
+}
