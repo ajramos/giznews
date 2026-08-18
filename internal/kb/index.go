@@ -196,7 +196,7 @@ func (s *Service) renderDaily(ctx context.Context, repo *db.KBRepo, day string) 
 func mapFrontmatter(kind string) string {
 	return frontmatter{
 		Type:    kind,
-		Created: time.Now().Format("2006-01-02 15:04"),
+		Created: noteTime(time.Now()),
 		Status:  "generated",
 		Tags:    []string{"ai", kind},
 	}.render()

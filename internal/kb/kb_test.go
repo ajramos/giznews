@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ajramos/giznews/internal/db"
+	"gopkg.in/yaml.v3"
 )
 
 func TestSlugify(t *testing.T) {
@@ -757,5 +758,83 @@ func TestRepairsRawConceptNames(t *testing.T) {
 	}
 	if !strings.Contains(string(onDisk), "# vLLM") {
 		t.Fatalf("electron was not rewritten:\n%s", onDisk)
+	}
+}
+
+func TestYAMLValueQuoting(t *testing.T) {
+	cases := map[string]string{
+		"models":           "models",
+		"HN RSS":           "HN RSS",
+		"★★★☆☆":            "★★★☆☆",
+		"2026-08-18 07:30": `"2026-08-18 07:30"`, // the time separator is a colon
+		"Ars Technica: AI": `"Ars Technica: AI"`,
+		"https://x.com/a":  `"https://x.com/a"`,
+		"#hashtag":         `"#hashtag"`,
+		`he said "hi"`:     `"he said \"hi\""`,
+		"- leading dash":   `"- leading dash"`,
+		"":                 `""`,
+		"two\nlines":       "two lines",
+	}
+	for in, want := range cases {
+		if got := yamlValue(in); got != want {
+			t.Errorf("yamlValue(%q) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+// The frontmatter of a note whose fields carry colons, quotes and hashes must
+// still parse as YAML — Obsidian reads it, and a broken block loses every field.
+func TestAtomFrontmatterParses(t *testing.T) {
+	a := &db.Article{
+		Title:      "Anthropic: what it means",
+		SourceName: "Ars Technica: AI",
+		URL:        "https://arstechnica.com/a?b=1#c",
+		Importance: 3,
+		Category:   "industry",
+		Summary:    "Something happened.",
+		Tags:       []string{"anthropic", "#policy", "cost: high"},
+		Published:  "2026-03-04T07:30:00Z",
+	}
+	content := BuildAtom(a, []string{"anthropic"})
+
+	block, _, found := strings.Cut(strings.TrimPrefix(content, "---\n"), "\n---\n")
+	if !found {
+		t.Fatalf("no frontmatter block:\n%s", content)
+	}
+	var fm struct {
+		Type     string   `yaml:"type"`
+		Created  string   `yaml:"created"`
+		Source   string   `yaml:"source"`
+		URL      string   `yaml:"url"`
+		Category string   `yaml:"category"`
+		Tags     []string `yaml:"tags"`
+	}
+	if err := yaml.Unmarshal([]byte(block), &fm); err != nil {
+		t.Fatalf("frontmatter does not parse: %v\n%s", err, block)
+	}
+	if fm.Source != "Ars Technica: AI" {
+		t.Errorf("source = %q", fm.Source)
+	}
+	if fm.URL != "https://arstechnica.com/a?b=1#c" {
+		t.Errorf("url = %q", fm.URL)
+	}
+	if len(fm.Tags) != 5 || fm.Tags[2] != "anthropic" || fm.Tags[3] != "#policy" || fm.Tags[4] != "cost: high" {
+		t.Errorf("tags = %q", fm.Tags)
+	}
+	// The note is dated by the article, not by the moment of the build.
+	if fm.Created != "2026-03-04 07:30" {
+		t.Errorf("created = %q, want the publication date", fm.Created)
+	}
+}
+
+// Without a publication date the fetch time stands in, and only then the clock.
+func TestAtomDateFallsBackToFetch(t *testing.T) {
+	a := &db.Article{Title: "T", URL: "u", FetchedAt: "2026-05-06T12:00:00Z"}
+	if got := BuildAtom(a, nil); !strings.Contains(got, "created: \"2026-05-06 12:00\"") {
+		t.Fatalf("created not taken from fetched_at:\n%s", got)
+	}
+	bare := BuildAtom(&db.Article{Title: "T", URL: "u"}, nil)
+	if !strings.Contains(bare, "created: ") {
+		t.Fatalf("missing created:\n%s", bare)
 	}
 }
