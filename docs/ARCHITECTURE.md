@@ -85,6 +85,8 @@ incrementales por `PRAGMA user_version` en `internal/db/db.go`:
    cubren lo que la regla no deduce)
 9. `kb_notes.content_hash` (huella del fichero que giznews escribió por última
    vez; es lo que distingue una nota intacta de una editada por el usuario)
+10. `concepts.definition` + `definition_key` (la prosa del concepto y de qué se
+    escribió, para no volver a pedirla en cada build)
 
 Nota: la numeración real en `db.go` es v7 `articles.starred`, v8 el grafo
 relacional, v9 los alias y v10 el hash — el orden de merge, no el de diseño.
@@ -117,6 +119,12 @@ reescribir (`Vault.Sync`):
 
 Los atoms se refrescan cuando su artículo cambia (`ListStaleNotes`), no una sola
 vez al crearse.
+
+Un **electron** no es una lista de backlinks: lleva una definición (escrita por
+el LLM cuando está disponible, cacheada en `concepts.definition` y regenerada
+solo cuando cambian las notas que la sustentan), la línea temporal de menciones
+por mes, los conceptos con los que comparte notas —co-ocurrencia real, no tags—
+y sus fuentes.
 
 Los parámetros del build viven en `kb` dentro de `config.json`
 (`min_occurrences`, `age_days`, `limit`; la importancia mínima sigue en

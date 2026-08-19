@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ajramos/giznews/internal/db"
+	"github.com/ajramos/giznews/internal/llm"
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,12 +54,32 @@ func TestBuildAtom(t *testing.T) {
 }
 
 func TestBuildElectron(t *testing.T) {
-	content := BuildElectron("LoRA", []atomRef{{Slug: "atom-1", Title: "LoRA paper"}})
+	content := BuildElectron(ElectronView{
+		Name:       "LoRA",
+		Definition: "A way to fine-tune a model cheaply.",
+		Sources:    []atomRef{{Slug: "atom-1", Title: "LoRA paper"}},
+		Related:    []db.RelatedConcept{{Slug: "qlora", Name: "QLoRA", Shared: 2}},
+		Timeline:   []db.MonthCount{{Month: "2026-07", Count: 1}, {Month: "2026-08", Count: 3}},
+	})
 	if !strings.Contains(content, "type: electron") {
 		t.Fatalf("missing type:\n%s", content)
 	}
 	if !strings.Contains(content, "[[atom-1]]") {
 		t.Fatalf("missing backlink:\n%s", content)
+	}
+	for _, want := range []string{
+		"A way to fine-tune a model cheaply.",
+		"2026-08 · 3 mention(s)",
+		"[[qlora]] — QLoRA · 2 shared note(s)",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("missing %q:\n%s", want, content)
+		}
+	}
+	// Without a definition the note still says something true.
+	plain := BuildElectron(ElectronView{Name: "LoRA", Sources: []atomRef{{Slug: "atom-1", Title: "LoRA paper"}}})
+	if !strings.Contains(plain, "named in 1 note(s)") {
+		t.Fatalf("fallback definition:\n%s", plain)
 	}
 }
 
@@ -1264,5 +1285,122 @@ func TestPreviewMatchesTheBuildThatFollows(t *testing.T) {
 		if _, err := db.NewKBRepo(d).GetBySlug(ctx, a.Slug); err != nil {
 			t.Fatalf("planned slug %q was not the one written: %v", a.Slug, err)
 		}
+	}
+}
+
+// countingProvider answers definitions and records how often it was asked.
+type countingProvider struct {
+	calls  int
+	answer string
+}
+
+func (p *countingProvider) Name() string                   { return "counting" }
+func (p *countingProvider) Ping(ctx context.Context) error { return nil }
+func (p *countingProvider) Embed(ctx context.Context, req llm.EmbeddingRequest) (llm.EmbeddingResponse, error) {
+	return llm.EmbeddingResponse{}, nil
+}
+func (p *countingProvider) StreamingComplete(ctx context.Context, req llm.CompletionRequest, onChunk func(string)) (llm.CompletionResponse, error) {
+	return p.Complete(ctx, req)
+}
+func (p *countingProvider) Complete(ctx context.Context, req llm.CompletionRequest) (llm.CompletionResponse, error) {
+	p.calls++
+	return llm.CompletionResponse{Content: p.answer}, nil
+}
+
+// A concept's definition is written once and kept until the notes behind it
+// change: asking a model on every build would cost a call per concept per run
+// and rewrite the vault for nothing.
+func TestElectronDefinitionIsWrittenOnceAndReused(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	vaultRoot := filepath.Join(t.TempDir(), "vault")
+	prov := &countingProvider{answer: "Retrieval-augmented generation grounds a model in documents it fetches."}
+	svc, err := NewService(d, vaultRoot, Options{
+		ImportanceThreshold: 2, MinOccurrences: 2, AgeDays: 30, UseLLM: true,
+	}, prov, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	src, err := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	classifiedArticle(t, d, src.ID, "RAG in production", []string{"rag"})
+	classifiedArticle(t, d, src.ID, "RAG at the edge", []string{"rag"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if prov.calls != 1 {
+		t.Fatalf("asked the model %d times on the first build, want 1", prov.calls)
+	}
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "rag.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(onDisk), "grounds a model in documents") {
+		t.Fatalf("definition not written:\n%s", onDisk)
+	}
+
+	// Nothing new: the stored definition is reused, the model is not asked.
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if prov.calls != 1 {
+		t.Fatalf("model asked again for an unchanged concept (%d calls)", prov.calls)
+	}
+
+	// A third note names it: the definition is written from more than before.
+	prov.answer = "Now with agents in the mix."
+	classifiedArticle(t, d, src.ID, "Agents that retrieve", []string{"rag"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if prov.calls != 2 {
+		t.Fatalf("model asked %d times, want 2 (the sources changed)", prov.calls)
+	}
+	after, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "rag.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), "Now with agents in the mix.") {
+		t.Fatalf("definition not refreshed:\n%s", after)
+	}
+}
+
+// What a concept comes up with, and when, are read from the mentions rather
+// than guessed.
+func TestElectronShowsTimelineAndNeighbours(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "RAG in production", []string{"rag", "agents"})
+	classifiedArticle(t, d, srcID, "RAG at the edge", []string{"rag", "embeddings"})
+	classifiedArticle(t, d, srcID, "Agents that retrieve", []string{"rag", "agents"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "01-Electrons", "rag.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(onDisk)
+	// agents shares two notes with rag, embeddings one — and that order shows.
+	agents := strings.Index(got, "[[agents]]")
+	embeddings := strings.Index(got, "[[embeddings]]")
+	if agents < 0 || embeddings < 0 || agents > embeddings {
+		t.Fatalf("neighbours missing or out of order:\n%s", got)
+	}
+	if !strings.Contains(got, "· 2 shared note(s)") {
+		t.Fatalf("shared count missing:\n%s", got)
+	}
+	month := time.Now().UTC().Format("2006-01")
+	if !strings.Contains(got, month+" · 3 mention(s)") {
+		t.Fatalf("timeline missing %s:\n%s", month, got)
 	}
 }

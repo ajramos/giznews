@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -342,4 +342,15 @@ CREATE INDEX IF NOT EXISTS idx_concept_aliases_canonical ON concept_aliases(cano
 // (whose text has to be preserved).
 const schemaV10 = `
 ALTER TABLE kb_notes ADD COLUMN content_hash TEXT NOT NULL DEFAULT '';
+`
+
+// schemaV11 lets a concept keep the definition written for it.
+//
+// An Electron was a list of backlinks under a fixed sentence; a definition is
+// worth asking a model for, but not worth asking again on every build. The key
+// records what the definition was written from, so it is regenerated when the
+// notes behind it change and reused when they have not.
+const schemaV11 = `
+ALTER TABLE concepts ADD COLUMN definition TEXT NOT NULL DEFAULT '';
+ALTER TABLE concepts ADD COLUMN definition_key TEXT NOT NULL DEFAULT '';
 `

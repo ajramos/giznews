@@ -23,6 +23,10 @@ type Concept struct {
 	Mentions  int    `json:"mentions"`
 	FirstSeen string `json:"first_seen"`
 	LastSeen  string `json:"last_seen"`
+	// Definition is the prose written for the concept, and DefinitionKey what
+	// it was written from.
+	Definition    string `json:"definition,omitempty"`
+	DefinitionKey string `json:"-"`
 }
 
 var conceptSuffixRe = regexp.MustCompile(`-concept(-\d+)?$`)
@@ -92,8 +96,8 @@ func (r *ConceptRepo) Get(ctx context.Context, slug string) (*Concept, error) {
 		noteID sql.NullInt64
 	)
 	err := r.db.sql.QueryRowContext(ctx,
-		"SELECT slug, name, note_id, mentions, first_seen, last_seen FROM concepts WHERE slug = ?", slug).
-		Scan(&c.Slug, &c.Name, &noteID, &c.Mentions, &c.FirstSeen, &c.LastSeen)
+		"SELECT slug, name, note_id, mentions, first_seen, last_seen, definition, definition_key FROM concepts WHERE slug = ?", slug).
+		Scan(&c.Slug, &c.Name, &noteID, &c.Mentions, &c.FirstSeen, &c.LastSeen, &c.Definition, &c.DefinitionKey)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -130,6 +134,84 @@ func (r *ConceptRepo) MentionedBy(ctx context.Context, slug string, limit int) (
 	}
 	defer rows.Close()
 	return scanKBNotes(rows)
+}
+
+// RelatedConcept is a concept that keeps turning up in the same notes.
+type RelatedConcept struct {
+	Slug   string `json:"slug"`
+	Name   string `json:"name"`
+	Shared int    `json:"shared"` // notes mentioning both
+}
+
+// MonthCount is how often a concept was mentioned in one month.
+type MonthCount struct {
+	Month string `json:"month"` // YYYY-MM
+	Count int    `json:"count"`
+}
+
+// SetDefinition stores the prose written for a concept, along with the key that
+// says what it was written from.
+func (r *ConceptRepo) SetDefinition(ctx context.Context, slug, definition, key string) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE concepts SET definition = ?, definition_key = ? WHERE slug = ?", definition, key, slug)
+	if err != nil {
+		return fmt.Errorf("set concept definition: %w", err)
+	}
+	return checkAffected(res, "set concept definition")
+}
+
+// CoOccurring returns the concepts most often mentioned alongside this one.
+// Sharing notes is what makes two ideas neighbours; nothing else in the graph
+// says so.
+func (r *ConceptRepo) CoOccurring(ctx context.Context, slug string, limit int) ([]RelatedConcept, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT c.slug, c.name, COUNT(*) AS shared
+		FROM concept_mentions mine
+		JOIN concept_mentions theirs
+		  ON theirs.note_id = mine.note_id AND theirs.concept_slug != mine.concept_slug
+		JOIN concepts c ON c.slug = theirs.concept_slug
+		WHERE mine.concept_slug = ?
+		GROUP BY c.slug, c.name
+		ORDER BY shared DESC, c.slug
+		LIMIT ?`, slug, limit)
+	if err != nil {
+		return nil, fmt.Errorf("co-occurring concepts: %w", err)
+	}
+	defer rows.Close()
+	var out []RelatedConcept
+	for rows.Next() {
+		var rc RelatedConcept
+		if err := rows.Scan(&rc.Slug, &rc.Name, &rc.Shared); err != nil {
+			return nil, err
+		}
+		out = append(out, rc)
+	}
+	return out, rows.Err()
+}
+
+// MentionsByMonth reports when a concept was picked up, oldest month first, so
+// a note can show whether an idea is rising or fading.
+func (r *ConceptRepo) MentionsByMonth(ctx context.Context, slug string) ([]MonthCount, error) {
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT substr(created_at, 1, 7) AS month, COUNT(*)
+		FROM concept_mentions WHERE concept_slug = ?
+		GROUP BY month ORDER BY month`, slug)
+	if err != nil {
+		return nil, fmt.Errorf("concept timeline: %w", err)
+	}
+	defer rows.Close()
+	var out []MonthCount
+	for rows.Next() {
+		var m MonthCount
+		if err := rows.Scan(&m.Month, &m.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }
 
 // HasMention reports whether a note is already counted towards a concept.

@@ -155,8 +155,20 @@ func BuildAtom(a *db.Article, concepts []string) string {
 	return b.String()
 }
 
-// BuildElectron produces an Electron note aggregating atom backlinks.
-func BuildElectron(name string, sources []atomRef) string {
+// ElectronView is everything an Electron note says about a concept.
+type ElectronView struct {
+	Name       string
+	Definition string // written by the model when one is available
+	Sources    []atomRef
+	Related    []db.RelatedConcept
+	Timeline   []db.MonthCount
+}
+
+// BuildElectron produces the Electron note for a concept. A list of backlinks
+// under a canned sentence says nothing a reader could not see from the graph;
+// what is worth writing down is what the concept means, when it comes up, and
+// what it keeps coming up with.
+func BuildElectron(v ElectronView) string {
 	fm := frontmatter{
 		Type:    "electron",
 		Created: noteTime(time.Now()),
@@ -166,16 +178,50 @@ func BuildElectron(name string, sources []atomRef) string {
 
 	var b strings.Builder
 	b.WriteString(fm.render())
-	b.WriteString("\n# " + name + "\n\n")
-	b.WriteString(fmt.Sprintf("## Definición\nConcepto recurrente en el seguimiento de IA — referenciado en %d nota(s).\n\n", len(sources)))
-	if len(sources) > 0 {
-		b.WriteString("## Fuentes\n")
-		for _, s := range sources {
-			b.WriteString("- [[" + s.Slug + "]] — " + s.Title + "\n")
+	b.WriteString("\n# " + v.Name + "\n\n")
+
+	b.WriteString("## Definition\n")
+	if v.Definition != "" {
+		b.WriteString(v.Definition + "\n\n")
+	} else {
+		b.WriteString(fmt.Sprintf("A recurring idea in the feed, named in %d note(s).\n\n", len(v.Sources)))
+	}
+
+	if len(v.Timeline) > 0 {
+		b.WriteString("## When it comes up\n")
+		for _, m := range v.Timeline {
+			b.WriteString(fmt.Sprintf("- %s · %d mention(s)%s\n", m.Month, m.Count, sparkbar(m.Count)))
+		}
+		b.WriteString("\n")
+	}
+
+	if len(v.Related) > 0 {
+		b.WriteString("## Comes up with\n")
+		for _, r := range v.Related {
+			b.WriteString(fmt.Sprintf("- [[%s]] — %s · %d shared note(s)\n", r.Slug, r.Name, r.Shared))
+		}
+		b.WriteString("\n")
+	}
+
+	if len(v.Sources) > 0 {
+		b.WriteString("## Sources\n")
+		for _, src := range v.Sources {
+			b.WriteString("- [[" + src.Slug + "]] — " + src.Title + "\n")
 		}
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// sparkbar draws a mention count so a run of months reads as a shape.
+func sparkbar(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if n > 20 {
+		n = 20
+	}
+	return "  " + strings.Repeat("▁", n)
 }
 
 // BuildMolecule produces a Molecule note synthesizing a category/theme.

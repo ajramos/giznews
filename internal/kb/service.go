@@ -477,6 +477,98 @@ func (s *Service) writeAtom(ctx context.Context, kbRepo *db.KBRepo, ingestRepo *
 	return note, nil
 }
 
+// electronView gathers what an Electron note says: the concept's definition —
+// written by the model when one is available, and reused while the notes behind
+// it have not changed — plus when it is mentioned and what it shares notes with.
+func (s *Service) electronView(ctx context.Context, slug, name string, sources []atomRef) (ElectronView, error) {
+	view := ElectronView{Name: name, Sources: sources}
+	repo := db.NewConceptRepo(s.db)
+
+	related, err := repo.CoOccurring(ctx, slug, 8)
+	if err != nil {
+		return view, err
+	}
+	view.Related = related
+
+	timeline, err := repo.MentionsByMonth(ctx, slug)
+	if err != nil {
+		return view, err
+	}
+	view.Timeline = timeline
+
+	concept, err := repo.Get(ctx, slug)
+	if err != nil && !errors.Is(err, db.ErrNotFound) {
+		return view, err
+	}
+	key := definitionKey(name, sources)
+	if concept != nil && concept.DefinitionKey == key {
+		view.Definition = concept.Definition // nothing it was written from moved
+		return view, nil
+	}
+	if !s.opts.UseLLM || s.prov == nil || concept == nil {
+		if concept != nil {
+			view.Definition = concept.Definition // keep the last one we had
+		}
+		return view, nil
+	}
+
+	definition, err := s.defineConcept(ctx, name, sources)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Printf("kb: could not define %q: %v", slug, err)
+		}
+		view.Definition = concept.Definition
+		return view, nil
+	}
+	if err := repo.SetDefinition(ctx, slug, definition, key); err != nil {
+		return view, err
+	}
+	view.Definition = definition
+	return view, nil
+}
+
+// definitionKey fingerprints what a definition was written from, so it is asked
+// for again when the notes change and reused when they have not.
+func definitionKey(name string, sources []atomRef) string {
+	titles := make([]string, 0, len(sources))
+	for _, src := range sources {
+		titles = append(titles, src.Slug)
+	}
+	sort.Strings(titles)
+	return hashOf([]byte(name + "\x00" + strings.Join(titles, "\x00")))
+}
+
+// defineConcept asks the model what the concept is, from the notes that name it.
+func (s *Service) defineConcept(ctx context.Context, name string, sources []atomRef) (string, error) {
+	const maxTitles = 14
+	titles := make([]string, 0, maxTitles)
+	for _, src := range sources {
+		if len(titles) == maxTitles {
+			break
+		}
+		titles = append(titles, "- "+src.Title)
+	}
+	resp, err := s.prov.Complete(ctx, llm.CompletionRequest{
+		Model: s.opts.Model,
+		Messages: []llm.Message{
+			{Role: llm.RoleSystem, Content: "You write the opening of a knowledge-base note about one concept in AI. " +
+				"Say what it is and why it keeps coming up, in 2-3 sentences of plain text. " +
+				"No markdown, no preamble, no repetition of the headlines." +
+				llm.LanguageInstruction(s.opts.Language)},
+			{Role: llm.RoleUser, Content: "Concept: " + name + "\nSeen in these notes:\n" + strings.Join(titles, "\n")},
+		},
+		Temperature: 0.2,
+	})
+	if err != nil {
+		return "", err
+	}
+	definition := strings.TrimSpace(resp.Content)
+	if definition == "" {
+		return "", fmt.Errorf("empty definition")
+	}
+	return definition, nil
+}
+
 // electronOutcome reports what upsertElectron did with one concept.
 type electronOutcome int
 
@@ -501,7 +593,11 @@ func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug, nam
 		return electronSkipped, nil, nil
 	}
 
-	content := BuildElectron(name, sources)
+	view, err := s.electronView(ctx, slug, name, sources)
+	if err != nil {
+		return electronSkipped, nil, err
+	}
+	content := BuildElectron(view)
 	fm, _ := json.Marshal(map[string]any{"type": "electron", "name": name, "tags": []string{"ai", "concept"}})
 	tags := []string{"ai", "concept"}
 	links := make([]string, 0, len(sources))
