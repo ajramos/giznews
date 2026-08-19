@@ -10,6 +10,7 @@ import type {
   ArticleDTO,
   BulkResult,
   ClassifyResult,
+  ConceptDTO,
   DigestDTO,
   DigestMeta,
   FetchResult,
@@ -18,6 +19,7 @@ import type {
   JobDTO,
   KBResult,
   ListArticlesOptions,
+  MergeDTO,
   NoteDTO,
   RuleActionDTO,
   RuleDTO,
@@ -131,6 +133,9 @@ export interface APIShape {
   ensureArticleNote: (articleID: number) => Promise<NoteDTO>;
   getArticleNote: (articleID: number) => Promise<NoteDTO | null>;
   listNotes: (type: string) => Promise<NoteDTO[]>;
+  listConcepts: () => Promise<ConceptDTO[]>;
+  promoteConcept: (slug: string) => Promise<NoteDTO>;
+  mergeConcepts: (from: string, to: string) => Promise<MergeDTO>;
   getNote: (id: number) => Promise<NoteDTO>;
   graphNeighbors: (id: number) => Promise<NoteDTO[]>;
   searchIndex: () => Promise<IndexResult>;
@@ -200,6 +205,10 @@ const realApi: APIShape = {
   getArticleNote: (articleID: number) =>
     call("GetArticleNote", articleID).then((v) => (v ? normalize<NoteDTO>(v) : null)),
   listNotes: (type: string) => call("ListNotes", type).then((v) => arr<NoteDTO>(v)),
+  listConcepts: () => call("ListConcepts").then((v) => arr<ConceptDTO>(v)),
+  promoteConcept: (slug: string) => call("PromoteConcept", slug).then((v) => normalize<NoteDTO>(v)),
+  mergeConcepts: (from: string, to: string) =>
+    call("MergeConcepts", from, to).then((v) => normalize<MergeDTO>(v)),
   getNote: (id: number) => call("GetNote", id).then((v) => normalize<NoteDTO>(v)),
   graphNeighbors: (id: number) => call("GraphNeighbors", id).then((v) => arr<NoteDTO>(v)),
 

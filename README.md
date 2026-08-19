@@ -29,7 +29,9 @@ giztui:
 - `y` resumen IA · `a` archivar (con deshacer) · `m` destacar · `t` leído.
 - `s` búsqueda · `g` grafo · `d` digest · `:` command palette · `?` ayuda.
 - `v` selección múltiple · `u/r/x/*` vistas por estado · `q` salir.
-- **Pickers** keyboard-first para fuentes (`:sources`) y temas.
+- **Pickers** keyboard-first para fuentes (`:sources`), conceptos
+  (`:concepts` — promover uno pendiente con `Enter`, fundir dos grafías con
+  `m`) y temas.
 - 5 temas (GizNews Dark, Dracula, Slate Blue, Nord, Light).
 
 ## Quick start

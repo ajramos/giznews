@@ -55,6 +55,25 @@ type NoteDTO struct {
 	Source   string `json:"source,omitempty"`
 }
 
+// ConceptDTO is a recurring idea tracked by the knowledge graph. Promoted says
+// whether it already has an Electron note; the rest are still dangling links.
+type ConceptDTO struct {
+	Slug      string `json:"slug"`
+	Name      string `json:"name"`
+	Mentions  int    `json:"mentions"`
+	NoteID    int64  `json:"note_id,omitempty"`
+	Promoted  bool   `json:"promoted"`
+	FirstSeen string `json:"first_seen,omitempty"`
+	LastSeen  string `json:"last_seen,omitempty"`
+}
+
+// MergeDTO reports what folding one concept into another changed.
+type MergeDTO struct {
+	NotesRelinked int  `json:"notes_relinked"`
+	Mentions      int  `json:"mentions"`
+	Redirected    bool `json:"redirected"`
+}
+
 // SearchResultDTO is one hit from hybrid search.
 type SearchResultDTO struct {
 	Kind    string  `json:"kind"` // article | note

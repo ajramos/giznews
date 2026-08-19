@@ -466,6 +466,12 @@ select option { background: var(--bg-panel); color: var(--fg); }
   font: inherit; font-size: var(--fs-sm); padding: 3px 0; outline: none;
 }
 .list-search .icon-btn { padding: 2px; }
+.picker-filter {
+  border: none; border-bottom: 1px solid var(--border); background: transparent;
+  color: var(--fg); font: inherit; font-size: var(--fs-sm);
+  padding: 6px 12px; outline: none;
+}
+.picker-filter::placeholder { color: var(--fg-dim); }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .filter-imp { display: flex; gap: 4px; }
 .chip {

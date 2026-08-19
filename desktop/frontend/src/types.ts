@@ -182,5 +182,23 @@ export interface RuleDTO {
   enabled: boolean;
 }
 
+// ConceptDTO is a recurring idea the knowledge graph tracks. Promoted ones have
+// an Electron note; the rest are still dangling links waiting for mentions.
+export interface ConceptDTO {
+  slug: string;
+  name: string;
+  mentions: number;
+  noteId?: number;
+  promoted: boolean;
+  firstSeen?: string;
+  lastSeen?: string;
+}
+
+export interface MergeDTO {
+  notesRelinked: number;
+  mentions: number;
+  redirected: boolean;
+}
+
 export type ViewMode = "articles" | "digest";
 export type PanelMode = "none" | "search" | "graph" | "palette";

@@ -157,6 +157,52 @@ func (a *App) GetNote(ctx context.Context, id int64) (*NoteDTO, error) {
 	return toNoteDTO(n), nil
 }
 
+// ListConcepts returns the tracked concepts, most mentioned first.
+func (a *App) ListConcepts(ctx context.Context) ([]*ConceptDTO, error) {
+	concepts, err := db.NewConceptRepo(a.db).Top(ctx, 500)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*ConceptDTO, 0, len(concepts))
+	for _, c := range concepts {
+		out = append(out, &ConceptDTO{
+			Slug: c.Slug, Name: c.Name, Mentions: c.Mentions, NoteID: c.NoteID,
+			Promoted: c.NoteID != 0, FirstSeen: c.FirstSeen, LastSeen: c.LastSeen,
+		})
+	}
+	return out, nil
+}
+
+// PromoteConcept gives a concept its note now, without waiting for the
+// mention threshold.
+func (a *App) PromoteConcept(ctx context.Context, slug string) (*NoteDTO, error) {
+	svc, err := a.kbService()
+	if err != nil {
+		return nil, err
+	}
+	note, err := svc.PromoteConcept(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	return toNoteDTO(note), nil
+}
+
+// MergeConcepts folds one concept into another, rewriting the notes that
+// pointed at it.
+func (a *App) MergeConcepts(ctx context.Context, from, to string) (*MergeDTO, error) {
+	svc, err := a.kbService()
+	if err != nil {
+		return nil, err
+	}
+	res, err := svc.MergeConcepts(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return &MergeDTO{
+		NotesRelinked: res.NotesRelinked, Mentions: res.Mentions, Redirected: res.Redirected,
+	}, nil
+}
+
 func (a *App) GraphNeighbors(ctx context.Context, id int64) ([]*NoteDTO, error) {
 	svc, err := a.kbService()
 	if err != nil {

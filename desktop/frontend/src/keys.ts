@@ -102,6 +102,7 @@ export const HELP: HelpCategory[] = [
       { keys: ":flow", label: "Pipeline flow (live counts per stage)" },
       { keys: ":logs", label: "Pipeline log (what the app decided)" },
       { keys: ":rules", label: "Deterministic classification rules (edit the ⚡ prefilter)" },
+      { keys: ":concepts", label: "Concepts by mentions — promote a pending one, merge two spellings" },
       { keys: "q", label: "Quit GizNews" },
     ],
   },

@@ -32,6 +32,7 @@ import { JobsPanel } from "./components/JobsPanel";
 import { CategoryPicker, CATEGORIES } from "./components/CategoryPicker";
 import { FlowPanel } from "./components/FlowPanel";
 import { LogsPanel } from "./components/LogsPanel";
+import { ConceptPicker } from "./components/ConceptPicker";
 import { RulesPicker } from "./components/RulesPicker";
 import { RuleForm } from "./components/RuleForm";
 import { PromptModal } from "./components/PromptModal";
@@ -67,6 +68,7 @@ export default function App() {
   const [flowOpen, setFlowOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [rulesPickerOpen, setRulesPickerOpen] = useState(false);
+  const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
   const [ruleForm, setRuleForm] = useState<{ initial: RuleDTO | null } | null>(null);
   const [status, setStatus] = useState<StatusDTO | null>(null);
 
@@ -790,6 +792,7 @@ export default function App() {
     { name: "flow", hint: "Pipeline flow (live counts)", run: () => setFlowOpen(true) },
     { name: "logs", hint: "Pipeline log (what the app decided)", run: () => setLogsOpen(true) },
     { name: "rules", hint: "Deterministic classification rules", run: () => setRulesPickerOpen(true) },
+    { name: "concepts", hint: "Concepts by mentions (promote, merge)", run: () => setConceptPickerOpen(true) },
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
     { name: "vault", hint: "Knowledge vault (electrons → atoms → molecules)", run: () => setMode("vault") },
@@ -850,6 +853,7 @@ export default function App() {
           flowOpen ? (setFlowOpen(false), true) :
           logsOpen ? (setLogsOpen(false), true) :
           rulesPickerOpen ? (setRulesPickerOpen(false), true) :
+          conceptPickerOpen ? (setConceptPickerOpen(false), true) :
           ruleForm ? (setRuleForm(null), true) :
           synthPrompt ? (setSynthPrompt(false), true) :
           urlPrompt ? (setUrlPrompt(false), true) :
@@ -1014,7 +1018,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, openExternal, openGraph, goUnread, goRead, goArchived, toggleStarred, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, toggleBulkId, bulkAction, classifyIds, classifySelected, materializeArticles, processSelected, summarizeSelected, executeRange, startRange, completeRange, appendRangeDigit, cancelRange, zoomBy, zoomReset]);
+  }, [paletteOpen, helpOpen, sourceForm, deleteSource, themeModalOpen, sourcePickerOpen, jobsOpen, categoryPickerOpen, flowOpen, logsOpen, rulesPickerOpen, conceptPickerOpen, ruleForm, synthPrompt, urlPrompt, statusOpen, noteLinks, panel, digestOpen, noteReader, paneFocus, contextOpen, mode, countBuf, articles.length, selected, selectedIndex, openArticle, openExternal, openGraph, goUnread, goRead, goArchived, toggleStarred, moveDigestFocus, openDigestFocus, scrollReader, openAdjacent, openNoteLinks, openArticleLinks, reader, bulk, exitBulk, toggleBulkId, bulkAction, classifyIds, classifySelected, materializeArticles, processSelected, summarizeSelected, executeRange, startRange, completeRange, appendRangeDigit, cancelRange, zoomBy, zoomReset]);
 
   // clear any pending graph-open timer only on unmount (the keyboard effect
   // re-subscribes often, so its cleanup must NOT cancel the pending `g`).
@@ -1311,6 +1315,13 @@ export default function App() {
           onDelete={(s) => { setSourcePickerOpen(false); setDeleteSource(s); }}
           onFilter={(s) => { setSourcePickerOpen(false); void selectSource(s.id); }}
           onClose={() => setSourcePickerOpen(false)}
+        />
+      )}
+      {conceptPickerOpen && (
+        <ConceptPicker
+          onOpenNote={(id) => { setConceptPickerOpen(false); void openNote(id); }}
+          onClose={() => setConceptPickerOpen(false)}
+          notify={notify}
         />
       )}
       {rulesPickerOpen && (

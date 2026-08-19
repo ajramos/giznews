@@ -114,6 +114,18 @@ func (a *App) EnsureArticleNote(articleID int64) (*gizdesktop.NoteDTO, error) {
 func (a *App) GetArticleNote(articleID int64) (*gizdesktop.NoteDTO, error) {
 	return a.api.GetArticleNote(bg(), articleID)
 }
+func (a *App) ListConcepts() ([]*gizdesktop.ConceptDTO, error) {
+	return a.api.ListConcepts(bg())
+}
+
+func (a *App) PromoteConcept(slug string) (*gizdesktop.NoteDTO, error) {
+	return a.api.PromoteConcept(bg(), slug)
+}
+
+func (a *App) MergeConcepts(from, to string) (*gizdesktop.MergeDTO, error) {
+	return a.api.MergeConcepts(bg(), from, to)
+}
+
 func (a *App) ListNotes(noteType string) ([]*gizdesktop.NoteDTO, error) {
 	return a.api.ListNotes(bg(), noteType)
 }

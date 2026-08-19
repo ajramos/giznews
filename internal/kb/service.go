@@ -776,6 +776,36 @@ func (s *Service) summarizeCategory(ctx context.Context, category string, refs [
 	return strings.TrimSpace(resp.Content), nil
 }
 
+// PromoteConcept gives a concept its Electron note now, whatever its mention
+// count. The threshold decides what is promoted automatically; a reader looking
+// at the promotion queue has already decided this one is worth a note.
+func (s *Service) PromoteConcept(ctx context.Context, slug string) (*db.KBNote, error) {
+	kbRepo := db.NewKBRepo(s.db)
+	conceptRepo := db.NewConceptRepo(s.db)
+
+	concept, err := conceptRepo.Get(ctx, slug)
+	if err != nil {
+		return nil, fmt.Errorf("kb: promote %q: %w", slug, err)
+	}
+	sources, err := s.conceptSources(ctx, conceptRepo, &conceptAgg{Slug: concept.Slug, Name: concept.Name})
+	if err != nil {
+		return nil, err
+	}
+	outcome, note, err := s.upsertElectron(ctx, kbRepo, concept.Slug, concept.Name, sources)
+	if err != nil {
+		return nil, err
+	}
+	if note == nil {
+		return nil, fmt.Errorf("kb: %q cannot have a note: its slug belongs to another one", slug)
+	}
+	if outcome == electronCreated {
+		if err := conceptRepo.Promote(ctx, concept.Slug, note.ID); err != nil {
+			return nil, err
+		}
+	}
+	return note, nil
+}
+
 // MergeResult reports what a concept merge changed.
 type MergeResult struct {
 	NotesRelinked int  `json:"notes_relinked"`

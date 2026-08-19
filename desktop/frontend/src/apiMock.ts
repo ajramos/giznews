@@ -6,6 +6,7 @@ import type {
   ArticleDTO,
   BulkResult,
   ClassifyResult,
+  ConceptDTO,
   DigestDTO,
   DigestMeta,
   FetchResult,
@@ -14,6 +15,7 @@ import type {
   JobDTO,
   KBResult,
   ListArticlesOptions,
+  MergeDTO,
   NoteDTO,
   RuleActionDTO,
   RuleDTO,
@@ -100,6 +102,16 @@ const mockDigests: DigestDTO[] = [];
 const mockRules: RuleDTO[] = [
   { id: 1, name: "openai", query: "openai|gpt|chatgpt", actions: [{ type: "category", value: "industry" }, { type: "importance", value: "2" }], enabled: true },
   { id: 2, name: "anthropic", query: "anthropic|claude", actions: [{ type: "category", value: "models" }], enabled: true },
+];
+
+// A promotion queue with a couple of concepts already promoted, so the picker
+// has both states to show.
+const mockConcepts: ConceptDTO[] = [
+  { slug: "openai", name: "OpenAI", mentions: 7, noteId: 301, promoted: true, firstSeen: "2026-08-01T09:00:00Z", lastSeen: "2026-08-14T09:00:00Z" },
+  { slug: "rag", name: "RAG", mentions: 4, noteId: 302, promoted: true, firstSeen: "2026-08-03T09:00:00Z", lastSeen: "2026-08-13T09:00:00Z" },
+  { slug: "watermarking", name: "Watermarking", mentions: 2, promoted: false, firstSeen: "2026-08-09T09:00:00Z", lastSeen: "2026-08-14T08:50:00Z" },
+  { slug: "sparse-attention", name: "Sparse Attention", mentions: 1, promoted: false, firstSeen: "2026-08-12T09:00:00Z", lastSeen: "2026-08-12T09:00:00Z" },
+  { slug: "open-ai", name: "Open AI", mentions: 1, promoted: false, firstSeen: "2026-08-11T09:00:00Z", lastSeen: "2026-08-11T09:00:00Z" },
 ];
 
 function beginJob(name: string, type: string): number {
@@ -331,6 +343,40 @@ export const mockBackend: APIShape = {
     await delay();
     const i = mockRules.findIndex((x) => x.id === id);
     if (i >= 0) mockRules.splice(i, 1);
+  },
+
+  listConcepts: async (): Promise<ConceptDTO[]> => {
+    await delay();
+    return mockConcepts.map((c) => ({ ...c }));
+  },
+  promoteConcept: async (slug: string): Promise<NoteDTO> => {
+    await delay(60);
+    const c = mockConcepts.find((x) => x.slug === slug);
+    if (!c) throw new Error("concept not found");
+    const note: NoteDTO = {
+      id: 900 + mockConcepts.indexOf(c),
+      type: "electron",
+      title: c.name,
+      slug: c.slug,
+      content: `# ${c.name}\n\nReferenced in ${c.mentions} note(s).`,
+      tags: ["ai", "concept"],
+      wikilinks: [],
+      createdAt: new Date().toISOString(),
+    };
+    c.promoted = true;
+    c.noteId = note.id;
+    NOTES.push(note);
+    return note;
+  },
+  mergeConcepts: async (from: string, to: string): Promise<MergeDTO> => {
+    await delay(60);
+    const i = mockConcepts.findIndex((c) => c.slug === from);
+    const target = mockConcepts.find((c) => c.slug === to);
+    if (i < 0 || !target) throw new Error("concept not found");
+    target.mentions += mockConcepts[i].mentions;
+    const redirected = mockConcepts[i].promoted;
+    mockConcepts.splice(i, 1);
+    return { notesRelinked: 1, mentions: target.mentions, redirected };
   },
 
   kbuild: async (): Promise<KBResult> => {

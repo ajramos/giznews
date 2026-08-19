@@ -25,6 +25,11 @@ const FAKE = `
     Classify: async () => ({ classified: 8, by_rules: 2, by_llm: 6, skipped_no_llm: 0, batches: 1, errors: [] }),
     ClassifyArticles: async () => ({ classified: 2, by_rules: 1, by_llm: 1, skipped_no_llm: 0, batches: 1, errors: [] }),
     KBuild: async () => ({ atoms_created: 3, electrons_created: 1, electrons_updated: 0, molecules_created: 0, articles_skipped: 0 }),
+    ListConcepts: async () => ([
+      { slug: "openai", name: "OpenAI", mentions: 7, note_id: 42, promoted: true, first_seen: "2026-08-01T09:00:00Z", last_seen: "2026-08-14T09:00:00Z" },
+      { slug: "watermarking", name: "Watermarking", mentions: 1, promoted: false, first_seen: "2026-08-09T09:00:00Z", last_seen: "2026-08-09T09:00:00Z" },
+    ]),
+    GetNote: async (id) => ({ id, type: "electron", title: "OpenAI", slug: "openai", content: "A concept note.", tags: ["ai", "concept"], wikilinks: [], created_at: "2026-08-14T09:00:00Z" }),
     ListJobs: async () => [],
     AddSource: async (a,b,c,d) => ({ id: 9, name: a, type: b, url: c, group: d, enabled: true }),
   } };
@@ -68,4 +73,27 @@ test("kb build maps snake_case KBResult into the toast", async ({ page }) => {
   await page.locator(".palette input").fill("kb build");
   await page.keyboard.press("Enter");
   await expect(page.locator(".toast")).toContainText("3 atoms · 1 electrons", { timeout: 6000 });
+});
+
+test("concepts wire shape: note_id reaches the note it opens", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("giznews-welcomed", "1"));
+  await page.addInitScript(FAKE);
+  await page.goto("/");
+  await expect(page.locator(".article-row").first()).toBeVisible({ timeout: 8000 });
+
+  await page.keyboard.press(":");
+  await page.locator(".palette input").fill("concepts");
+  await page.keyboard.press("Enter");
+  const rows = page.locator('[data-testid="concept-row"]');
+  await expect(rows).toHaveCount(2);
+  // mentions and promoted map through from snake_case
+  await expect(rows.first()).toContainText("7×");
+  await expect(rows.first().locator(".sp-dot")).toHaveAttribute("data-on", "true");
+  await expect(rows.nth(1).locator(".sp-dot")).toHaveAttribute("data-on", "false");
+
+  // note_id → noteId: Enter on a promoted concept opens its note rather than
+  // trying to create one. Getting this name wrong is invisible in the mock.
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".reader-head h1")).toHaveText("OpenAI", { timeout: 6000 });
+  await expect(page.locator(".reader .note-type")).toHaveText("electron");
 });

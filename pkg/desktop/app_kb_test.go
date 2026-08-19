@@ -105,3 +105,69 @@ func TestKSynthesizeViaAPI(t *testing.T) {
 	}
 	_ = note
 }
+
+// The promotion queue is actionable: a concept below the threshold can be given
+// its note on demand, and folding two concepts rewrites the notes involved.
+func TestConceptsViaAPI(t *testing.T) {
+	app := newAppForKB(t)
+	ctx := context.Background()
+
+	s, _ := app.AddSource(ctx, "HN", "hackernews", "u", "")
+	repo := db.NewArticleRepo(app.db)
+	for _, a := range []struct {
+		title string
+		tags  []string
+	}{
+		{"Sparse attention at scale", []string{"sparse-attention"}},
+		{"Long context, cheaply", []string{"long-context"}},
+	} {
+		id, _, _ := repo.Upsert(ctx, db.NewArticle{
+			SourceID: s.ID, GUID: a.title, Title: a.title, Status: db.StatusUnread,
+		})
+		_ = repo.ApplyClassification(ctx, id, "research", "sum", a.tags, nil, 3)
+	}
+	if _, err := app.KBuild(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	concepts, err := app.ListConcepts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(concepts) != 2 {
+		t.Fatalf("concepts = %d, want 2", len(concepts))
+	}
+	for _, c := range concepts {
+		if c.Promoted {
+			t.Fatalf("%s promoted with %d mention(s); the threshold is 2", c.Slug, c.Mentions)
+		}
+	}
+
+	// Promote one by hand.
+	note, err := app.PromoteConcept(ctx, "sparse-attention")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note.Type != "electron" || note.Title != "Sparse Attention" {
+		t.Fatalf("note = %+v", note)
+	}
+	concepts, _ = app.ListConcepts(ctx)
+	for _, c := range concepts {
+		if c.Slug == "sparse-attention" && (!c.Promoted || c.NoteID == 0) {
+			t.Fatalf("concept not marked as promoted: %+v", c)
+		}
+	}
+
+	// Fold the other one into it.
+	merged, err := app.MergeConcepts(ctx, "long-context", "sparse-attention")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.NotesRelinked != 1 || merged.Mentions != 2 {
+		t.Fatalf("merge = %+v, want 1 relinked and 2 mentions", merged)
+	}
+	concepts, _ = app.ListConcepts(ctx)
+	if len(concepts) != 1 {
+		t.Fatalf("concepts after merge = %d, want 1", len(concepts))
+	}
+}
