@@ -736,7 +736,11 @@ func TestRepairsRawConceptNames(t *testing.T) {
 	if err := kbRepo.Update(ctx, note); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.vault.Write("electron", "vllm", note.Content); err != nil {
+	// A note written by a giznews that had neither markers nor hashes.
+	if err := kbRepo.SetContentHash(ctx, note.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(note.Path, []byte(note.Content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -836,5 +840,168 @@ func TestAtomDateFallsBackToFetch(t *testing.T) {
 	bare := BuildAtom(&db.Article{Title: "T", URL: "u"}, nil)
 	if !strings.Contains(bare, "created: ") {
 		t.Fatalf("missing created:\n%s", bare)
+	}
+}
+
+// A paragraph typed in Obsidian must survive the article being re-classified.
+func TestUserEditsSurviveRefresh(t *testing.T) {
+	svc, d, _, srcID := buildFixture(t)
+	ctx := context.Background()
+	repo := db.NewArticleRepo(d)
+	kbRepo := db.NewKBRepo(d)
+
+	id := classifiedArticle(t, d, srcID, "Agents in production", []string{"agents"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	note, err := kbRepo.GetBySlug(ctx, "agents-in-production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if note.ContentHash == "" {
+		t.Fatal("no content hash recorded for the note")
+	}
+
+	// The reader adds their own thinking below the generated region, and a tag.
+	onDisk, err := os.ReadFile(note.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := strings.Replace(string(onDisk), "tags:\n", "tags:\n  - my-own-tag\n", 1)
+	edited += "\n## My take\nThis matters because of X.\n"
+	if err := os.WriteFile(note.Path, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The article is re-classified: a new summary, a new importance.
+	if err := repo.ApplyClassification(ctx, id, "tools", "A much better summary.", []string{"agents", "orchestration"}, nil, 3); err != nil {
+		t.Fatal(err)
+	}
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.AtomsRefreshed != 1 {
+		t.Fatalf("refreshed %d atoms, want 1", res.AtomsRefreshed)
+	}
+	if res.EditedNotesKept != 1 {
+		t.Fatalf("edited notes kept = %d, want 1", res.EditedNotesKept)
+	}
+
+	after, err := os.ReadFile(note.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(after)
+	// The user's prose and tag are still there...
+	if !strings.Contains(got, "## My take\nThis matters because of X.") {
+		t.Fatalf("user text was lost:\n%s", got)
+	}
+	if !strings.Contains(got, "my-own-tag") {
+		t.Fatalf("user tag was lost:\n%s", got)
+	}
+	// ...and the regenerated part caught up with the article.
+	if !strings.Contains(got, "A much better summary.") {
+		t.Fatalf("generated region was not refreshed:\n%s", got)
+	}
+	if !strings.Contains(got, "orchestration") {
+		t.Fatalf("new tag missing from frontmatter:\n%s", got)
+	}
+	// The frontmatter still parses after the merge.
+	block, _, found := strings.Cut(strings.TrimPrefix(got, "---\n"), "\n---\n")
+	if !found {
+		t.Fatalf("no frontmatter after merge:\n%s", got)
+	}
+	var fm map[string]any
+	if err := yaml.Unmarshal([]byte(block), &fm); err != nil {
+		t.Fatalf("merged frontmatter does not parse: %v\n%s", err, block)
+	}
+}
+
+// A note the user rewrote so thoroughly that the generated region is gone is
+// never overwritten: giznews has nowhere safe to write, so it writes nothing.
+func TestNoteWithoutRegionIsLeftAlone(t *testing.T) {
+	svc, d, _, srcID := buildFixture(t)
+	ctx := context.Background()
+	repo := db.NewArticleRepo(d)
+	kbRepo := db.NewKBRepo(d)
+
+	id := classifiedArticle(t, d, srcID, "A note I rewrote", []string{"rewrites"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	note, err := kbRepo.GetBySlug(ctx, "a-note-i-rewrote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine := "---\ntype: atom\n---\n\n# Entirely mine now\n"
+	if err := os.WriteFile(note.Path, []byte(mine), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.ApplyClassification(ctx, id, "tools", "New summary.", nil, nil, 3); err != nil {
+		t.Fatal(err)
+	}
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.EditedNotesKept != 1 {
+		t.Fatalf("edited notes kept = %d, want 1", res.EditedNotesKept)
+	}
+	after, err := os.ReadFile(note.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != mine {
+		t.Fatalf("the user's file was modified:\n%s", after)
+	}
+}
+
+// An untouched note is replaced whole, and nothing is rewritten when the
+// article has not moved.
+func TestUntouchedNoteIsReplacedAndIdle(t *testing.T) {
+	svc, d, _, srcID := buildFixture(t)
+	ctx := context.Background()
+	repo := db.NewArticleRepo(d)
+
+	id := classifiedArticle(t, d, srcID, "Steady news", nil)
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// A second build with nothing new must not rewrite anything.
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.AtomsRefreshed != 0 || res.EditedNotesKept != 0 {
+		t.Fatalf("idle build did work: %+v", res)
+	}
+
+	// Re-classify: the note is replaced whole, markers and all.
+	if err := repo.ApplyClassification(ctx, id, "models", "Fresh summary.", nil, nil, 3); err != nil {
+		t.Fatal(err)
+	}
+	res, err = svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.AtomsRefreshed != 1 || res.EditedNotesKept != 0 {
+		t.Fatalf("res = %+v, want 1 refreshed and no edits found", res)
+	}
+	note, err := db.NewKBRepo(d).GetBySlug(ctx, "steady-news")
+	if err != nil {
+		t.Fatal(err)
+	}
+	onDisk, err := os.ReadFile(note.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(onDisk), "Fresh summary.") {
+		t.Fatalf("note not refreshed:\n%s", onDisk)
+	}
+	if !strings.Contains(string(onDisk), markerBegin) {
+		t.Fatalf("generated region markers missing:\n%s", onDisk)
 	}
 }

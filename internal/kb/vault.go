@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 )
 
+// dirOf is filepath.Dir, kept here so sync.go does not need the import.
+func dirOf(path string) string { return filepath.Dir(path) }
+
 // Vault is an Obsidian-compatible directory. Folder names mirror the chronicles
 // structure so the vault opens cleanly in Obsidian and shares conventions.
 type Vault struct {
@@ -44,20 +47,4 @@ func NewVault(root string) (*Vault, error) {
 // NotePath returns the absolute markdown path for a note.
 func (v *Vault) NotePath(noteType, slug string) string {
 	return filepath.Join(v.Root, FolderFor(noteType), slug+".md")
-}
-
-// Write atomically writes note markdown to disk (temp + rename).
-func (v *Vault) Write(noteType, slug, content string) (string, error) {
-	path := v.NotePath(noteType, slug)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", fmt.Errorf("kb: create note dir: %w", err)
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
-		return "", fmt.Errorf("kb: write note: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		return "", fmt.Errorf("kb: rename note: %w", err)
-	}
-	return path, nil
 }

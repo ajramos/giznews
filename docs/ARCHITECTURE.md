@@ -83,6 +83,40 @@ incrementales por `PRAGMA user_version` en `internal/db/db.go`:
 8. `concepts.canon_key` + `concept_aliases` (una misma idea escrita de varias
    formas —"Open AI"/"OpenAI"— es un solo concepto; los alias explícitos
    cubren lo que la regla no deduce)
+9. `kb_notes.content_hash` (huella del fichero que giznews escribió por última
+   vez; es lo que distingue una nota intacta de una editada por el usuario)
+
+Nota: la numeración real en `db.go` es v7 `articles.starred`, v8 el grafo
+relacional, v9 los alias y v10 el hash — el orden de merge, no el de diseño.
+
+## El contrato del vault
+
+El vault es un directorio en el que el usuario también escribe, así que una nota
+generada delimita la parte que giznews mantiene:
+
+```
+---
+<frontmatter: las claves de giznews + las que añadas tú>
+---
+<lo que escribas aquí se respeta>
+<!-- giznews:begin -->
+… región regenerada en cada build …
+<!-- giznews:end -->
+<y lo que escribas aquí también>
+```
+
+`kb_notes.content_hash` guarda la huella del fichero que giznews escribió. Al
+reescribir (`Vault.Sync`):
+
+- fichero ausente → se crea;
+- huella igual a la guardada (nadie lo tocó) → se reemplaza entero;
+- huella distinta pero con marcadores → **merge**: se refresca solo la región y
+  se conservan tu texto, tus propiedades del frontmatter (copiadas literales) y
+  tus tags;
+- huella distinta y sin marcadores → no se toca; se registra en el log.
+
+Los atoms se refrescan cuando su artículo cambia (`ListStaleNotes`), no una sola
+vez al crearse.
 
 ## Desktop (Wails)
 

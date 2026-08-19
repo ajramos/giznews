@@ -59,7 +59,11 @@ Everything must be green before committing.
 - Config: `~/.config/giznews/config.json` (schema in `internal/config`).
   Field names: `lenientInt`, `llm.enabled`, `extract.on_fetch/limit/
   concurrency`, `gmail.credentials_path` (shared with giztui).
-- Knowledge vault: `~/Documents/obsidian/chronicles-ai` (Obsidian).
+- Knowledge vault: `~/Documents/obsidian/chronicles-ai` (Obsidian). The user
+  writes there too: every generated note delimits its own part with
+  `<!-- giznews:begin -->` / `<!-- giznews:end -->`, and `kb_notes.content_hash`
+  tells an untouched file from an edited one. Always write notes through
+  `Vault.Sync` — never straight to disk, or you will destroy someone's edits.
 
 ## Code conventions
 

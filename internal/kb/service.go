@@ -37,6 +37,13 @@ type BuildResult struct {
 	// ConceptsTracked counts the distinct concepts this run recorded mentions
 	// for, promoted to an electron or not.
 	ConceptsTracked int `json:"concepts_tracked"`
+	// AtomsRefreshed counts atoms rewritten because their article changed after
+	// the note was written (a re-classification, a body extracted later).
+	AtomsRefreshed int `json:"atoms_refreshed"`
+	// EditedNotesKept counts how many of those files the user had edited: their
+	// text was preserved, by merging the generated region or by leaving the
+	// file alone when there was none to merge.
+	EditedNotesKept int `json:"edited_notes_kept"`
 }
 
 // Service maintains the knowledge graph.
@@ -198,6 +205,11 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		}
 	}
 
+	// Notes whose article moved on since they were written catch up here.
+	if err := s.refreshStaleAtoms(ctx, kbRepo, conceptRepo, res); err != nil && s.logger != nil {
+		s.logger.Printf("kb: atom refresh failed: %v", err)
+	}
+
 	// Concepts first seen through a lowercase tag kept it as their name; give
 	// them a readable one now that they can get it.
 	if err := s.repairConceptNames(ctx, kbRepo, conceptRepo); err != nil && s.logger != nil {
@@ -284,12 +296,110 @@ func (s *Service) conceptSources(ctx context.Context, repo *db.ConceptRepo, agg 
 	return out, nil
 }
 
+// syncNote writes a note file through the vault and says out loud when it found
+// the user's own edits there.
+func (s *Service) syncNote(in SyncInput) (SyncResult, error) {
+	res, err := s.vault.Sync(in)
+	if err != nil || s.logger == nil {
+		return res, err
+	}
+	switch res.Outcome {
+	case SyncMerged:
+		s.logger.Printf("kb: %s was edited in the vault; refreshed only the generated region", res.Path)
+	case SyncKept:
+		s.logger.Printf("kb: %s was edited and has no generated region; left untouched", res.Path)
+	}
+	return res, err
+}
+
+// refreshStaleAtoms rewrites the atoms whose article changed after the note was
+// written. Without this an atom froze at the moment it was created: a later
+// re-classification, a better summary or a body extracted afterwards never
+// reached the vault, because an ingested article is never selected again.
+func (s *Service) refreshStaleAtoms(ctx context.Context, kbRepo *db.KBRepo, conceptRepo *db.ConceptRepo, res *BuildResult) error {
+	stale, err := db.NewArticleRepo(s.db).ListStaleNotes(ctx, s.opts.Limit)
+	if err != nil {
+		return err
+	}
+	ingestRepo := db.NewIngestRepo(s.db)
+	for _, a := range stale {
+		noteID, err := ingestRepo.NoteID(ctx, "article", fmt.Sprintf("%d", a.ID))
+		if err != nil || noteID == 0 {
+			continue
+		}
+		note, err := kbRepo.Get(ctx, noteID)
+		if err != nil {
+			continue
+		}
+
+		links, err := s.resolveConcepts(ctx, kbRepo, conceptRepo, a)
+		if err != nil {
+			return err
+		}
+		content := BuildAtom(a, links)
+		if content == note.Content {
+			// Nothing a reader would notice changed (an archive, a status flip):
+			// mark the note fresh so it stops being reported, leave the file be.
+			if err := kbRepo.MarkFresh(ctx, note.ID); err != nil {
+				return err
+			}
+			continue
+		}
+
+		written, err := s.syncNote(SyncInput{
+			NoteType: "atom", Slug: note.Slug, Content: content,
+			LastHash: note.ContentHash, LastTags: note.Tags,
+		})
+		if err != nil {
+			return err
+		}
+		fm, _ := json.Marshal(map[string]any{
+			"type": "atom", "category": a.Category, "source": a.SourceName,
+			"url": a.URL, "rating": a.Importance, "tags": a.Tags,
+		})
+		note.Title = a.Title
+		note.Content = content
+		note.Frontmatter = string(fm)
+		note.Tags = append([]string{"atom", "ai"}, a.Tags...)
+		note.Wikilinks = links
+		if err := kbRepo.Update(ctx, note); err != nil {
+			return err
+		}
+		if err := kbRepo.SetContentHash(ctx, note.ID, written.Hash); err != nil {
+			return err
+		}
+		res.AtomsRefreshed++
+		if written.Outcome == SyncMerged || written.Outcome == SyncKept {
+			res.EditedNotesKept++
+		}
+	}
+	return nil
+}
+
+// resolveConcepts is the concept-slug resolution one article needs on its own,
+// outside a batch: fold spellings, then avoid slugs an atom already owns.
+func (s *Service) resolveConcepts(ctx context.Context, kbRepo *db.KBRepo, conceptRepo *db.ConceptRepo, a *db.Article) ([]string, error) {
+	reserved := map[string]bool{}
+	var links []string
+	for _, raw := range s.conceptSlugs(a) {
+		key, err := conceptRepo.Resolve(ctx, raw)
+		if err != nil {
+			return nil, err
+		}
+		resolved := s.electronSlugFor(ctx, kbRepo, key, reserved)
+		reserved[resolved] = true
+		links = appendUnique(links, resolved)
+	}
+	sort.Strings(links)
+	return links, nil
+}
+
 // writeAtom renders an article as an Atom note, writes it to the vault, mirrors
 // it in SQLite and marks the article ingested. A failed insert removes the file
 // again so the vault never keeps a note the database does not know about.
 func (s *Service) writeAtom(ctx context.Context, kbRepo *db.KBRepo, ingestRepo *db.IngestRepo, a *db.Article, slug string, links []string) (*db.KBNote, error) {
 	content := BuildAtom(a, links)
-	path, err := s.vault.Write("atom", slug, content)
+	written, err := s.syncNote(SyncInput{NoteType: "atom", Slug: slug, Content: content})
 	if err != nil {
 		return nil, err
 	}
@@ -298,12 +408,13 @@ func (s *Service) writeAtom(ctx context.Context, kbRepo *db.KBRepo, ingestRepo *
 		"url": a.URL, "rating": a.Importance, "tags": a.Tags,
 	})
 	note, err := kbRepo.Create(ctx, db.NewKBNote{
-		Type: db.NoteAtom, Title: a.Title, Slug: slug, Path: path,
+		Type: db.NoteAtom, Title: a.Title, Slug: slug, Path: written.Path,
 		Frontmatter: string(fm), Content: content,
 		Tags: append([]string{"atom", "ai"}, a.Tags...), Wikilinks: links,
+		ContentHash: written.Hash,
 	})
 	if err != nil {
-		_ = os.Remove(path)
+		_ = os.Remove(written.Path)
 		return nil, fmt.Errorf("kb: create atom: %w", err)
 	}
 	if err := ingestRepo.Record(ctx, "article", fmt.Sprintf("%d", a.ID), note.ID, "processed"); err != nil {
@@ -345,8 +456,14 @@ func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug, nam
 	}
 
 	// The vault file is rewritten on every upsert: it is what the user reads in
-	// Obsidian, so it must carry the same backlinks as the database row.
-	path, err := s.vault.Write("electron", slug, content)
+	// Obsidian, so it must carry the same backlinks as the database row — but
+	// never at the cost of what the user wrote around them.
+	in := SyncInput{NoteType: "electron", Slug: slug, Content: content}
+	if existing != nil {
+		in.LastHash = existing.ContentHash
+		in.LastTags = existing.Tags
+	}
+	written, err := s.syncNote(in)
 	if err != nil {
 		return electronSkipped, nil, err
 	}
@@ -360,15 +477,20 @@ func (s *Service) upsertElectron(ctx context.Context, repo *db.KBRepo, slug, nam
 		if err := repo.Update(ctx, existing); err != nil {
 			return electronSkipped, nil, err
 		}
+		if err := repo.SetContentHash(ctx, existing.ID, written.Hash); err != nil {
+			return electronSkipped, nil, err
+		}
+		existing.ContentHash = written.Hash
 		return electronUpdated, existing, nil
 	}
 
 	note, err := repo.Create(ctx, db.NewKBNote{
-		Type: db.NoteElectron, Title: name, Slug: slug, Path: path,
+		Type: db.NoteElectron, Title: name, Slug: slug, Path: written.Path,
 		Frontmatter: string(fm), Content: content, Tags: tags, Wikilinks: links,
+		ContentHash: written.Hash,
 	})
 	if err != nil {
-		_ = os.Remove(path)
+		_ = os.Remove(written.Path)
 		return electronSkipped, nil, err
 	}
 	return electronCreated, note, nil
@@ -487,20 +609,16 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 	}
 
 	conceptRepo := db.NewConceptRepo(s.db)
-	reserved := map[string]bool{}
-	var links []string
+	links, err := s.resolveConcepts(ctx, kbRepo, conceptRepo, art)
+	if err != nil {
+		return nil, err
+	}
 	names := map[string]string{}
 	for _, raw := range s.conceptSlugs(art) {
-		key, err := conceptRepo.Resolve(ctx, raw)
-		if err != nil {
-			return nil, err
+		if key, err := conceptRepo.Resolve(ctx, raw); err == nil {
+			names[key] = s.conceptName(art, raw)
 		}
-		resolved := s.electronSlugFor(ctx, kbRepo, key, reserved)
-		reserved[resolved] = true
-		names[resolved] = s.conceptName(art, raw)
-		links = appendUnique(links, resolved)
 	}
-	sort.Strings(links)
 
 	content := BuildAtom(art, links)
 	fm, _ := json.Marshal(map[string]any{
@@ -516,6 +634,13 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 		if err != nil {
 			return nil, err
 		}
+		written, err := s.syncNote(SyncInput{
+			NoteType: "atom", Slug: existing.Slug, Content: content,
+			LastHash: existing.ContentHash, LastTags: existing.Tags,
+		})
+		if err != nil {
+			return nil, err
+		}
 		existing.Title = art.Title
 		existing.Frontmatter = string(fm)
 		existing.Content = content
@@ -524,11 +649,17 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 		if err := kbRepo.Update(ctx, existing); err != nil {
 			return nil, err
 		}
-		if _, err := s.vault.Write("atom", existing.Slug, content); err != nil {
+		if err := kbRepo.SetContentHash(ctx, existing.ID, written.Hash); err != nil {
 			return nil, err
 		}
+		existing.ContentHash = written.Hash
 		note = existing
 	} else {
+		// The atom must not take a slug one of its own concepts will need.
+		reserved := make(map[string]bool, len(links))
+		for _, link := range links {
+			reserved[link] = true
+		}
 		slug := s.uniqueSlug(ctx, kbRepo, Slugify(stripBrackets(art.Title)), reserved)
 		created, err := s.writeAtom(ctx, kbRepo, ingestRepo, art, slug, links)
 		if err != nil {
@@ -599,15 +730,25 @@ func (s *Service) Synthesize(ctx context.Context, category string) (*BuildResult
 		if err := repo.Update(ctx, existing); err != nil {
 			return nil, err
 		}
-		_, _ = s.vault.Write("molecule", slug, content)
+		written, err := s.syncNote(SyncInput{
+			NoteType: "molecule", Slug: slug, Content: content,
+			LastHash: existing.ContentHash, LastTags: existing.Tags,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err := repo.SetContentHash(ctx, existing.ID, written.Hash); err != nil {
+			return nil, err
+		}
 	} else {
-		path, err := s.vault.Write("molecule", slug, content)
+		written, err := s.syncNote(SyncInput{NoteType: "molecule", Slug: slug, Content: content})
 		if err != nil {
 			return nil, err
 		}
 		if _, err := repo.Create(ctx, db.NewKBNote{
-			Type: db.NoteMolecule, Title: title, Slug: slug, Path: path,
+			Type: db.NoteMolecule, Title: title, Slug: slug, Path: written.Path,
 			Frontmatter: string(fm), Content: content, Tags: tags, Wikilinks: links,
+			ContentHash: written.Hash,
 		}); err != nil {
 			return nil, err
 		}
@@ -673,10 +814,7 @@ func (s *Service) MergeConcepts(ctx context.Context, from, to string) (*MergeRes
 		}
 		note.Content = strings.ReplaceAll(note.Content, "[["+from+"]]", "[["+to+"]]")
 		note.Wikilinks = replaceInSlice(note.Wikilinks, from, to)
-		if err := kbRepo.Update(ctx, note); err != nil {
-			return nil, err
-		}
-		if _, err := s.vault.Write(string(note.Type), note.Slug, note.Content); err != nil {
+		if err := s.syncExisting(ctx, kbRepo, note); err != nil {
 			return nil, err
 		}
 		res.NotesRelinked++
@@ -692,10 +830,7 @@ func (s *Service) MergeConcepts(ctx context.Context, from, to string) (*MergeRes
 		if note, err := kbRepo.Get(ctx, sourceNoteID); err == nil {
 			note.Content = BuildRedirect(sourceName, target.Name, to)
 			note.Wikilinks = []string{to}
-			if err := kbRepo.Update(ctx, note); err != nil {
-				return nil, err
-			}
-			if _, err := s.vault.Write(string(note.Type), note.Slug, note.Content); err != nil {
+			if err := s.syncExisting(ctx, kbRepo, note); err != nil {
 				return nil, err
 			}
 			res.Redirected = true
@@ -719,6 +854,26 @@ func (s *Service) MergeConcepts(ctx context.Context, from, to string) (*MergeRes
 		}
 	}
 	return res, nil
+}
+
+// syncExisting persists an already-loaded note and mirrors it to the vault,
+// keeping whatever the user wrote around the generated region.
+func (s *Service) syncExisting(ctx context.Context, repo *db.KBRepo, note *db.KBNote) error {
+	written, err := s.syncNote(SyncInput{
+		NoteType: string(note.Type), Slug: note.Slug, Content: note.Content,
+		LastHash: note.ContentHash, LastTags: note.Tags,
+	})
+	if err != nil {
+		return err
+	}
+	if err := repo.Update(ctx, note); err != nil {
+		return err
+	}
+	if err := repo.SetContentHash(ctx, note.ID, written.Hash); err != nil {
+		return err
+	}
+	note.ContentHash = written.Hash
+	return nil
 }
 
 func replaceInSlice(list []string, from, to string) []string {

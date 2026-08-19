@@ -120,7 +120,7 @@ func (r *ConceptRepo) MentionedBy(ctx context.Context, slug string, limit int) (
 		limit = 500
 	}
 	rows, err := r.db.sql.QueryContext(ctx, `
-		SELECT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.created_at, n.updated_at
+		SELECT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.content_hash, n.created_at, n.updated_at
 		FROM concept_mentions m
 		JOIN kb_notes n ON n.id = m.note_id
 		WHERE m.concept_slug = ?

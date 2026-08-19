@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 9 {
-		t.Fatalf("user_version = %d, want 9", version)
+	if version != 10 {
+		t.Fatalf("user_version = %d, want 10", version)
 	}
 }
 
@@ -75,6 +75,9 @@ func TestMigrateFromV1(t *testing.T) {
 	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN starred;"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := d.sql.Exec("ALTER TABLE kb_notes DROP COLUMN content_hash;"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
 		t.Fatal(err)
 	}
@@ -89,8 +92,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 9 {
-		t.Fatalf("user_version after reopen = %d, want 9", version)
+	if version != 10 {
+		t.Fatalf("user_version after reopen = %d, want 10", version)
 	}
 	// Columns must exist now.
 	var n int
@@ -148,6 +151,9 @@ func TestMigrateV8BackfillsGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN starred;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("ALTER TABLE kb_notes DROP COLUMN content_hash;"); err != nil {
 		t.Fatal(err)
 	}
 	// Three atoms citing "rag" (never promoted) and an existing "mamba" electron

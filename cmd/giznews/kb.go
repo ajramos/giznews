@@ -52,6 +52,12 @@ func runKB(args []string, logger *log.Logger) {
 		}
 		fmt.Printf("kb build: %d atoms, %d concepts tracked, %d electrons created, %d updated, %d articles skipped\n",
 			res.AtomsCreated, res.ConceptsTracked, res.ElectronsCreated, res.ElectronsUpdated, res.ArticlesSkipped)
+		if res.AtomsRefreshed > 0 {
+			fmt.Printf("  %d note(s) refreshed from their article\n", res.AtomsRefreshed)
+		}
+		if res.EditedNotesKept > 0 {
+			fmt.Printf("  %d note(s) you had edited: your text was kept\n", res.EditedNotesKept)
+		}
 
 	case "list":
 		noteType := "atom"

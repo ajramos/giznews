@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -331,4 +331,15 @@ CREATE TABLE IF NOT EXISTS concept_aliases (
 	created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_concept_aliases_canonical ON concept_aliases(canonical);
+`
+
+// schemaV10 remembers what giznews last wrote to each note file.
+//
+// The vault is a directory the user also writes in. Until now every rebuild
+// overwrote the file whole, so a paragraph added in Obsidian was gone the next
+// time the article was re-classified. Comparing the file on disk against this
+// hash is what tells an untouched note (safe to replace) from an edited one
+// (whose text has to be preserved).
+const schemaV10 = `
+ALTER TABLE kb_notes ADD COLUMN content_hash TEXT NOT NULL DEFAULT '';
 `

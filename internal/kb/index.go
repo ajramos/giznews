@@ -45,10 +45,14 @@ func (s *Service) BuildIndex(ctx context.Context) (*IndexResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.vault.Write("map", "Index", index); err != nil {
+	// Generated views are marked like any other note, so a reader who adds a
+	// paragraph to Index.md keeps it across rebuilds.
+	if _, err := s.vault.Sync(SyncInput{NoteType: "map", Slug: "Index", Content: index}); err != nil {
 		return nil, err
 	}
-	if _, err := s.vault.Write("map", "Unresolved concepts", s.renderDangling(dangling)); err != nil {
+	if _, err := s.vault.Sync(SyncInput{
+		NoteType: "map", Slug: "Unresolved concepts", Content: s.renderDangling(dangling),
+	}); err != nil {
 		return nil, err
 	}
 
@@ -60,7 +64,7 @@ func (s *Service) BuildIndex(ctx context.Context) (*IndexResult, error) {
 		return nil, err
 	}
 	if wrote {
-		if _, err := s.vault.Write("inbox", day, daily); err != nil {
+		if _, err := s.vault.Sync(SyncInput{NoteType: "inbox", Slug: day, Content: daily}); err != nil {
 			return nil, err
 		}
 		res.DailyNotes = 1

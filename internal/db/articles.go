@@ -146,18 +146,18 @@ func (r *ArticleRepo) GetByIDs(ctx context.Context, ids []int64) ([]*Article, er
 
 // ListOptions filters the article list.
 type ListOptions struct {
-	Status        ArticleStatus // empty = all
-	Unarchived    bool          // status IN (unread, read)
-	Starred       *bool         // nil = any
-	Category      string        // empty = all
-	SourceID      int64         // 0 = all
-	Group         string        // source group; empty = all
-	ImportanceMin int           // only articles with importance >= this
-	ImportanceExact *int        // nil = any; 0-3 = exact importance
-	Unclassified  bool          // only articles not yet classified
-	Query         string        // LIKE filter on title/author; empty = all
-	Limit         int           // 0 = default 200
-	Offset        int
+	Status          ArticleStatus // empty = all
+	Unarchived      bool          // status IN (unread, read)
+	Starred         *bool         // nil = any
+	Category        string        // empty = all
+	SourceID        int64         // 0 = all
+	Group           string        // source group; empty = all
+	ImportanceMin   int           // only articles with importance >= this
+	ImportanceExact *int          // nil = any; 0-3 = exact importance
+	Unclassified    bool          // only articles not yet classified
+	Query           string        // LIKE filter on title/author; empty = all
+	Limit           int           // 0 = default 200
+	Offset          int
 }
 
 // List returns articles matching the options, newest first.
@@ -403,6 +403,38 @@ func (r *ArticleRepo) ListForKB(ctx context.Context, importanceMin, ageDays, lim
 		LIMIT ?`, importanceMin, cutoff, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list for kb: %w", err)
+	}
+	defer rows.Close()
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ListStaleNotes returns articles that may have moved on since their knowledge
+// note was written: a re-classification, a summary or a body extracted
+// afterwards. Timestamps have second granularity, so the comparison is
+// inclusive — a change landing in the same second as the note would otherwise
+// stay invisible forever. The caller decides what actually changed by
+// comparing the rendered note.
+func (r *ArticleRepo) ListStaleNotes(ctx context.Context, limit int) ([]*Article, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT `+articleColumns+articleFrom+`
+		JOIN ingests i ON i.ref_type = 'article' AND i.ref_id = CAST(a.id AS TEXT)
+		JOIN kb_notes n ON n.id = i.note_id
+		WHERE a.updated_at >= n.updated_at
+		ORDER BY a.updated_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list stale notes: %w", err)
 	}
 	defer rows.Close()
 	var out []*Article

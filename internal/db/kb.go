@@ -30,8 +30,11 @@ type KBNote struct {
 	Content     string   `json:"content"`
 	Tags        []string `json:"tags"`
 	Wikilinks   []string `json:"wikilinks"`
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
+	// ContentHash is the SHA-256 of the file giznews last wrote for this note.
+	// A file that no longer hashes to it has been edited by the user.
+	ContentHash string `json:"content_hash,omitempty"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 // NewKBNote is the input to insert a note.
@@ -44,6 +47,7 @@ type NewKBNote struct {
 	Content     string
 	Tags        []string
 	Wikilinks   []string
+	ContentHash string
 }
 
 // KBRepo provides persistence for knowledge-graph notes.
@@ -60,10 +64,10 @@ func NewKBRepo(db *DB) *KBRepo {
 func (r *KBRepo) Create(ctx context.Context, nn NewKBNote) (*KBNote, error) {
 	now := Now()
 	res, err := r.db.sql.ExecContext(ctx, `
-		INSERT INTO kb_notes (note_type, title, slug, path, frontmatter, content, tags, wikilinks, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO kb_notes (note_type, title, slug, path, frontmatter, content, tags, wikilinks, content_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		string(nn.Type), nn.Title, nn.Slug, nn.Path, nn.Frontmatter, nn.Content,
-		marshalStrings(nn.Tags), marshalStrings(nn.Wikilinks), now, now)
+		marshalStrings(nn.Tags), marshalStrings(nn.Wikilinks), nn.ContentHash, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert kb note: %w", err)
 	}
@@ -150,6 +154,28 @@ func (r *KBRepo) SetLinks(ctx context.Context, noteID int64, slugs []string) err
 	return nil
 }
 
+// MarkFresh bumps a note's updated_at without touching its content. It is how
+// a note that turned out to need no rewrite stops being reported as stale —
+// Update would also drop the embedding and rewrite the links for nothing.
+func (r *KBRepo) MarkFresh(ctx context.Context, id int64) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE kb_notes SET updated_at = ? WHERE id = ?", Now(), id)
+	if err != nil {
+		return fmt.Errorf("mark note fresh: %w", err)
+	}
+	return checkAffected(res, "mark note fresh")
+}
+
+// SetContentHash records the fingerprint of the file written for a note.
+func (r *KBRepo) SetContentHash(ctx context.Context, id int64, hash string) error {
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE kb_notes SET content_hash = ? WHERE id = ?", hash, id)
+	if err != nil {
+		return fmt.Errorf("set content hash: %w", err)
+	}
+	return checkAffected(res, "set content hash")
+}
+
 // SetEmbedding stores the semantic-search vector for a note.
 func (r *KBRepo) SetEmbedding(ctx context.Context, id int64, embedding []float32) error {
 	blob, err := marshalFloats(embedding)
@@ -199,7 +225,7 @@ func (r *KBRepo) Incoming(ctx context.Context, slug string, limit int) ([]*KBNot
 		limit = 500
 	}
 	rows, err := r.db.sql.QueryContext(ctx, `
-		SELECT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.created_at, n.updated_at
+		SELECT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.content_hash, n.created_at, n.updated_at
 		FROM kb_links l
 		JOIN kb_notes n ON n.id = l.from_note
 		WHERE l.to_slug = ?
@@ -219,7 +245,7 @@ func (r *KBRepo) CoMentioned(ctx context.Context, noteID int64, limit int) ([]*K
 		limit = 50
 	}
 	rows, err := r.db.sql.QueryContext(ctx, `
-		SELECT DISTINCT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.created_at, n.updated_at
+		SELECT DISTINCT n.id, n.note_type, n.title, n.slug, n.path, n.frontmatter, n.content, n.tags, n.wikilinks, n.content_hash, n.created_at, n.updated_at
 		FROM kb_links mine
 		JOIN kb_links theirs ON theirs.to_slug = mine.to_slug AND theirs.from_note != mine.from_note
 		JOIN kb_notes n ON n.id = theirs.from_note
@@ -246,7 +272,7 @@ func (r *KBRepo) BySharedTag(ctx context.Context, selfID int64, tags []string, l
 	}
 	args = append(args, selfID, limit)
 	rows, err := r.db.sql.QueryContext(ctx, `
-		SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, created_at, updated_at
+		SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, content_hash, created_at, updated_at
 		FROM kb_notes
 		WHERE ( `+strings.Join(clauses, " OR ")+` ) AND id != ?
 		ORDER BY created_at DESC LIMIT ?`, args...)
@@ -298,7 +324,7 @@ func (r *KBRepo) CreatedOn(ctx context.Context, day string, limit int) ([]*KBNot
 // ByCategory returns notes whose frontmatter declares the given category.
 func (r *KBRepo) ByCategory(ctx context.Context, category string, limit int) ([]*KBNote, error) {
 	rows, err := r.db.sql.QueryContext(ctx, `
-		SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, created_at, updated_at
+		SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, content_hash, created_at, updated_at
 		FROM kb_notes
 		WHERE frontmatter LIKE ? AND note_type = 'atom'
 		ORDER BY created_at DESC LIMIT ?`, `%"category":"`+category+`"%`, limit)
@@ -323,7 +349,7 @@ func scanKBNotes(rows *sql.Rows) ([]*KBNote, error) {
 }
 
 const kbNoteColumns = `
-	SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, created_at, updated_at
+	SELECT id, note_type, title, slug, path, frontmatter, content, tags, wikilinks, content_hash, created_at, updated_at
 	FROM kb_notes`
 
 func scanKBNote(row scanner) (*KBNote, error) {
@@ -332,7 +358,7 @@ func scanKBNote(row scanner) (*KBNote, error) {
 		tagsRaw  string
 		linksRaw string
 	)
-	if err := row.Scan(&n.ID, &n.Type, &n.Title, &n.Slug, &n.Path, &n.Frontmatter, &n.Content, &tagsRaw, &linksRaw, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.ID, &n.Type, &n.Title, &n.Slug, &n.Path, &n.Frontmatter, &n.Content, &tagsRaw, &linksRaw, &n.ContentHash, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
