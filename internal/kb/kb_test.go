@@ -1005,3 +1005,140 @@ func TestUntouchedNoteIsReplacedAndIdle(t *testing.T) {
 		t.Fatalf("generated region markers missing:\n%s", onDisk)
 	}
 }
+
+// A note written by hand in the vault joins the graph: it becomes searchable,
+// it links like any other note, and its links count as concept mentions.
+func TestSyncVaultImportsHandWrittenNotes(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t) // MinOccurrences = 2
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "Agents in production", []string{"agents"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	conceptRepo := db.NewConceptRepo(d)
+	before, err := conceptRepo.Get(ctx, "agents")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Mentions != 1 || before.NoteID != 0 {
+		t.Fatalf("concept = %+v, want 1 mention and no note", before)
+	}
+
+	// The reader writes their own note, citing the same concept.
+	mine := filepath.Join(vaultRoot, "00-Inbox", "my-thinking.md")
+	body := "---\ntags:\n  - fieldwork\n  - \"cost: high\"\n---\n\n" +
+		"# What I actually think about agents\n\n" +
+		"We run three of these. See [[agents]] and [[agents-in-production]].\n"
+	if err := os.WriteFile(mine, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.SyncVault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Imported != 1 {
+		t.Fatalf("imported %d notes, want 1", res.Imported)
+	}
+	if res.Mentions != 1 {
+		t.Fatalf("recorded %d mentions, want 1 (agents exists, the atom link is not a concept)", res.Mentions)
+	}
+
+	note, err := db.NewKBRepo(d).GetBySlug(ctx, "my-thinking")
+	if err != nil {
+		t.Fatalf("note not imported: %v", err)
+	}
+	if note.Type != db.NoteInbox {
+		t.Fatalf("type = %s, want inbox", note.Type)
+	}
+	if note.Title != "What I actually think about agents" {
+		t.Fatalf("title = %q", note.Title)
+	}
+	if len(note.Tags) != 2 || note.Tags[0] != "fieldwork" || note.Tags[1] != "cost: high" {
+		t.Fatalf("tags = %q", note.Tags)
+	}
+	if len(note.Wikilinks) != 2 {
+		t.Fatalf("links = %q", note.Wikilinks)
+	}
+
+	// The user's mention counts towards promotion like any other.
+	after, err := conceptRepo.Get(ctx, "agents")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Mentions != 2 {
+		t.Fatalf("mentions = %d, want 2", after.Mentions)
+	}
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	promoted, err := conceptRepo.Get(ctx, "agents")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if promoted.NoteID == 0 {
+		t.Fatal("the concept did not graduate even though the reader's note pushed it over the threshold")
+	}
+
+	// Re-scanning an unchanged vault does nothing.
+	again, err := svc.SyncVault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Imported != 0 || again.Updated != 0 {
+		t.Fatalf("second scan = %+v, want no work", again)
+	}
+
+	// Editing the file updates the row, and never the file.
+	edited := body + "\n## Later\nStill true.\n"
+	if err := os.WriteFile(mine, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	third, err := svc.SyncVault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if third.Updated != 1 {
+		t.Fatalf("third scan = %+v, want 1 updated", third)
+	}
+	onDisk, err := os.ReadFile(mine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(onDisk) != edited {
+		t.Fatalf("the reader's file was rewritten:\n%s", onDisk)
+	}
+}
+
+// The scan must not touch what giznews writes: neither its notes nor the
+// generated views, even after a build has left them all in the vault.
+func TestSyncVaultIgnoresGeneratedFiles(t *testing.T) {
+	svc, d, _, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "One", []string{"agents"})
+	classifiedArticle(t, d, srcID, "Two", []string{"agents"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	countBefore, err := db.NewKBRepo(d).Count(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := svc.SyncVault(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Imported != 0 || res.Updated != 0 {
+		t.Fatalf("scan adopted generated files: %+v", res)
+	}
+	countAfter, err := db.NewKBRepo(d).Count(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countAfter != countBefore {
+		t.Fatalf("note count went from %d to %d", countBefore, countAfter)
+	}
+}

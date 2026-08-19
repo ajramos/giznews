@@ -13,7 +13,7 @@ import (
 // runKB manages the knowledge graph: build, list, synth.
 func runKB(args []string, logger *log.Logger) {
 	if len(args) == 0 {
-		logger.Fatal("usage: giznews kb <build|list|synth|index|concepts|merge|alias> [args]")
+		logger.Fatal("usage: giznews kb <build|list|synth|index|sync|concepts|merge|alias> [args]")
 	}
 
 	cfg, d, ctx := loadAndOpenDB(args[1:], logger)
@@ -55,6 +55,9 @@ func runKB(args []string, logger *log.Logger) {
 		if res.AtomsRefreshed > 0 {
 			fmt.Printf("  %d note(s) refreshed from their article\n", res.AtomsRefreshed)
 		}
+		if res.NotesImported > 0 {
+			fmt.Printf("  %d note(s) of your own read into the graph\n", res.NotesImported)
+		}
 		if res.EditedNotesKept > 0 {
 			fmt.Printf("  %d note(s) you had edited: your text was kept\n", res.EditedNotesKept)
 		}
@@ -88,6 +91,14 @@ func runKB(args []string, logger *log.Logger) {
 		} else {
 			fmt.Printf("molecule created for %q in vault\n", args[1])
 		}
+
+	case "sync":
+		res, err := svc.SyncVault(ctx)
+		if err != nil {
+			logger.Fatalf("kb sync: %v", err)
+		}
+		fmt.Printf("vault sync: %d note(s) imported, %d updated, %d concept mention(s) recorded\n",
+			res.Imported, res.Updated, res.Mentions)
 
 	case "index":
 		res, err := svc.BuildIndex(ctx)
@@ -137,7 +148,7 @@ func runKB(args []string, logger *log.Logger) {
 		fmt.Printf("%q now resolves to %q\n", args[1], args[2])
 
 	default:
-		logger.Fatalf("unknown kb subcommand %q (expected build|list|synth|index|concepts|merge|alias)", args[0])
+		logger.Fatalf("unknown kb subcommand %q (expected build|list|synth|index|sync|concepts|merge|alias)", args[0])
 	}
 	_ = context.Background
 }

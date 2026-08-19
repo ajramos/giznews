@@ -44,6 +44,8 @@ type BuildResult struct {
 	// text was preserved, by merging the generated region or by leaving the
 	// file alone when there was none to merge.
 	EditedNotesKept int `json:"edited_notes_kept"`
+	// NotesImported counts hand-written vault notes read into the graph.
+	NotesImported int `json:"notes_imported"`
 }
 
 // Service maintains the knowledge graph.
@@ -91,6 +93,16 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	kbRepo := db.NewKBRepo(s.db)
 	ingestRepo := db.NewIngestRepo(s.db)
 	conceptRepo := db.NewConceptRepo(s.db)
+
+	// Notes the reader wrote by hand join the graph before anything is counted,
+	// so their links weigh on promotion like any other mention.
+	if imported, err := s.SyncVault(ctx); err != nil {
+		if s.logger != nil {
+			s.logger.Printf("kb: vault scan failed: %v", err)
+		}
+	} else {
+		res.NotesImported = imported.Imported + imported.Updated
+	}
 
 	articles, err := artRepo.ListForKB(ctx, s.opts.ImportanceThreshold, s.opts.AgeDays, s.opts.Limit)
 	if err != nil {
@@ -205,6 +217,13 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		}
 	}
 
+	// A concept can cross the threshold without any of this run's articles
+	// naming it: a merge, or the reader's own notes, count towards it too. The
+	// queue is swept so nothing sits there already qualified.
+	if err := s.promoteQueued(ctx, kbRepo, conceptRepo, res); err != nil {
+		return nil, err
+	}
+
 	// Notes whose article moved on since they were written catch up here.
 	if err := s.refreshStaleAtoms(ctx, kbRepo, conceptRepo, res); err != nil && s.logger != nil {
 		s.logger.Printf("kb: atom refresh failed: %v", err)
@@ -310,6 +329,35 @@ func (s *Service) syncNote(in SyncInput) (SyncResult, error) {
 		s.logger.Printf("kb: %s was edited and has no generated region; left untouched", res.Path)
 	}
 	return res, err
+}
+
+// promoteQueued gives a note to every concept that has enough mentions but none
+// yet, whoever recorded those mentions.
+func (s *Service) promoteQueued(ctx context.Context, kbRepo *db.KBRepo, conceptRepo *db.ConceptRepo, res *BuildResult) error {
+	queued, err := conceptRepo.Dangling(ctx, 500)
+	if err != nil {
+		return err
+	}
+	for _, c := range queued {
+		if c.Mentions < s.opts.MinOccurrences {
+			continue
+		}
+		sources, err := s.conceptSources(ctx, conceptRepo, &conceptAgg{Slug: c.Slug, Name: c.Name})
+		if err != nil {
+			return err
+		}
+		outcome, note, err := s.upsertElectron(ctx, kbRepo, c.Slug, c.Name, sources)
+		if err != nil {
+			return err
+		}
+		if outcome == electronCreated {
+			if err := conceptRepo.Promote(ctx, c.Slug, note.ID); err != nil {
+				return err
+			}
+			res.ElectronsCreated++
+		}
+	}
+	return nil
 }
 
 // refreshStaleAtoms rewrites the atoms whose article changed after the note was

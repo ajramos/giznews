@@ -64,6 +64,8 @@ Everything must be green before committing.
   `<!-- giznews:begin -->` / `<!-- giznews:end -->`, and `kb_notes.content_hash`
   tells an untouched file from an edited one. Always write notes through
   `Vault.Sync` — never straight to disk, or you will destroy someone's edits.
+  Notes the user wrote (no markers, no `status: generated`) are imported by
+  `SyncVault` and never written back; their row carries `{"origin":"vault"}`.
 
 ## Code conventions
 

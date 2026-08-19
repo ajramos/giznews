@@ -92,6 +92,7 @@ export interface KBResult {
   conceptsTracked: number;
   atomsRefreshed: number;
   editedNotesKept: number;
+  notesImported: number;
 }
 
 export interface IndexResult {

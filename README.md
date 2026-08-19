@@ -52,6 +52,7 @@ go run ./cmd/giznews sources add --name "DeepMind" --url https://deepmind.google
 go run ./cmd/giznews fetch      # + extrae cuerpos en batch
 go run ./cmd/giznews classify   # reglas ⚡ + LLM
 go run ./cmd/giznews kb build   # genera atoms/electrons + Index.md en el vault
+go run ./cmd/giznews kb sync            # importa al grafo tus notas del vault
 go run ./cmd/giznews kb concepts        # conceptos por menciones (electron | pending)
 go run ./cmd/giznews kb merge gpt4 gpt-5  # funde dos conceptos y reescribe los enlaces
 go run ./cmd/giznews digest     # digest diario

@@ -118,6 +118,15 @@ reescribir (`Vault.Sync`):
 Los atoms se refrescan cuando su artículo cambia (`ListStaleNotes`), no una sola
 vez al crearse.
 
+Y el camino de vuelta: `kb sync` (también al principio de cada `kb build`) lee
+las notas que escribes tú. Un fichero sin marcadores y sin `status: generated`
+no es de giznews, así que se importa a `kb_notes` — título, tags, wikilinks — y
+sus enlaces a conceptos que ya existen cuentan como menciones, de modo que tus
+notas pesan en la promoción igual que los artículos. **Nunca se reescribe**: tu
+fichero manda y la base de datos solo guarda una copia y su huella. Un concepto
+puede cruzar el umbral sin que ningún artículo del run lo nombre, así que el
+build también barre la cola de pendientes.
+
 ## Desktop (Wails)
 
 - `desktop/main.go` — bootstrap vía `pkg/desktop.OpenApp()` (nunca `internal/`).

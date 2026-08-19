@@ -93,6 +93,12 @@ func (r *KBRepo) GetBySlug(ctx context.Context, slug string) (*KBNote, error) {
 	return scanKBNote(row)
 }
 
+// GetByPath returns the note stored at a vault path, or ErrNotFound.
+func (r *KBRepo) GetByPath(ctx context.Context, path string) (*KBNote, error) {
+	row := r.db.sql.QueryRowContext(ctx, kbNoteColumns+" WHERE path = ?", path)
+	return scanKBNote(row)
+}
+
 // List returns notes, optionally filtered by type, ordered by created desc.
 func (r *KBRepo) List(ctx context.Context, noteType NoteType, limit int) ([]*KBNote, error) {
 	q := kbNoteColumns
