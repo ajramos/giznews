@@ -33,8 +33,15 @@ interface Props {
 
 export function ArticleList({ articles, selectedIndex, loading, archived, starredFilter, readFilter, hasSources, bulk, bulkSel, unreadCount, filterCategory, importanceExact, filterUnclassified, filterQuery, onActive, onArchived, onStarred, onReadFilter, onCategory, onImportance, onUnclassified, onQuery, onToggleBulk, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastSelected = useRef(selectedIndex);
 
+  // Follow the cursor, but only when the cursor moved. The articles array gets
+  // a new identity whenever anything about a row changes — a status flip, a
+  // finished classify job — and scrolling then would yank the list back under
+  // a reader who is scrolling it by hand.
   useEffect(() => {
+    if (lastSelected.current === selectedIndex) return;
+    lastSelected.current = selectedIndex;
     containerRef.current?.querySelector(".article-row.selected")?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex, articles]);
 

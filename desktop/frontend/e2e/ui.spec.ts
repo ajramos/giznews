@@ -9,9 +9,11 @@ test.describe("UI render", () => {
 
     await expect(page.locator(".topbar .brand-name")).toHaveText("GizNews");
     await expect(page.locator(".list-head .view-tab").first()).toContainText("Active");
-    await expect(page.locator(".list-head .view-count").first()).toHaveText("7");
+    // The mock has 7 unread, and the first one auto-loads into the reader,
+    // which marks it read — so the Active badge settles at 6.
+    await expect(page.locator(".list-head .view-count").first()).toHaveText("6");
 
-    await expect(page.locator(".article-row")).toHaveCount(8); // 7 unread + 1 read in mock
+    await expect(page.locator(".article-row")).toHaveCount(8); // Active = everything not archived
     // no sources sidebar — sources live in the :sources picker
     await expect(page.locator(".sources-col")).toHaveCount(0);
 

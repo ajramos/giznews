@@ -16,6 +16,9 @@ test.describe("vault flow", () => {
     // the news article list is gone while in the knowledge world
     await expect(page.locator(".article-row")).toHaveCount(0);
     await shot(page, "13-vault");
+    // The vault loads its notes and opens the one under the cursor; toggling
+    // back mid-load races with the key handler re-subscribing.
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
     await press(page, "f"); // back to news
     await expect(page.locator(".vault-browser")).toHaveCount(0);
     await expect(page.locator(".article-row").first()).toBeVisible();
