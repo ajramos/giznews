@@ -85,6 +85,9 @@ type Config struct {
 	// Fetch configures article ingestion from sources.
 	Fetch FetchConfig `json:"fetch"`
 
+	// KB configures how the knowledge graph is built.
+	KB KBConfig `json:"kb"`
+
 	// Extract configures full-article content extraction (readability) during
 	// fetch, so bodies are ready before you open them.
 	Extract ExtractConfig `json:"extract"`
@@ -152,6 +155,18 @@ type ClassifyConfig struct {
 	ImportanceThreshold int `json:"importance_threshold"`
 }
 
+// KBConfig configures a knowledge-graph build. The defaults suit a personal
+// feed; a heavier one wants a higher threshold, a quieter one a lower.
+type KBConfig struct {
+	// MinOccurrences is how many notes must mention a concept before it gets an
+	// Electron of its own. Mentions accumulate across runs.
+	MinOccurrences int `json:"min_occurrences"`
+	// AgeDays limits how far back a build looks for articles to turn into atoms.
+	AgeDays int `json:"age_days"`
+	// Limit caps how many atoms one run writes.
+	Limit int `json:"limit"`
+}
+
 // FetchConfig configures article ingestion from sources.
 type FetchConfig struct {
 	// MaxAgeDays drops feed items published more than N days ago, so archive
@@ -214,6 +229,11 @@ func DefaultConfig() *Config {
 		},
 		Fetch: FetchConfig{
 			MaxAgeDays: 30,
+		},
+		KB: KBConfig{
+			MinOccurrences: 2,
+			AgeDays:        30,
+			Limit:          200,
 		},
 		Extract: ExtractConfig{
 			OnFetch:     true,

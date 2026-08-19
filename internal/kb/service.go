@@ -94,9 +94,9 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	ingestRepo := db.NewIngestRepo(s.db)
 	conceptRepo := db.NewConceptRepo(s.db)
 
-	// Notes the reader wrote by hand join the graph before anything is counted,
-	// so their links weigh on promotion like any other mention.
-	if imported, err := s.SyncVault(ctx); err != nil {
+	// The reader's own notes join the graph before anything else is written;
+	// what they cite is counted further down, once this run's atoms exist.
+	if imported, err := s.importVaultFiles(ctx); err != nil {
 		if s.logger != nil {
 			s.logger.Printf("kb: vault scan failed: %v", err)
 		}
@@ -215,6 +215,12 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 		case electronUpdated:
 			res.ElectronsUpdated++
 		}
+	}
+
+	// Now that this run's atoms exist, what the reader's notes cite can be
+	// counted — including concepts that had no name in the graph until today.
+	if _, err := s.recordVaultMentions(ctx); err != nil && s.logger != nil {
+		s.logger.Printf("kb: counting your notes' mentions failed: %v", err)
 	}
 
 	// A concept can cross the threshold without any of this run's articles

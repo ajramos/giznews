@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/ajramos/giznews/internal/db"
 	"github.com/ajramos/giznews/internal/kb"
@@ -13,7 +14,7 @@ import (
 // runKB manages the knowledge graph: build, list, synth.
 func runKB(args []string, logger *log.Logger) {
 	if len(args) == 0 {
-		logger.Fatal("usage: giznews kb <build|list|synth|index|sync|concepts|merge|alias> [args]")
+		logger.Fatal("usage: giznews kb <build [--dry-run]|list|synth|index|sync|concepts|merge|alias> [args]")
 	}
 
 	cfg, d, ctx := loadAndOpenDB(args[1:], logger)
@@ -37,6 +38,9 @@ func runKB(args []string, logger *log.Logger) {
 
 	svc, err := kb.NewService(d, cfg.ResolveVaultPath(), kb.Options{
 		ImportanceThreshold: cfg.Classify.ImportanceThreshold,
+		MinOccurrences:      cfg.KB.MinOccurrences,
+		AgeDays:             cfg.KB.AgeDays,
+		Limit:               cfg.KB.Limit,
 		Model:               cfg.LLM.Model,
 		UseLLM:              prov != nil,
 	}, prov, logger)
@@ -46,6 +50,14 @@ func runKB(args []string, logger *log.Logger) {
 
 	switch args[0] {
 	case "build":
+		if hasFlag(args, "dry-run") {
+			plan, err := svc.Preview(ctx)
+			if err != nil {
+				logger.Fatalf("kb build --dry-run: %v", err)
+			}
+			printPlan(plan)
+			return
+		}
 		res, err := svc.Build(ctx)
 		if err != nil {
 			logger.Fatalf("kb build: %v", err)
@@ -151,6 +163,47 @@ func runKB(args []string, logger *log.Logger) {
 		logger.Fatalf("unknown kb subcommand %q (expected build|list|synth|index|sync|concepts|merge|alias)", args[0])
 	}
 	_ = context.Background
+}
+
+// hasFlag reports whether a boolean flag was given, in any position.
+func hasFlag(args []string, name string) bool {
+	for _, a := range args {
+		if a == "--"+name || a == "-"+name {
+			return true
+		}
+	}
+	return false
+}
+
+// printPlan renders a dry run: what the build would write, before it writes it.
+func printPlan(p *kb.BuildPreview) {
+	fmt.Printf("dry run — nothing was written\n")
+	fmt.Printf("parameters: importance >= %d · last %d days · max %d atoms · %d mention(s) to promote a concept\n\n",
+		p.Importance, p.AgeDays, p.Limit, p.MinOccurrences)
+
+	fmt.Printf("%d article(s) would become notes\n", len(p.Atoms))
+	for _, a := range p.Atoms {
+		fmt.Printf("  ★%d %-9s %-44s → %s\n", a.Importance, a.Category, truncate(a.Title, 44), a.Slug)
+		if len(a.Concepts) > 0 {
+			fmt.Printf("            concepts: %s\n", strings.Join(a.Concepts, ", "))
+		}
+	}
+
+	if len(p.Promoting) > 0 {
+		fmt.Printf("\n%d concept(s) would get a note\n", len(p.Promoting))
+		for _, c := range p.Promoting {
+			fmt.Printf("  %-30s %d → %d mention(s)\n", truncate(c.Slug, 30), c.Mentions, c.After)
+		}
+	}
+	if len(p.Pending) > 0 {
+		fmt.Printf("\n%d concept(s) would still be waiting\n", len(p.Pending))
+		for _, c := range p.Pending {
+			fmt.Printf("  %-30s %d → %d mention(s)\n", truncate(c.Slug, 30), c.Mentions, c.After)
+		}
+	}
+
+	fmt.Printf("\n%d note(s) would be refreshed from their article\n", p.StaleAtoms)
+	fmt.Printf("%d note(s) of your own would be read in, %d re-read after your edits\n", p.VaultNew, p.VaultEdits)
 }
 
 func truncate(s string, n int) string {

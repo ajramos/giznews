@@ -37,9 +37,75 @@ var wikilinkRe = regexp.MustCompile(`\[\[([^\]|#]+)`)
 // ever written back. The user's file stays the source of truth; the database
 // keeps a copy and the fingerprint that says whether it changed since.
 func (s *Service) SyncVault(ctx context.Context) (*ImportResult, error) {
-	res := &ImportResult{}
+	res, err := s.importVaultFiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mentions, err := s.recordVaultMentions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res.Mentions = mentions
+	if s.logger != nil && (res.Imported > 0 || res.Updated > 0) {
+		s.logger.Printf("kb sync: %d note(s) imported, %d updated, %d concept mention(s)",
+			res.Imported, res.Updated, res.Mentions)
+	}
+	return res, nil
+}
+
+// importVaultFiles brings the reader's notes into the graph. A build runs it
+// before writing anything of its own, so notes and articles are counted
+// together.
+func (s *Service) importVaultFiles(ctx context.Context) (*ImportResult, error) {
+	kbRepo := db.NewKBRepo(s.db)
+	candidates, res, err := s.scanVault(ctx, kbRepo)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range candidates {
+		if _, err := s.applyCandidate(ctx, kbRepo, c); err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+// recordVaultMentions counts what the reader's notes cite. It runs over every
+// note they own, not only the ones that just changed, and a build runs it after
+// the articles have been written: a note may name a concept before any article
+// does, and its file will never change again to trigger a second look.
+func (s *Service) recordVaultMentions(ctx context.Context) (int, error) {
 	kbRepo := db.NewKBRepo(s.db)
 	conceptRepo := db.NewConceptRepo(s.db)
+	mine, err := kbRepo.ByOrigin(ctx, vaultOrigin, 1000)
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, note := range mine {
+		n, err := s.recordUserMentions(ctx, conceptRepo, note)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+// vaultCandidate is a hand-written file the scan decided to act on.
+type vaultCandidate struct {
+	Path     string
+	Content  string
+	Hash     string
+	Existing *db.KBNote // nil when the file is not in the graph yet
+}
+
+// scanVault reads the vault and decides what to do with every file, without
+// writing anything. SyncVault applies the result; a dry run just counts it, and
+// both see exactly the same decisions.
+func (s *Service) scanVault(ctx context.Context, repo *db.KBRepo) ([]vaultCandidate, *ImportResult, error) {
+	res := &ImportResult{}
+	var out []vaultCandidate
 
 	err := filepath.WalkDir(s.vault.Root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -61,93 +127,68 @@ func (s *Service) SyncVault(ctx context.Context) (*ImportResult, error) {
 			return nil // giznews wrote this one
 		}
 
-		note, outcome, err := s.importNote(ctx, kbRepo, path, content, hashOf(raw))
-		if err != nil {
+		hash := hashOf(raw)
+		existing, err := repo.GetByPath(ctx, path)
+		if err != nil && !errors.Is(err, db.ErrNotFound) {
 			return err
 		}
-		switch outcome {
-		case importSkipped:
-			res.Skipped++
-			return nil
-		case importCreated:
-			res.Imported++
-		case importUpdated:
+		if existing != nil {
+			if existing.ContentHash == hash || existing.Frontmatter != vaultOrigin {
+				// Either nothing changed, or this is a giznews note whose file
+				// the reader rewrote: taking over the row here would silently
+				// stop the note from ever tracking its article again.
+				res.Skipped++
+				return nil
+			}
 			res.Updated++
+		} else {
+			res.Imported++
 		}
-
-		mentions, err := s.recordUserMentions(ctx, conceptRepo, note)
-		if err != nil {
-			return err
-		}
-		res.Mentions += mentions
+		out = append(out, vaultCandidate{Path: path, Content: content, Hash: hash, Existing: existing})
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("kb: scan vault: %w", err)
+		return nil, nil, fmt.Errorf("kb: scan vault: %w", err)
 	}
-	if s.logger != nil && (res.Imported > 0 || res.Updated > 0) {
-		s.logger.Printf("kb sync: %d note(s) imported, %d updated, %d concept mention(s)",
-			res.Imported, res.Updated, res.Mentions)
-	}
-	return res, nil
+	return out, res, nil
 }
 
-type importOutcome int
+// applyCandidate writes one scanned file into the graph.
+func (s *Service) applyCandidate(ctx context.Context, repo *db.KBRepo, c vaultCandidate) (*db.KBNote, error) {
+	links := parseWikilinks(c.Content)
+	tags := parseTags(c.Content)
+	title := parseTitle(c.Content, c.Path)
 
-const (
-	importSkipped importOutcome = iota
-	importCreated
-	importUpdated
-)
-
-// importNote mirrors one hand-written file into kb_notes, creating the row on
-// first sight and refreshing it when the file changed.
-func (s *Service) importNote(ctx context.Context, repo *db.KBRepo, path, content, hash string) (*db.KBNote, importOutcome, error) {
-	existing, err := repo.GetByPath(ctx, path)
-	if err != nil && !errors.Is(err, db.ErrNotFound) {
-		return nil, importSkipped, err
+	if c.Existing != nil {
+		note := c.Existing
+		note.Title = title
+		note.Content = c.Content
+		note.Tags = tags
+		note.Wikilinks = links
+		if err := repo.Update(ctx, note); err != nil {
+			return nil, err
+		}
+		if err := repo.SetContentHash(ctx, note.ID, c.Hash); err != nil {
+			return nil, err
+		}
+		note.ContentHash = c.Hash
+		return note, nil
 	}
 
-	links := parseWikilinks(content)
-	tags := parseTags(content)
-	title := parseTitle(content, path)
-	noteType := noteTypeFor(path, content)
-
-	if existing != nil {
-		if existing.ContentHash == hash || existing.Frontmatter != vaultOrigin {
-			// Either nothing changed, or this is a giznews note whose file the
-			// reader rewrote: taking over the row here would silently stop the
-			// note from ever tracking its article again.
-			return existing, importSkipped, nil
-		}
-		existing.Title = title
-		existing.Content = content
-		existing.Tags = tags
-		existing.Wikilinks = links
-		if err := repo.Update(ctx, existing); err != nil {
-			return nil, importSkipped, err
-		}
-		if err := repo.SetContentHash(ctx, existing.ID, hash); err != nil {
-			return nil, importSkipped, err
-		}
-		existing.ContentHash = hash
-		return existing, importUpdated, nil
-	}
-
-	base := Slugify(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+	base := Slugify(strings.TrimSuffix(filepath.Base(c.Path), filepath.Ext(c.Path)))
 	slug := s.uniqueSlug(ctx, repo, base, nil)
 	if slug != base && s.logger != nil {
-		s.logger.Printf("kb: %s imported as %q, its own name was taken", path, slug)
+		s.logger.Printf("kb: %s imported as %q, its own name was taken", c.Path, slug)
 	}
 	note, err := repo.Create(ctx, db.NewKBNote{
-		Type: noteType, Title: title, Slug: slug, Path: path,
-		Frontmatter: vaultOrigin, Content: content, Tags: tags, Wikilinks: links,
-		ContentHash: hash,
+		Type: noteTypeFor(c.Path, c.Content), Title: title, Slug: slug, Path: c.Path,
+		Frontmatter: vaultOrigin, Content: c.Content, Tags: tags, Wikilinks: links,
+		ContentHash: c.Hash,
 	})
 	if err != nil {
-		return nil, importSkipped, fmt.Errorf("kb: import %s: %w", path, err)
+		return nil, fmt.Errorf("kb: import %s: %w", c.Path, err)
 	}
-	return note, importCreated, nil
+	return note, nil
 }
 
 // recordUserMentions counts a hand-written note's links to concepts that already

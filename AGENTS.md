@@ -58,7 +58,9 @@ Everything must be green before committing.
 
 - Config: `~/.config/giznews/config.json` (schema in `internal/config`).
   Field names: `lenientInt`, `llm.enabled`, `extract.on_fetch/limit/
-  concurrency`, `gmail.credentials_path` (shared with giztui).
+  concurrency`, `gmail.credentials_path` (shared with giztui),
+  `kb.min_occurrences/age_days/limit` (what a graph build selects and when a
+  concept earns a note).
 - Knowledge vault: `~/Documents/obsidian/chronicles-ai` (Obsidian). The user
   writes there too: every generated note delimits its own part with
   `<!-- giznews:begin -->` / `<!-- giznews:end -->`, and `kb_notes.content_hash`

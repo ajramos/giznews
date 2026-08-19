@@ -93,6 +93,21 @@ func (r *KBRepo) GetBySlug(ctx context.Context, slug string) (*KBNote, error) {
 	return scanKBNote(row)
 }
 
+// ByOrigin returns the notes whose frontmatter marks them as coming from a
+// given origin — the ones read out of the vault rather than generated.
+func (r *KBRepo) ByOrigin(ctx context.Context, origin string, limit int) ([]*KBNote, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	rows, err := r.db.sql.QueryContext(ctx, kbNoteColumns+`
+		WHERE frontmatter = ? ORDER BY created_at DESC LIMIT ?`, origin, limit)
+	if err != nil {
+		return nil, fmt.Errorf("kb by origin: %w", err)
+	}
+	defer rows.Close()
+	return scanKBNotes(rows)
+}
+
 // GetByPath returns the note stored at a vault path, or ErrNotFound.
 func (r *KBRepo) GetByPath(ctx context.Context, path string) (*KBNote, error) {
 	row := r.db.sql.QueryRowContext(ctx, kbNoteColumns+" WHERE path = ?", path)

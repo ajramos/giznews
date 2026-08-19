@@ -132,6 +132,17 @@ func (r *ConceptRepo) MentionedBy(ctx context.Context, slug string, limit int) (
 	return scanKBNotes(rows)
 }
 
+// HasMention reports whether a note is already counted towards a concept.
+func (r *ConceptRepo) HasMention(ctx context.Context, slug string, noteID int64) (bool, error) {
+	var n int
+	err := r.db.sql.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM concept_mentions WHERE concept_slug = ? AND note_id = ?", slug, noteID).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("concept mention exists: %w", err)
+	}
+	return n > 0, nil
+}
+
 // Top returns the most-mentioned concepts, promoted or not.
 func (r *ConceptRepo) Top(ctx context.Context, limit int) ([]*Concept, error) {
 	if limit <= 0 {

@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -84,27 +85,31 @@ Global options:
 
 func loadConfig(args []string) (*config.Config, error) {
 	fs := flag.NewFlagSet("giznews", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	configPath := fs.String("config", "", "path to config JSON")
-	_ = fs.Parse(flagArgs(args))
+	_ = fs.Parse(configArgs(args))
 	return config.LoadConfig(*configPath)
 }
 
-// flagArgs keeps only the flags out of a subcommand's arguments. Go's flag
-// package stops at the first positional argument, so without this
-// `kb merge a b --config=x` would silently fall back to the default config.
-func flagArgs(args []string) []string {
-	out := make([]string, 0, len(args))
+// configArgs picks the config flag out of a subcommand's arguments, wherever it
+// sits. Go's flag package stops at the first positional argument and rejects
+// flags it does not know, so neither `kb merge a b --config=x` nor
+// `kb build --dry-run --config=x` would otherwise find the config it was given.
+func configArgs(args []string) []string {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		if !strings.HasPrefix(a, "-") {
-			continue
+		if a == "-config" || a == "--config" {
+			if i+1 < len(args) {
+				return []string{"-config", args[i+1]}
+			}
+			return nil
 		}
-		out = append(out, a)
-		// "--config path" carries its value in the next argument.
-		if !strings.Contains(a, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-			i++
-			out = append(out, args[i])
+		if value, ok := strings.CutPrefix(a, "--config="); ok {
+			return []string{"-config", value}
+		}
+		if value, ok := strings.CutPrefix(a, "-config="); ok {
+			return []string{"-config", value}
 		}
 	}
-	return out
+	return nil
 }

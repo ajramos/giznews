@@ -1142,3 +1142,127 @@ func TestSyncVaultIgnoresGeneratedFiles(t *testing.T) {
 		t.Fatalf("note count went from %d to %d", countBefore, countAfter)
 	}
 }
+
+// A note may cite a concept that does not exist yet. Counting mentions only
+// when the file changes would drop that one forever, since the file never
+// changes again.
+func TestUserMentionCountsOnceTheConceptExists(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t) // MinOccurrences = 2
+	ctx := context.Background()
+	conceptRepo := db.NewConceptRepo(d)
+
+	// The reader writes about something giznews has never seen.
+	mine := filepath.Join(vaultRoot, "00-Inbox", "early-thoughts.md")
+	if err := os.MkdirAll(filepath.Dir(mine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mine, []byte("# Early thoughts\n\nOn [[mamba]].\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SyncVault(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conceptRepo.Get(ctx, "mamba"); !errors.Is(err, db.ErrNotFound) {
+		t.Fatalf("a link invented a concept: %v", err)
+	}
+
+	// The news catches up: one article names it, so the concept now exists.
+	classifiedArticle(t, d, srcID, "Mamba enters the arena", []string{"mamba"})
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// The reader's note has not changed, but its mention must now count — and
+	// with two, the concept graduates.
+	c, err := conceptRepo.Get(ctx, "mamba")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Mentions != 2 {
+		t.Fatalf("mentions = %d, want 2 (the article and the reader's note)", c.Mentions)
+	}
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	promoted, err := conceptRepo.Get(ctx, "mamba")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if promoted.NoteID == 0 {
+		t.Fatal("concept did not graduate with two mentions")
+	}
+}
+
+// A dry run has to predict the build that follows it, or it is worse than no
+// dry run at all.
+func TestPreviewMatchesTheBuildThatFollows(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	classifiedArticle(t, d, srcID, "Agents in production", []string{"agents"})
+	classifiedArticle(t, d, srcID, "Agents everywhere", []string{"agents"})
+	classifiedArticle(t, d, srcID, "A quiet paper on retrieval", []string{"rag"})
+	mine := filepath.Join(vaultRoot, "00-Inbox", "mine.md")
+	if err := os.MkdirAll(filepath.Dir(mine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mine, []byte("# Mine\n\nOn [[rag]].\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := svc.Preview(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Atoms) != 3 {
+		t.Fatalf("plan has %d atoms, want 3", len(plan.Atoms))
+	}
+	// Both agents articles must plan the same concept slug: reserving per
+	// article would give the second one a suffixed slug of its own.
+	if got := plan.Atoms[0].Concepts; len(got) != 1 || got[0] != "agents" {
+		t.Fatalf("first atom concepts = %v", got)
+	}
+	if got := plan.Atoms[1].Concepts; len(got) != 1 || got[0] != "agents" {
+		t.Fatalf("second atom concepts = %v, want the same slug as the first", got)
+	}
+	// Both concepts reach two: "agents" from its two articles, and "rag" from
+	// one article plus the reader's note — which the build counts once the
+	// article has created the concept.
+	if len(plan.Promoting) != 2 {
+		t.Fatalf("promoting = %+v, want agents and rag", plan.Promoting)
+	}
+	for _, c := range plan.Promoting {
+		if c.After != 2 {
+			t.Fatalf("%s lands at %d, want 2", c.Slug, c.After)
+		}
+	}
+	if plan.VaultNew != 1 {
+		t.Fatalf("vault new = %d, want 1", plan.VaultNew)
+	}
+
+	// Nothing was written by the preview.
+	if n, err := db.NewKBRepo(d).Count(ctx, ""); err != nil {
+		t.Fatal(err)
+	} else if n != 0 {
+		t.Fatalf("preview wrote %d notes", n)
+	}
+
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.AtomsCreated != len(plan.Atoms) {
+		t.Fatalf("build wrote %d atoms, the plan said %d", res.AtomsCreated, len(plan.Atoms))
+	}
+	if res.ElectronsCreated != len(plan.Promoting) {
+		t.Fatalf("build promoted %d concepts, the plan said %d", res.ElectronsCreated, len(plan.Promoting))
+	}
+	if res.NotesImported != plan.VaultNew+plan.VaultEdits {
+		t.Fatalf("build imported %d notes, the plan said %d", res.NotesImported, plan.VaultNew+plan.VaultEdits)
+	}
+	for _, a := range plan.Atoms {
+		if _, err := db.NewKBRepo(d).GetBySlug(ctx, a.Slug); err != nil {
+			t.Fatalf("planned slug %q was not the one written: %v", a.Slug, err)
+		}
+	}
+}

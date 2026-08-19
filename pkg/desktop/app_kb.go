@@ -19,6 +19,9 @@ func (a *App) kbService() (*kb.Service, error) {
 	}
 	return kb.NewService(a.db, a.cfg.ResolveVaultPath(), kb.Options{
 		ImportanceThreshold: a.cfg.Classify.ImportanceThreshold,
+		MinOccurrences:      a.cfg.KB.MinOccurrences,
+		AgeDays:             a.cfg.KB.AgeDays,
+		Limit:               a.cfg.KB.Limit,
 		Model:               a.cfg.LLM.Model,
 		UseLLM:              a.cfg.LLM.Enabled && prov != nil,
 		Language:            a.cfg.LLM.Language,

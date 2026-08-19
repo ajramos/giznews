@@ -118,6 +118,17 @@ reescribir (`Vault.Sync`):
 Los atoms se refrescan cuando su artículo cambia (`ListStaleNotes`), no una sola
 vez al crearse.
 
+Los parámetros del build viven en `kb` dentro de `config.json`
+(`min_occurrences`, `age_days`, `limit`; la importancia mínima sigue en
+`classify.importance_threshold`), y `kb build --dry-run` los imprime junto con
+lo que el run escribiría — atoms, conceptos que graduarían y notas que
+refrescaría — sin tocar nada.
+
+Orden dentro de un build, que importa: primero se importan tus notas, luego se
+escriben los atoms (que crean conceptos), luego se cuentan las menciones de tus
+notas —así una nota tuya puede nombrar algo antes que ningún artículo— y por
+último se promueve.
+
 Y el camino de vuelta: `kb sync` (también al principio de cada `kb build`) lee
 las notas que escribes tú. Un fichero sin marcadores y sin `status: generated`
 no es de giznews, así que se importa a `kb_notes` — título, tags, wikilinks — y
