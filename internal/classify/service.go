@@ -81,7 +81,7 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 	// Phase 1: deterministic rules.
 	var llmBatch []*db.Article
 	for _, a := range articles {
-		if actions := MatchFirst(rules, a); actions != nil {
+		if actions := MatchFirst(rules, a); actions != nil && !actions.Keep {
 			if err := s.apply(ctx, repo, a, actions); err != nil {
 				res.Errors = append(res.Errors, fmt.Sprintf("#%d: %v", a.ID, err))
 				continue

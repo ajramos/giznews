@@ -10,6 +10,16 @@ interface Props {
   notify: (msg: string) => void;
 }
 
+// ruleEffect names what a rule does with what it matches — the one thing the
+// list has to say, since first-match-wins makes an archive rule and a keep rule
+// mean opposite things in the same position.
+function ruleEffect(r: RuleDTO): string {
+  if (!r.enabled) return "off";
+  if (r.actions.some((a) => a.type === "keep")) return "keep";
+  if (r.actions.some((a) => a.type === "archive")) return "archive";
+  return "classify";
+}
+
 // RulesPicker: browse/manage the deterministic classification rules.
 //   j/k navigate · Enter toggle enabled · a add · e edit · d delete · Esc close
 export function RulesPicker({ onEdit, onAdd, onClose, notify }: Props) {
@@ -55,7 +65,7 @@ export function RulesPicker({ onEdit, onAdd, onClose, notify }: Props) {
               <span className="sp-type">{r.enabled ? <Check size={13} /> : <Zap size={13} />}</span>
               <span className="sp-name">{r.name}</span>
               <span className="sp-meta">{r.query}</span>
-              <span className="sp-state">{r.enabled ? "on" : "off"}</span>
+              <span className="sp-state">{ruleEffect(r)}</span>
             </div>
           ))}
         </div>
