@@ -54,6 +54,19 @@ Everything must be green before committing.
 - Article states: `unread | read | archived | starred` — all logical, nothing
   is physically deleted. Archiving offers undo.
 
+## Classification prefilter
+
+Rules run before the LLM: regex over `title + author + URL`, **first match
+wins** (ordered by id, i.e. creation order). Actions: `category`, `importance`,
+`tag`, `archive`, `keep`. Anything but `keep` resolves the article and skips the
+model — which also means it gets **no summary and no entities**, so prefer
+`archive` for noise over pre-classifying good articles. `keep` applies nothing
+and sends the article to the model anyway; it is the shield placed above broad
+noise rules. Ship rules in `docs/rules/*.json` and load them with
+`giznews rules import` (matched by name, idempotent); never hand-write rows.
+`giznews rules test "<regex>"` and `giznews classify --dry-run` before enabling
+anything that archives.
+
 ## Database / user config
 
 - Config: `~/.config/giznews/config.json` (schema in `internal/config`).

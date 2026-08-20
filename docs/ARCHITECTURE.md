@@ -37,7 +37,8 @@ fetch ──► normalize + dedupe (simhash/URL) ──► SQLite
    │
    ├──► extract (batch, readability → markdown, cacheado en content_md)
    │
-classify ──► reglas deterministas ⚡ → LLM en batch (categoría, importancia, tags, entidades, resumen)
+classify ──► reglas deterministas ⚡ (archive/keep/clasificar) → LLM en batch
+             (categoría, importancia, tags, entidades, resumen)
    │
 kb build ──► atoms (artículos) + electrons (conceptos, promovidos al superar N
              menciones históricas) + molecules (temas, agrupados por los
@@ -49,6 +50,33 @@ digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digest
    │
 search ──► FTS5 (keyword) ⊕ embeddings (Ollama, coseno) con RRF
 ```
+
+## El prefiltro determinista (⚡)
+
+Antes del clasificador caro, cada artículo pasa por las reglas: un regex —
+case-insensitive, casado contra `título + autor + URL`— y unas acciones. **Gana
+la primera regla que casa**, en orden de id, o sea de creación: el orden *es*
+la lógica.
+
+Acciones: `category`, `importance`, `tag`, `archive` y `keep`. Las cuatro
+primeras resuelven el artículo y **se saltan el LLM**, lo cual tiene un coste
+que conviene tener presente: ese artículo se queda sin `summary` y sin
+entidades, así que si acaba en el vault su atom no tiene resumen y aporta menos
+conceptos. Por eso el set que se distribuye es casi todo `archive`: matar ruido
+es ganancia pura; pre-clasificar es un intercambio.
+
+`keep` existe justamente por el "gana la primera": no aplica nada y manda el
+artículo al modelo igual. Es el escudo que se pone **por encima** de las reglas
+de ruido para decir qué no pueden tocar — sin él, un regex amplio ("cualquier
+cosa sobre cripto") se lleva por delante el único artículo de cripto que
+importaba.
+
+Las reglas viven en un fichero versionado (`docs/rules/noise.json`) y se cargan
+con `giznews rules import <fichero>`, que empareja por nombre: importar dos
+veces no duplica nada. `giznews rules test "<regex>"` dice qué artículos de tu
+base casarían —la única forma honesta de escribir un regex que archiva— y
+`giznews classify --dry-run` dice qué reclamaría cada regla y cuántos quedan
+para el modelo, sin tocar nada.
 
 ## El flujo de lectura
 

@@ -16,13 +16,21 @@ type RuleActions struct {
 	Tags       []string
 	Importance int // 0..3; 0 when unset
 	Archive    bool
+	// Keep protects an article: the rule fires, nothing is applied, and the
+	// article goes to the model anyway. Rules are first-match-wins, so a broad
+	// noise rule ("anything about crypto") would otherwise archive the one
+	// article about crypto that mattered. A keep rule placed before it says
+	// what the noise rules are not allowed to touch.
+	Keep bool
 }
 
 // compiledRule is a rule with its matcher compiled. It embeds the parsed
 // actions so fields are reachable directly.
 type compiledRule struct {
 	*RuleActions
-	re *regexp.Regexp
+	Name  string
+	Query string
+	re    *regexp.Regexp
 }
 
 // CompiledRule is the exported compiled rule with a Match method.
@@ -48,6 +56,8 @@ func ParseRule(r *db.Rule) (*RuleActions, error) {
 			}
 		case "archive":
 			ra.Archive = true
+		case "keep":
+			ra.Keep = true
 		}
 	}
 	return ra, nil
@@ -63,7 +73,7 @@ func CompileRule(r *db.Rule) (*CompiledRule, error) {
 		return nil, err
 	}
 	re, _ := regexp.Compile("(?i)" + r.Query)
-	return &compiledRule{RuleActions: ra, re: re}, nil
+	return &compiledRule{RuleActions: ra, Name: r.Name, Query: r.Query, re: re}, nil
 }
 
 // CompileAll precompiles every enabled rule; broken rules are skipped.
@@ -85,9 +95,19 @@ func CompileAll(ctx context.Context, repo *db.RuleRepo) ([]*compiledRule, error)
 
 // MatchFirst returns the actions of the first rule that fires for a, or nil.
 func MatchFirst(rules []*compiledRule, a *db.Article) *RuleActions {
+	if r := MatchFirstRule(rules, a); r != nil {
+		return r.RuleActions
+	}
+	return nil
+}
+
+// MatchFirstRule returns the first rule that fires for a, or nil. Callers that
+// only need the outcome use MatchFirst; a preview needs to say which rule it
+// was.
+func MatchFirstRule(rules []*compiledRule, a *db.Article) *CompiledRule {
 	for _, r := range rules {
 		if r.Match(a) {
-			return r.RuleActions
+			return r
 		}
 	}
 	return nil

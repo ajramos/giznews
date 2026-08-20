@@ -102,6 +102,9 @@ const mockDigests: DigestDTO[] = [];
 const mockRules: RuleDTO[] = [
   { id: 1, name: "openai", query: "openai|gpt|chatgpt", actions: [{ type: "category", value: "industry" }, { type: "importance", value: "2" }], enabled: true },
   { id: 2, name: "anthropic", query: "anthropic|claude", actions: [{ type: "category", value: "models" }], enabled: true },
+  // The two shapes the shipped ruleset is made of: a shield and a noise rule.
+  { id: 3, name: "keep: labs and models", query: "\\b(openai|anthropic|gemini)\\b", actions: [{ type: "keep", value: "" }], enabled: true },
+  { id: 4, name: "noise: crypto", query: "\\b(bitcoin|crypto|web3)\\b", actions: [{ type: "archive", value: "" }], enabled: true },
 ];
 
 // A promotion queue with a couple of concepts already promoted, so the picker

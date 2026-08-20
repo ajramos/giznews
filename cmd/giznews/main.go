@@ -48,6 +48,8 @@ func main() {
 		runServe(args, logger)
 	case "sources":
 		runSources(args, logger)
+	case "rules":
+		runRules(args, logger)
 	case "gmail-auth":
 		runGmailAuth(args, logger)
 	case "help", "--help", "-h":
@@ -68,11 +70,12 @@ Usage:
 Commands:
   init      Create default config, database and knowledge vault skeleton
   fetch     Fetch new articles from all enabled sources
-  classify  Classify unread articles (rules ⚡ + LLM)
+  classify  Classify unread articles (rules ⚡ + LLM; --dry-run to plan it)
   digest    Generate the daily digest (grouped by theme)
   kb        Knowledge-graph operations (build, list, sync)
   search    Semantic + keyword search over notes and articles
   sources   Manage news sources (list, add, enable, disable)
+  rules     Manage the ⚡ prefilter (list, test, import, export, add, rm)
   gmail-auth  Run the Gmail OAuth flow (newsletters)
   serve     Run the daemon (background fetch on schedule)
   version   Show version

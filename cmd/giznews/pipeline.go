@@ -36,6 +36,15 @@ func runClassify(args []string, logger *log.Logger) {
 		Model:     cfg.LLM.Model,
 	}, prov, logger)
 
+	if hasFlag(args, "dry-run") {
+		plan, err := svc.Preview(ctx)
+		if err != nil {
+			logger.Fatalf("classify --dry-run: %v", err)
+		}
+		printClassifyPlan(plan)
+		return
+	}
+
 	res, err := svc.ClassifyAll(ctx)
 	if err != nil {
 		logger.Fatalf("classify: %v", err)
@@ -44,6 +53,33 @@ func runClassify(args []string, logger *log.Logger) {
 		res.Classified, res.ByRules, res.ByLLM, res.SkippedNoLLM)
 	for _, e := range res.Errors {
 		fmt.Printf("  ! %s\n", e)
+	}
+}
+
+// printClassifyPlan renders a dry run: which rule claims what, and how much is
+// left for the model.
+func printClassifyPlan(p *classify.Plan) {
+	fmt.Printf("dry run — nothing was classified, archived or written\n")
+	fmt.Printf("%d article(s) waiting\n\n", p.Pending)
+
+	if len(p.Rules) == 0 {
+		fmt.Println("no rules — everything goes to the model")
+	}
+	for _, r := range p.Rules {
+		fmt.Printf("  %-8s %-34s %3d article(s)\n", r.Effect, truncate(r.Name, 34), r.Matches)
+		for _, title := range r.Sample {
+			fmt.Printf("           · %s\n", truncate(title, 62))
+		}
+	}
+
+	fmt.Printf("\n%d resolved by rules, %d of them archived — these never reach the model,\n", p.ByRules, p.Archived)
+	fmt.Printf("and never get a summary or entities either.\n")
+	if p.Kept > 0 {
+		fmt.Printf("%d protected by a keep rule: they go to the model untouched.\n", p.Kept)
+	}
+	fmt.Printf("\n%d would go to the model, in %d batch(es):\n", p.ToLLM, p.Batches)
+	for _, title := range p.Unmatched {
+		fmt.Printf("  · %s\n", truncate(title, 62))
 	}
 }
 

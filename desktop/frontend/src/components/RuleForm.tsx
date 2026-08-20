@@ -18,6 +18,7 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
   const [importance, setImportance] = useState(initial?.actions.find((a) => a.type === "importance")?.value ?? "");
   const [tags, setTags] = useState((initial?.actions.filter((a) => a.type === "tag").map((a) => a.value) ?? []).join(", "));
   const [archive, setArchive] = useState(initial?.actions.some((a) => a.type === "archive") ?? false);
+  const [keep, setKeep] = useState(initial?.actions.some((a) => a.type === "keep") ?? false);
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +34,7 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
     if (importance) actions.push({ type: "importance", value: importance });
     for (const t of tags.split(",").map((s) => s.trim()).filter(Boolean)) actions.push({ type: "tag", value: t });
     if (archive) actions.push({ type: "archive", value: "" });
+    if (keep) actions.push({ type: "keep", value: "" });
     onSave({ name: name.trim(), query: query.trim(), actions, enabled });
   };
 
@@ -79,9 +81,12 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
             <label>Tags (comma-separated)</label>
             <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="agents, safety" />
           </div>
-          <div className="field" style={{ display: "flex", gap: 16 }}>
+          <div className="field" style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <input type="checkbox" checked={archive} onChange={(e) => setArchive(e.target.checked)} /> Archive on match
+              <input type="checkbox" checked={archive} onChange={(e) => { setArchive(e.target.checked); if (e.target.checked) setKeep(false); }} /> Archive on match
+            </label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }} title="Protect: the rule fires, nothing is applied, and the article still goes to the LLM. Put it above the rules it protects from.">
+              <input type="checkbox" checked={keep} onChange={(e) => { setKeep(e.target.checked); if (e.target.checked) setArchive(false); }} /> Keep (protect from later rules)
             </label>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Enabled

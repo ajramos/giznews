@@ -143,3 +143,136 @@ func TestDefaultImportance(t *testing.T) {
 		t.Fatal("expected 1 for random")
 	}
 }
+
+// A keep rule protects an article from the rules below it: nothing is applied
+// and the model still sees it. Without this, one broad noise rule silently
+// swallows the article it was never meant to catch.
+func TestKeepRuleProtectsFromLaterRules(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "a",
+		Title: "OpenAI weighs in on crypto payments", URL: "https://x.com/1"})
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "b",
+		Title: "Bitcoin rips past $120k", URL: "https://x.com/2"})
+
+	ruleRepo := db.NewRuleRepo(d)
+	// Order is the matching order: the shield goes first.
+	if _, err := ruleRepo.Create(ctx, db.NewRule{
+		Name: "keep: labs", Query: `\b(openai|anthropic)\b`,
+		Actions: []db.RuleAction{{Type: "keep"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ruleRepo.Create(ctx, db.NewRule{
+		Name: "noise: crypto", Query: `\b(bitcoin|crypto)\b`,
+		Actions: []db.RuleAction{{Type: "archive"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(d, Options{UseLLM: false, BatchSize: 10, AgeDays: 30}, nil, nil)
+
+	plan, err := svc.Preview(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Pending != 2 || plan.Kept != 1 || plan.Archived != 1 || plan.ToLLM != 1 {
+		t.Fatalf("plan = %+v", plan)
+	}
+	if len(plan.Rules) != 2 || plan.Rules[0].Effect != "keep" || plan.Rules[0].Matches != 1 {
+		t.Fatalf("plan rules = %+v", plan.Rules)
+	}
+
+	res, err := svc.ClassifyAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The protected one was not resolved by rules: with no LLM it falls through
+	// to the deterministic default instead.
+	if res.ByRules != 1 || res.SkippedNoLLM != 1 {
+		t.Fatalf("res = %+v", res)
+	}
+	protected, _ := artRepo.Get(ctx, 1)
+	if protected.Status == db.StatusArchived {
+		t.Fatalf("the keep rule did not protect it: %+v", protected)
+	}
+	noise, _ := artRepo.Get(ctx, 2)
+	if noise.Status != db.StatusArchived {
+		t.Fatalf("the noise rule did not archive it: %+v", noise)
+	}
+}
+
+// A preview must describe the run that follows it: same rules, same articles,
+// same outcome.
+func TestPreviewLeavesEverythingAlone(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "a", Title: "Podcast: agents", URL: "https://x.com/1"})
+
+	ruleRepo := db.NewRuleRepo(d)
+	_, _ = ruleRepo.Create(ctx, db.NewRule{
+		Name: "noise: podcast", Query: `^podcast`,
+		Actions: []db.RuleAction{{Type: "archive"}}, Enabled: true,
+	})
+
+	svc := NewService(d, Options{UseLLM: false, BatchSize: 10, AgeDays: 30}, nil, nil)
+	if _, err := svc.Preview(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := artRepo.Get(ctx, 1)
+	if before.Status == db.StatusArchived {
+		t.Fatalf("the preview archived it: %+v", before)
+	}
+	if pending, _ := artRepo.CountUnclassified(ctx); pending != 1 {
+		t.Fatalf("the preview classified something: %d still pending, want 1", pending)
+	}
+	if _, err := svc.ClassifyAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := artRepo.Get(ctx, 1)
+	if after.Status != db.StatusArchived {
+		t.Fatalf("the run did not do what the preview said: %+v", after)
+	}
+}
+
+// TestQuery is what a rule is written with, so it has to match exactly what the
+// classifier would match — title, author and URL, case-insensitively.
+func TestTestQueryMatchesTheSameHaystack(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "a", Title: "A quiet title", URL: "https://acme.fm/podcast/ep-1"})
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "b", Title: "Another one", URL: "https://x.com/2"})
+
+	svc := NewService(d, Options{}, nil, nil)
+	matched, total, err := svc.TestQuery(ctx, `/podcast/`, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(matched) != 1 || matched[0].GUID != "a" {
+		t.Fatalf("matched %d (%+v)", total, matched)
+	}
+	if _, _, err := svc.TestQuery(ctx, "([unclosed", 10); err == nil {
+		t.Fatal("expected a broken regex to be reported, not silently ignored")
+	}
+}
