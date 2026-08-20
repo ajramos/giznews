@@ -276,3 +276,111 @@ func TestTestQueryMatchesTheSameHaystack(t *testing.T) {
 		t.Fatal("expected a broken regex to be reported, not silently ignored")
 	}
 }
+
+// A boost is a floor applied after the model, not instead of it: the article
+// still gets its summary and entities, and an importance the model already
+// judged higher is never pulled back down.
+func TestBoostIsAFloorAppliedAfterClassification(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "a", Title: "Acme releases a model", URL: "https://x.com/1"})
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "b", Title: "A quiet afternoon", URL: "https://x.com/2"})
+
+	ruleRepo := db.NewRuleRepo(d)
+	if _, err := ruleRepo.Create(ctx, db.NewRule{
+		Name: "high: releases", Query: `\breleases\b`,
+		Actions: []db.RuleAction{{Type: "boost", Value: "3"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(d, Options{UseLLM: false, BatchSize: 10, AgeDays: 30}, nil, nil)
+	plan, err := svc.Preview(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Boosted != 1 || plan.ByRules != 0 || plan.ToLLM != 2 {
+		t.Fatalf("plan = %+v", plan)
+	}
+
+	res, err := svc.ClassifyAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Nothing was resolved by rules: a boost does not take the article away
+	// from the classifier, it only raises it afterwards.
+	if res.ByRules != 0 || res.Boosted != 1 {
+		t.Fatalf("res = %+v", res)
+	}
+	boosted, _ := artRepo.Get(ctx, 1)
+	if boosted.Importance != 3 {
+		t.Fatalf("importance = %d, want 3", boosted.Importance)
+	}
+	plain, _ := artRepo.Get(ctx, 2)
+	if plain.Importance >= 3 {
+		t.Fatalf("an unboosted article was raised too: %+v", plain)
+	}
+
+	// A floor below what the article already carries changes nothing: it is a
+	// floor, not a value.
+	if err := artRepo.SetImportance(ctx, 2, 3); err != nil {
+		t.Fatal(err)
+	}
+	raised, err := svc.applyFloors(ctx, artRepo, []*db.Article{{ID: 2}}, map[int64]int{2: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raised != 0 {
+		t.Fatalf("applyFloors touched %d article(s), want 0", raised)
+	}
+	after, _ := artRepo.Get(ctx, 2)
+	if after.Importance != 3 {
+		t.Fatalf("the floor pulled an article down to %d", after.Importance)
+	}
+}
+
+// An explicit "this matters" outranks a pattern that says "this usually does
+// not": a boosted article is never archived by a rule below it.
+func TestBoostOutranksArchive(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: "a",
+		Title: "Court fines a crypto exchange over an AI trading bot", URL: "https://x.com/1"})
+
+	ruleRepo := db.NewRuleRepo(d)
+	// The archive rule is created first, so it would win on order alone.
+	_, _ = ruleRepo.Create(ctx, db.NewRule{
+		Name: "noise: crypto", Query: `\bcrypto\b`,
+		Actions: []db.RuleAction{{Type: "archive"}}, Enabled: true,
+	})
+	_, _ = ruleRepo.Create(ctx, db.NewRule{
+		Name: "high: regulation", Query: `\bcourt fines\b`,
+		Actions: []db.RuleAction{{Type: "boost", Value: "3"}}, Enabled: true,
+	})
+
+	svc := NewService(d, Options{UseLLM: false, BatchSize: 10, AgeDays: 30}, nil, nil)
+	if _, err := svc.ClassifyAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := artRepo.Get(ctx, 1)
+	if got.Status == db.StatusArchived {
+		t.Fatalf("a boosted article was archived: %+v", got)
+	}
+	if got.Importance != 3 {
+		t.Fatalf("importance = %d, want 3", got.Importance)
+	}
+}

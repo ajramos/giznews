@@ -22,6 +22,13 @@ type RuleActions struct {
 	// article about crypto that mattered. A keep rule placed before it says
 	// what the noise rules are not allowed to touch.
 	Keep bool
+	// Boost is an importance floor applied *after* the model has classified the
+	// article, not instead of it. Marking something important with an ordinary
+	// importance action would resolve it and skip the model, which is exactly
+	// backwards: the articles worth three stars are the ones most worth having
+	// a summary and entities for. A boost says "whatever the model decides,
+	// this is at least an N" and leaves the rest of the pipeline alone.
+	Boost int
 }
 
 // compiledRule is a rule with its matcher compiled. It embeds the parsed
@@ -58,6 +65,10 @@ func ParseRule(r *db.Rule) (*RuleActions, error) {
 			ra.Archive = true
 		case "keep":
 			ra.Keep = true
+		case "boost":
+			if n, err := strconv.Atoi(act.Value); err == nil && n > 0 && n <= 3 {
+				ra.Boost = n
+			}
 		}
 	}
 	return ra, nil
@@ -91,6 +102,45 @@ func CompileAll(ctx context.Context, repo *db.RuleRepo) ([]*compiledRule, error)
 		out = append(out, cr)
 	}
 	return out, nil
+}
+
+// Decision is what the whole rule chain decided about one article.
+//
+// Rules are first-match-wins, but a boost is not a claim on an article — it is
+// something said about it. So the chain is read twice: the highest boost any
+// rule gives it, and separately the first rule that actually wants to do
+// something. An article somebody boosted is never archived: an explicit "this
+// matters" outranks a pattern that says "this usually does not".
+type Decision struct {
+	Floor     int    // highest importance floor a boost rule gives it
+	BoostedBy string // the rule that set that floor
+	Action    *RuleActions
+	ActionBy  string
+}
+
+// ToLLM reports whether the article still has to be classified by the model.
+func (d Decision) ToLLM() bool {
+	return d.Floor > 0 || d.Action == nil || d.Action.Keep
+}
+
+// Decide runs the whole chain over one article.
+func Decide(rules []*compiledRule, a *db.Article) Decision {
+	var d Decision
+	for _, r := range rules {
+		if !r.Match(a) {
+			continue
+		}
+		if r.Boost > 0 {
+			if r.Boost > d.Floor {
+				d.Floor, d.BoostedBy = r.Boost, r.Name
+			}
+			continue // a boost annotates; it does not claim the article
+		}
+		if d.Action == nil {
+			d.Action, d.ActionBy = r.RuleActions, r.Name
+		}
+	}
+	return d
 }
 
 // MatchFirst returns the actions of the first rule that fires for a, or nil.

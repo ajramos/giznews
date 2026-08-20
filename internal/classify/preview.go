@@ -18,6 +18,7 @@ type Plan struct {
 	ByRules  int        `json:"by_rules"`
 	Archived int        `json:"archived"`
 	Kept     int        `json:"kept"`
+	Boosted  int        `json:"boosted"`
 	ToLLM    int        `json:"to_llm"`
 	Batches  int        `json:"batches"`
 	Rules    []RulePlan `json:"rules"`
@@ -59,31 +60,46 @@ func (s *Service) Preview(ctx context.Context) (*Plan, error) {
 		plan.Rules = append(plan.Rules, *rp)
 	}
 
+	count := func(name, title string) {
+		rp := byName[name]
+		if rp == nil {
+			return
+		}
+		rp.Matches++
+		if len(rp.Sample) < maxSample {
+			rp.Sample = append(rp.Sample, title)
+		}
+	}
+
 	for _, a := range articles {
-		match := MatchFirstRule(rules, a)
-		if match == nil {
+		d := Decide(rules, a)
+		if d.Floor > 0 {
+			plan.Boosted++
+			count(d.BoostedBy, a.Title)
+		}
+		// A boost decides the article's fate on its own, so the rule that would
+		// otherwise have acted is not counted: every article appears once in a
+		// plan, under whatever actually happens to it.
+		if d.Action != nil && d.Floor == 0 {
+			count(d.ActionBy, a.Title)
+		}
+		if d.ToLLM() {
 			plan.ToLLM++
-			if len(plan.Unmatched) < maxSample {
-				plan.Unmatched = append(plan.Unmatched, a.Title)
+			switch {
+			case d.Floor > 0:
+				// counted as boosted already
+			case d.Action != nil && d.Action.Keep:
+				plan.Kept++
+			default:
+				if len(plan.Unmatched) < maxSample {
+					plan.Unmatched = append(plan.Unmatched, a.Title)
+				}
 			}
 			continue
 		}
-		rp := byName[match.Name]
-		if rp != nil {
-			rp.Matches++
-			if len(rp.Sample) < maxSample {
-				rp.Sample = append(rp.Sample, a.Title)
-			}
-		}
-		switch {
-		case match.Keep:
-			plan.Kept++
-			plan.ToLLM++ // protected: the model still sees it
-		case match.Archive:
+		plan.ByRules++
+		if d.Action.Archive {
 			plan.Archived++
-			plan.ByRules++
-		default:
-			plan.ByRules++
 		}
 	}
 
@@ -102,6 +118,8 @@ func (s *Service) Preview(ctx context.Context) (*Plan, error) {
 // effectOf names what a rule does, for a reader scanning a list of them.
 func effectOf(a *RuleActions) string {
 	switch {
+	case a.Boost > 0:
+		return fmt.Sprintf("boost ★%d", a.Boost)
 	case a.Keep:
 		return "keep"
 	case a.Archive:

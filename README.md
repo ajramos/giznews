@@ -50,7 +50,8 @@ go run ./cmd/giznews sources add --name "DeepMind" --url https://deepmind.google
 
 # 3. Pipeline completo
 go run ./cmd/giznews fetch      # + extrae cuerpos en batch
-go run ./cmd/giznews rules import docs/rules/noise.json  # prefiltro: mata el ruido
+go run ./cmd/giznews rules import docs/rules/noise.json       # prefiltro: mata el ruido
+go run ./cmd/giznews rules import docs/rules/high-value.json  # y marca lo que va a ★3
 go run ./cmd/giznews classify --dry-run  # qué reclama cada regla, sin clasificar nada
 go run ./cmd/giznews classify   # reglas ⚡ + LLM
 go run ./cmd/giznews kb build --dry-run  # qué haría, sin tocar el vault

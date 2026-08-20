@@ -58,14 +58,22 @@ Everything must be green before committing.
 
 Rules run before the LLM: regex over `title + author + URL`, **first match
 wins** (ordered by id, i.e. creation order). Actions: `category`, `importance`,
-`tag`, `archive`, `keep`. Anything but `keep` resolves the article and skips the
-model — which also means it gets **no summary and no entities**, so prefer
-`archive` for noise over pre-classifying good articles. `keep` applies nothing
-and sends the article to the model anyway; it is the shield placed above broad
-noise rules. Ship rules in `docs/rules/*.json` and load them with
-`giznews rules import` (matched by name, idempotent); never hand-write rows.
-`giznews rules test "<regex>"` and `giznews classify --dry-run` before enabling
-anything that archives.
+`tag`, `archive`, `keep`, `boost`.
+
+`category`/`importance`/`tag`/`archive` resolve the article and skip the model,
+which also means it gets **no summary and no entities** — so prefer `archive`
+for noise over pre-classifying good articles.
+
+`keep` and `boost` do not resolve anything. `keep` is the shield placed above
+broad noise rules. `boost` is an importance **floor** applied *after* the model
+(`applyFloors`), so a ★3 article keeps its summary and its entities; boosts are
+collected from every matching rule (highest wins) rather than first-match, and a
+boosted article is never archived. See `classify.Decide`.
+
+Ship rules in `docs/rules/*.json` (`noise.json`, `high-value.json`) and load
+them with `giznews rules import` (matched by name, idempotent); never
+hand-write rows. `giznews rules test "<regex>"` and `giznews classify
+--dry-run` before enabling anything that archives or boosts.
 
 ## Database / user config
 

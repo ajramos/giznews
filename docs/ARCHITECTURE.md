@@ -58,12 +58,12 @@ case-insensitive, casado contra `título + autor + URL`— y unas acciones. **Ga
 la primera regla que casa**, en orden de id, o sea de creación: el orden *es*
 la lógica.
 
-Acciones: `category`, `importance`, `tag`, `archive` y `keep`. Las cuatro
-primeras resuelven el artículo y **se saltan el LLM**, lo cual tiene un coste
-que conviene tener presente: ese artículo se queda sin `summary` y sin
+Acciones: `category`, `importance`, `tag`, `archive`, `keep` y `boost`. Las
+cuatro primeras resuelven el artículo y **se saltan el LLM**, lo cual tiene un
+coste que conviene tener presente: ese artículo se queda sin `summary` y sin
 entidades, así que si acaba en el vault su atom no tiene resumen y aporta menos
-conceptos. Por eso el set que se distribuye es casi todo `archive`: matar ruido
-es ganancia pura; pre-clasificar es un intercambio.
+conceptos. Por eso el set de ruido es casi todo `archive`: matar ruido es
+ganancia pura; pre-clasificar es un intercambio.
 
 `keep` existe justamente por el "gana la primera": no aplica nada y manda el
 artículo al modelo igual. Es el escudo que se pone **por encima** de las reglas
@@ -71,9 +71,18 @@ de ruido para decir qué no pueden tocar — sin él, un regex amplio ("cualquie
 cosa sobre cripto") se lleva por delante el único artículo de cripto que
 importaba.
 
-Las reglas viven en un fichero versionado (`docs/rules/noise.json`) y se cargan
-con `giznews rules import <fichero>`, que empareja por nombre: importar dos
-veces no duplica nada. `giznews rules test "<regex>"` dice qué artículos de tu
+`boost` es lo contrario y por el mismo motivo: un suelo de importancia que se
+aplica **después** de que el modelo haya clasificado (`applyFloors`), no en su
+lugar. Marcar lo bueno con un `importance` normal sería justo al revés —
+precisamente los artículos que merecen ★3 son los que más falta les hace un
+resumen y unas entidades, porque son los que acaban en la base de conocimiento.
+Los boosts no son "primera que gana": se recogen de todas las reglas que casan
+(gana el más alto), y un artículo con boost **nunca se archiva**. Todo esto vive
+en `classify.Decide`.
+
+Las reglas viven en ficheros versionados (`docs/rules/noise.json`,
+`docs/rules/high-value.json`) y se cargan con `giznews rules import <fichero>`,
+que empareja por nombre: importar dos veces no duplica nada. `giznews rules test "<regex>"` dice qué artículos de tu
 base casarían —la única forma honesta de escribir un regex que archiva— y
 `giznews classify --dry-run` dice qué reclamaría cada regla y cuántos quedan
 para el modelo, sin tocar nada.

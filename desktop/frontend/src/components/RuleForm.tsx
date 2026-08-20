@@ -15,7 +15,10 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [query, setQuery] = useState(initial?.query ?? "");
   const [category, setCategory] = useState(initial?.actions.find((a) => a.type === "category")?.value ?? "");
-  const [importance, setImportance] = useState(initial?.actions.find((a) => a.type === "importance")?.value ?? "");
+  const [importance, setImportance] = useState(
+    initial?.actions.find((a) => a.type === "importance" || a.type === "boost")?.value ?? "",
+  );
+  const [boost, setBoost] = useState(initial?.actions.some((a) => a.type === "boost") ?? false);
   const [tags, setTags] = useState((initial?.actions.filter((a) => a.type === "tag").map((a) => a.value) ?? []).join(", "));
   const [archive, setArchive] = useState(initial?.actions.some((a) => a.type === "archive") ?? false);
   const [keep, setKeep] = useState(initial?.actions.some((a) => a.type === "keep") ?? false);
@@ -31,7 +34,7 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
     }
     const actions: RuleActionDTO[] = [];
     if (category) actions.push({ type: "category", value: category });
-    if (importance) actions.push({ type: "importance", value: importance });
+    if (importance) actions.push({ type: boost ? "boost" : "importance", value: importance });
     for (const t of tags.split(",").map((s) => s.trim()).filter(Boolean)) actions.push({ type: "tag", value: t });
     if (archive) actions.push({ type: "archive", value: "" });
     if (keep) actions.push({ type: "keep", value: "" });
@@ -65,6 +68,12 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
           </div>
           <div className="field">
             <label>Importance</label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 400 }}
+              title="Applied after the LLM rather than instead of it: the article keeps its summary and entities, and is only raised if the model rated it lower.">
+              <input type="checkbox" checked={boost} disabled={!importance}
+                onChange={(e) => { setBoost(e.target.checked); if (e.target.checked) setArchive(false); }} />
+              as a floor after the LLM (boost)
+            </label>
             <Select
               value={importance}
               onChange={setImportance}
@@ -83,7 +92,7 @@ export function RuleForm({ initial, onSave, onCancel }: Props) {
           </div>
           <div className="field" style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <input type="checkbox" checked={archive} onChange={(e) => { setArchive(e.target.checked); if (e.target.checked) setKeep(false); }} /> Archive on match
+              <input type="checkbox" checked={archive} onChange={(e) => { setArchive(e.target.checked); if (e.target.checked) { setKeep(false); setBoost(false); } }} /> Archive on match
             </label>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }} title="Protect: the rule fires, nothing is applied, and the article still goes to the LLM. Put it above the rules it protects from.">
               <input type="checkbox" checked={keep} onChange={(e) => { setKeep(e.target.checked); if (e.target.checked) setArchive(false); }} /> Keep (protect from later rules)

@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "high: frontier model release",
+      "note": "A named frontier model plus a shipping verb, in the same line. The verb can come first (\\\"OpenAI announces GPT-5\\\") or second (\\\"GPT-5 is here\\\"), which is why the pattern is written both ways round.",
+      "query": "\\b(gpt-?[5-9]|claude [3-9]|gemini [2-9]|llama ?[4-9]|grok ?[3-9]|deepseek[ -]?(v[3-9]|r[1-9])|qwen ?[3-9]|o[3-9] ?(preview|mini|pro)?)\\b.*\\b(launch(es|ed)?|releas(e|es|ed)|unveil(s|ed)?|announc(e|es|ed)|introduc(e|es|ing)|ships?|now available|out now|is here|debuts?)\\b|\\b(launch(es|ed)?|releas(e|es|ed)|unveil(s|ed)?|announc(e|es|ed)|introduc(e|es|ing)|ships?|debuts?)\\b.*\\b(gpt-?[5-9]|claude [3-9]|gemini [2-9]|llama ?[4-9]|grok ?[3-9]|deepseek[ -]?(v[3-9]|r[1-9])|qwen ?[3-9])\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: open weights",
+      "note": "Open weights are the most actionable thing in the feed: you can run them.",
+      "query": "\\b(open-?sourc(e|es|ed|ing)|open weights?|weights (are )?(now )?(public|available|released)|released under (apache|mit)|apache 2\\.0)\\b.*\\b(model|models|llm|weights|checkpoints?|[0-9]+ ?b\\b)|\\b(model|models|llm|weights|checkpoints?)\\b.*\\b(open-?sourc(e|es|ed|ing)|open weights?|apache 2\\.0)\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: safety and evaluation landmarks",
+      "note": "System cards and the evaluation vocabulary labs only use when they are publishing something real.",
+      "query": "\\b(system card|model card|safety (framework|case|report)|preparedness framework|responsible scaling|frontier safety|red[- ]?team(ing)?|interpretability|scheming|sandbagging|deceptive alignment|dangerous capabilit(y|ies))\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: regulation with teeth",
+      "note": "Not policy chatter — the moments something becomes binding: an act, an order, a court, a fine.",
+      "query": "\\b(ai act|executive order|court (rules|ruling|orders)|judge (rules|orders)|lawsuit|sues?|sued|settlement|antitrust|injunction|subpoena|consent decree|fined? \\$?[0-9]|ban(s|ned)? (the |on )?(ai|models?|chatbots?)|ftc|doj|attorneys? general)\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: billion-scale money",
+      "note": "Both halves are required: a number that size on its own is usually quarterly revenue, which is noise.",
+      "query": "\\b(rais(e|es|ed|ing)|funding|round|invest(s|ed|ment)?|acquir(e|es|ed)|acquisition|merger|takeover|valuation|valued at)\\b.*\\$ ?[0-9]+(\\.[0-9]+)? ?(b|bn|billion)\\b|\\$ ?[0-9]+(\\.[0-9]+)? ?(b|bn|billion)\\b.*\\b(rais(e|es|ed|ing)|funding|round|invest(s|ed|ment)?|acquir(e|es|ed)|acquisition|valuation)\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: capability milestone",
+      "note": "Claims that a ceiling moved. Rare in a headline unless it actually happened.",
+      "query": "\\b(state[- ]of[- ]the[- ]art|sota|beats? (human|expert|doctors|the best)|outperform(s|ed) (human|expert|doctor)|human[- ]level|superhuman|gold medal|solves? .*(olympiad|benchmark|conjecture)|saturat(es|ed) .*benchmark|passes? .*(bar exam|olympiad))\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: compute, chips and supply",
+      "note": "The physical constraint everything else runs into. A named accelerator counts on its own; a data centre only counts at billion scale, and the money can be written on either side of it.",
+      "query": "\\b(export controls?|chip (ban|export|restrictions?|curbs?)|entity list|gigawatts?|[0-9]+ ?gw\\b|blackwell|rubin|b[23]00|gb[0-9]{3}|mi[23][0-9]{2}x?|tpu v[0-9]|trainium[0-9]?|h[12]00 (supply|shortage|export))\\b|\\b(data ?cent(er|re)|supercomputer|cluster|fab)\\b.*\\$ ?[0-9]+(\\.[0-9]+)? ?(b|bn|billion)\\b|\\$ ?[0-9]+(\\.[0-9]+)? ?(b|bn|billion)\\b.*\\b(data ?cent(er|re)|supercomputer|cluster|fab)\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: leadership shake-up",
+      "note": "Who runs a frontier lab decides what it ships. Needs both a role and a departure — a company name alone is not enough.",
+      "query": "\\b(ceo|cto|co-?founder|founder|chief scientist|head of (research|alignment|safety)|board)\\b.*\\b(steps down|stepped down|resign(s|ed)?|fired|ousted|departs?|is leaving|joins)\\b|\\b(steps down|resign(s|ed)?|fired|ousted) as (ceo|cto|chief scientist)\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "name": "high: security incident",
+      "note": "Real incidents only — \\\"jailbreak\\\" is deliberately absent, there is a paper about one every week.",
+      "query": "\\b(data breach|breached|leaked (weights|model|system prompt|source code)|(weights|model|system prompt|source code|credentials?) (were )?leaked|zero[- ]day|cve-[0-9]{4}-[0-9]+|supply[- ]chain attack|exfiltrat(e|ed|ion)|credentials? (leak|stolen))\\b",
+      "actions": [
+        {
+          "type": "boost",
+          "value": "3"
+        }
+      ],
+      "enabled": true
+    }
+  ]
+}

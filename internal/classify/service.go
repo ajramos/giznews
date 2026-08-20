@@ -80,9 +80,14 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 
 	// Phase 1: deterministic rules.
 	var llmBatch []*db.Article
+	floors := map[int64]int{} // article -> importance floor a boost rule gave it
 	for _, a := range articles {
-		if actions := MatchFirst(rules, a); actions != nil && !actions.Keep {
-			if err := s.apply(ctx, repo, a, actions); err != nil {
+		d := Decide(rules, a)
+		if d.Floor > 0 {
+			floors[a.ID] = d.Floor
+		}
+		if !d.ToLLM() {
+			if err := s.apply(ctx, repo, a, d.Action); err != nil {
 				res.Errors = append(res.Errors, fmt.Sprintf("#%d: %v", a.ID, err))
 				continue
 			}
@@ -115,7 +120,39 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 		}
 	}
 
+	// The floors go on last, over whatever the model (or the fallback) decided:
+	// a boost raises an article's importance, it never lowers it.
+	boosted, err := s.applyFloors(ctx, repo, llmBatch, floors)
+	if err != nil {
+		res.Errors = append(res.Errors, err.Error())
+	}
+	res.Boosted = boosted
+
 	return res, nil
+}
+
+// applyFloors raises the importance of the articles a boost rule claimed, once
+// they have been classified.
+func (s *Service) applyFloors(ctx context.Context, repo *db.ArticleRepo, batch []*db.Article, floors map[int64]int) (int, error) {
+	n := 0
+	for _, a := range batch {
+		floor, ok := floors[a.ID]
+		if !ok {
+			continue
+		}
+		current, err := repo.Get(ctx, a.ID)
+		if err != nil {
+			return n, fmt.Errorf("boost #%d: %w", a.ID, err)
+		}
+		if current.Importance >= floor {
+			continue // the model agreed, or went higher
+		}
+		if err := repo.SetImportance(ctx, a.ID, floor); err != nil {
+			return n, fmt.Errorf("boost #%d: %w", a.ID, err)
+		}
+		n++
+	}
+	return n, nil
 }
 
 // runBatches classifies articles in LLM batches (optionally in parallel). It

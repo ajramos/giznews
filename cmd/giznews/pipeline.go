@@ -66,7 +66,7 @@ func printClassifyPlan(p *classify.Plan) {
 		fmt.Println("no rules — everything goes to the model")
 	}
 	for _, r := range p.Rules {
-		fmt.Printf("  %-8s %-34s %3d article(s)\n", r.Effect, truncate(r.Name, 34), r.Matches)
+		fmt.Printf("  %-9s %-34s %3d article(s)\n", r.Effect, truncate(r.Name, 34), r.Matches)
 		for _, title := range r.Sample {
 			fmt.Printf("           · %s\n", truncate(title, 62))
 		}
@@ -76,6 +76,9 @@ func printClassifyPlan(p *classify.Plan) {
 	fmt.Printf("and never get a summary or entities either.\n")
 	if p.Kept > 0 {
 		fmt.Printf("%d protected by a keep rule: they go to the model untouched.\n", p.Kept)
+	}
+	if p.Boosted > 0 {
+		fmt.Printf("%d boosted: classified by the model, then raised to their floor.\n", p.Boosted)
 	}
 	fmt.Printf("\n%d would go to the model, in %d batch(es):\n", p.ToLLM, p.Batches)
 	for _, title := range p.Unmatched {

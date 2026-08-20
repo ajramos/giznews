@@ -86,6 +86,63 @@ func TestShippedNoiseRulesetDoesWhatItSays(t *testing.T) {
 	}
 }
 
+// The high-value set hands out three stars, which is what puts an article into
+// the knowledge base. Same contract as the noise set, in the other direction:
+// these headlines earn it, those are left for the model to judge.
+func TestShippedHighValueRulesetDoesWhatItSays(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+	repo := db.NewRuleRepo(d)
+
+	// Both sets, as a reader would have them, so the interaction is covered too.
+	for _, name := range []string{"noise.json", "high-value.json"} {
+		if _, _, _, err := importRules(ctx, repo, filepath.Join("..", "..", "docs", "rules", name), false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rules, err := classify.CompileAll(ctx, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		title string
+		floor int // 0 = no boost: the model decides on its own
+	}{
+		{"OpenAI announces GPT-5 with a new reasoning mode", 3},
+		{"Claude 5 is here, and it runs for a day unattended", 3},
+		{"Mistral open-sources a 24B model under Apache 2.0", 3},
+		{"Anthropic publishes the Claude 5 system card", 3},
+		{"EU AI Act enforcement begins for general-purpose models", 3},
+		{"NYT lawsuit against OpenAI survives motion to dismiss", 3},
+		{"Anthropic raises $10 billion at a $350B valuation", 3},
+		{"New model beats human experts on GPQA Diamond", 3},
+		{"US tightens chip export controls on inference accelerators", 3},
+		{"xAI announces a $6 billion data center in Memphis", 3},
+		{"Nvidia unveils the B300 accelerator", 3},
+		{"OpenAI's chief scientist steps down after four years", 3},
+		{"Model weights leaked from an unsecured S3 bucket", 3},
+
+		// Real but ordinary: three stars would drown the ones above.
+		{"A closer look at how retrieval pipelines drift", 0},
+		{"Researchers propose a new attention variant", 0},
+		{"Show HN: a local RAG server in 400 lines of Go", 0},
+		{"Startup raises $4 million seed for AI note-taking", 0},
+		{"Nvidia posts $30 billion in quarterly revenue", 0},
+	}
+
+	for _, tc := range cases {
+		d := classify.Decide(rules, &db.Article{Title: tc.title, URL: "https://feed/x"})
+		if d.Floor != tc.floor {
+			t.Errorf("%q\n  got  floor %d (rule %q)\n  want floor %d", tc.title, d.Floor, d.BoostedBy, tc.floor)
+		}
+	}
+}
+
 // Importing the same file twice must change nothing: the file is the source of
 // truth, and a second import that duplicated every rule would double the
 // prefilter's work and make its order meaningless.

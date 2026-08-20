@@ -57,7 +57,7 @@ func runRules(args []string, logger *log.Logger) {
 			if !r.Enabled {
 				state = "off"
 			}
-			fmt.Printf("%3d  %s  %-8s  %-34s  %s\n", r.ID, state, ruleEffect(r), truncate(r.Name, 34), truncate(r.Query, 52))
+			fmt.Printf("%3d  %s  %-9s  %-34s  %s\n", r.ID, state, ruleEffect(r), truncate(r.Name, 34), truncate(r.Query, 52))
 		}
 		fmt.Printf("\n%d rule(s). First match wins, in this order.\n", len(rules))
 
@@ -161,6 +161,7 @@ func runRules(args []string, logger *log.Logger) {
 		tags := fs.String("tag", "", "comma-separated tags to apply")
 		archive := fs.Bool("archive", false, "archive what matches")
 		keep := fs.Bool("keep", false, "protect what matches from later rules")
+		boost := fs.Int("boost", 0, "importance floor applied after the model (1-3)")
 		disabled := fs.Bool("disabled", false, "create it switched off")
 		mustParse(fs, args[1:], logger)
 		if *name == "" || *query == "" {
@@ -183,6 +184,9 @@ func runRules(args []string, logger *log.Logger) {
 		}
 		if *keep {
 			actions = append(actions, db.RuleAction{Type: "keep"})
+		}
+		if *boost > 0 {
+			actions = append(actions, db.RuleAction{Type: "boost", Value: strconv.Itoa(*boost)})
 		}
 		nr := db.NewRule{Name: *name, Query: *query, Actions: actions, Enabled: !*disabled}
 		if err := validateRule(nr); err != nil {
@@ -304,6 +308,8 @@ func ruleEffect(r *db.Rule) string {
 		return "broken"
 	}
 	switch {
+	case actions.Boost > 0:
+		return fmt.Sprintf("boost ★%d", actions.Boost)
 	case actions.Keep:
 		return "keep"
 	case actions.Archive:
