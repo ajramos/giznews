@@ -27,6 +27,7 @@ func (a *App) ListArticles(ctx context.Context, opts ListArticlesOptions) ([]*Ar
 		ImportanceMin:   opts.ImportanceMin,
 		ImportanceExact: opts.ImportanceExact,
 		Unclassified:    opts.Unclassified,
+		Summarized:      opts.Summarized,
 		Query:           opts.Query,
 		Limit:           limit,
 		Offset:          offset,

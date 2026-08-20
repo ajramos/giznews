@@ -200,6 +200,7 @@ export const mockBackend: APIShape = {
     if (opts.sourceId) list = list.filter((a) => a.sourceId === opts.sourceId);
     if (opts.category) list = list.filter((a) => a.category === opts.category);
     if (opts.unclassified) list = list.filter((a) => !a.category);
+    if (opts.summarized) list = list.filter((a) => !!a.summary);
     if (opts.unarchived) list = list.filter((a) => a.status === "unread" || a.status === "read");
     if (opts.starred != null) list = list.filter((a) => (a.starred === true) === opts.starred);
     if (opts.importanceExact != null) list = list.filter((a) => a.importance === opts.importanceExact);

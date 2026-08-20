@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Inbox, Archive, Star, Search, X } from "lucide-react";
+import { Inbox, Archive, Star, Search, X, Sparkles } from "lucide-react";
 import type { ArticleDTO } from "../types";
 import { stars, timeAgo, catClass } from "./Markdown";
 import { CATEGORIES } from "./CategoryPicker";
@@ -18,6 +18,7 @@ interface Props {
   filterCategory: string | null;
   importanceExact: number | null;
   filterUnclassified: boolean;
+  summarizedFilter: boolean;
   filterQuery: string;
   onActive: () => void;
   onArchived: () => void;
@@ -26,12 +27,13 @@ interface Props {
   onCategory: (c: string | null) => void;
   onImportance: (n: number | null) => void;
   onUnclassified: (v: boolean) => void;
+  onSummarized: (v: boolean) => void;
   onQuery: (q: string) => void;
   onToggleBulk: (id: number) => void;
   onSelect: (index: number) => void;
 }
 
-export function ArticleList({ articles, selectedIndex, loading, archived, starredFilter, readFilter, hasSources, bulk, bulkSel, unreadCount, filterCategory, importanceExact, filterUnclassified, filterQuery, onActive, onArchived, onStarred, onReadFilter, onCategory, onImportance, onUnclassified, onQuery, onToggleBulk, onSelect }: Props) {
+export function ArticleList({ articles, selectedIndex, loading, archived, starredFilter, readFilter, hasSources, bulk, bulkSel, unreadCount, filterCategory, importanceExact, filterUnclassified, summarizedFilter, filterQuery, onActive, onArchived, onStarred, onReadFilter, onCategory, onImportance, onUnclassified, onSummarized, onQuery, onToggleBulk, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const lastSelected = useRef(selectedIndex);
 
@@ -89,6 +91,9 @@ export function ArticleList({ articles, selectedIndex, loading, archived, starre
           </button>
           <button className={`chip ${filterUnclassified ? "active" : ""}`} onClick={() => onUnclassified(!filterUnclassified)}>
             Unclassified
+          </button>
+          <button className={`chip ${summarizedFilter ? "active" : ""}`} onClick={() => onSummarized(!summarizedFilter)}>
+            <Sparkles size={11} /> Summarized
           </button>
           {CATEGORIES.map((c) => (
             <button
@@ -158,6 +163,9 @@ export function ArticleList({ articles, selectedIndex, loading, archived, starre
                     {a.starred === true && <span className="star-badge">★</span>}
                   </span>
                 )}
+                <span className="summary-flag" title={a.summary ? "AI summary" : undefined}>
+                  {a.summary && <Sparkles size={12} />}
+                </span>
                 <span className="article-imp imp" data-level={a.importance} title={`Importance: ${a.importance}/3`}>
                   {stars(a.importance)}
                 </span>

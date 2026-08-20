@@ -146,6 +146,7 @@ export interface ListArticlesOptions {
   importanceMin?: number;
   importanceExact?: number;
   unclassified?: boolean;
+  summarized?: boolean;
   query?: string;
   limit?: number;
   offset?: number;

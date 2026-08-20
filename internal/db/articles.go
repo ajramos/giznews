@@ -155,6 +155,7 @@ type ListOptions struct {
 	ImportanceMin   int           // only articles with importance >= this
 	ImportanceExact *int          // nil = any; 0-3 = exact importance
 	Unclassified    bool          // only articles not yet classified
+	Summarized      bool          // only articles with an AI summary
 	Query           string        // LIKE filter on title/author; empty = all
 	Limit           int           // 0 = default 200
 	Offset          int
@@ -198,6 +199,9 @@ func (r *ArticleRepo) List(ctx context.Context, opts ListOptions) ([]*Article, e
 	}
 	if opts.Unclassified {
 		conds = append(conds, "a.classified = 0")
+	}
+	if opts.Summarized {
+		conds = append(conds, "a.summary != ''")
 	}
 	if opts.Query != "" {
 		conds = append(conds, "(a.title LIKE ? OR a.author LIKE ?)")

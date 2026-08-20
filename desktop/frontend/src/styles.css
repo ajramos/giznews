@@ -498,6 +498,7 @@ select option { background: var(--bg-panel); color: var(--fg); }
 .unread-badge { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
 .read-badge { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--fg-dim); display: inline-block; box-sizing: border-box; }
 .star-badge { color: var(--warn); font-size: 13px; line-height: 1; }
+.summary-flag { width: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); }
 .article-imp { width: 46px; font-size: 11px; flex-shrink: 0; color: var(--fg-dim); line-height: 1.4; }
 .imp[data-level="2"] { color: var(--warn); }
 .imp[data-level="3"] { color: var(--accent); }

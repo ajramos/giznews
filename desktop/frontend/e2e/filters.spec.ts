@@ -46,6 +46,17 @@ test.describe("classification filters", () => {
     await expect(page.locator(".article-row")).toHaveCount(8);
   });
 
+  test("summarized flag and filter: only AI-summarized articles show, flagged in the list", async ({ page }) => {
+    await gotoApp(page);
+    await expect(page.locator(".article-row")).toHaveCount(8);
+    // 4 of the 8 mock articles carry a summary, and only those show the flag.
+    await expect(page.locator(".summary-flag svg")).toHaveCount(4);
+    await page.locator(".filter-chips .chip", { hasText: "Summarized" }).click();
+    await expect(page.locator(".article-row")).toHaveCount(4);
+    await page.locator(".filter-chips .chip", { hasText: "Summarized" }).click();
+    await expect(page.locator(".article-row")).toHaveCount(8);
+  });
+
   test("search box filters the list by title", async ({ page }) => {
     await gotoApp(page);
     await expect(page.locator(".article-row")).toHaveCount(8);

@@ -119,6 +119,7 @@ type ListArticlesOptions struct {
 	ImportanceMin   int    `json:"importance_min,omitempty"`
 	ImportanceExact *int   `json:"importance_exact,omitempty"`
 	Unclassified    bool   `json:"unclassified,omitempty"`
+	Summarized      bool   `json:"summarized,omitempty"`
 	Query           string `json:"query,omitempty"`
 	Limit           int    `json:"limit,omitempty"`
 	Offset          int    `json:"offset,omitempty"`

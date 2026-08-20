@@ -63,6 +63,7 @@ export default function App() {
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [importanceExact, setImportanceExact] = useState<number | null>(null); // null = any, 0-3
   const [filterUnclassified, setFilterUnclassified] = useState(false);
+  const [summarizedFilter, setSummarizedFilter] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
@@ -171,6 +172,7 @@ export default function App() {
         ...(filterCategory ? { category: filterCategory } : {}),
         ...(importanceExact != null ? { importanceExact } : {}),
         ...(filterUnclassified ? { unclassified: true } : {}),
+        ...(summarizedFilter ? { summarized: true } : {}),
         ...(filterQuery ? { query: filterQuery } : {}),
         ...opts,
       });
@@ -181,7 +183,7 @@ export default function App() {
     } finally {
       setLoadingList(false);
     }
-  }, [notify, archived, starredFilter, readFilter, filterCategory, importanceExact, filterUnclassified, filterQuery]);
+  }, [notify, archived, starredFilter, readFilter, filterCategory, importanceExact, filterUnclassified, summarizedFilter, filterQuery]);
 
   const reloadAll = useCallback(() => {
     void loadSources();
@@ -348,7 +350,7 @@ export default function App() {
       try {
         await api.bulkSetStatus(batch.map((a) => a.id), target);
         setArticles((prev) => restoring ? prev : prev.filter((a) => !batch.some((b) => b.id === a.id)));
-        if (!restoring) setSelectedIndex((i) => Math.max(0, i - 1));
+        if (!restoring) setSelectedIndex((i) => Math.max(0, Math.min(i, articles.length - batch.length - 1)));
         void loadStatus();
         notify(`${batch.length} archived`, () => {
           void Promise.all(batch.map((a) => api.setArticleStatus(a.id, undo[a.id])));
@@ -1144,6 +1146,11 @@ export default function App() {
                 ✕ unclassified
               </button>
             )}
+            {summarizedFilter && (
+              <button className="pill filter" onClick={() => setSummarizedFilter(false)}>
+                ✕ summarized
+              </button>
+            )}
           </div>
         )}
         <div className="topbar-actions">
@@ -1180,6 +1187,7 @@ export default function App() {
               filterCategory={filterCategory}
               importanceExact={importanceExact}
               filterUnclassified={filterUnclassified}
+              summarizedFilter={summarizedFilter}
               filterQuery={filterQuery}
               onActive={goActive}
               onArchived={goArchived}
@@ -1189,6 +1197,7 @@ export default function App() {
               onCategory={(c) => setFilterCategory(c)}
               onImportance={(n) => setImportanceExact(n)}
               onUnclassified={(v) => setFilterUnclassified(v)}
+              onSummarized={(v) => setSummarizedFilter(v)}
               onQuery={(q) => setFilterQuery(q)}
               onToggleBulk={toggleBulkId}
               onSelect={(i) => { setSelectedIndex(i); setPaneFocus("list"); if (reader) setReader(null); }}
