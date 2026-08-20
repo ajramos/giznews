@@ -94,6 +94,9 @@ anything that archives.
   in Spanish: `docs/`, comments, `keys.ts`, component strings, toasts, palette
   hints, and `AGENTS.md`-level notes. Spanish is only allowed when talking to
   the user, never in the repo.
+- **Anything published to GitHub is English too**: commit messages, pull
+  request titles and bodies, issue text, and review comments. The chat can be
+  in Spanish; the permanent record cannot.
 
 ## Icons
 
