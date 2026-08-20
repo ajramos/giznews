@@ -129,6 +129,7 @@ export interface APIShape {
   setRuleEnabled: (id: number, enabled: boolean) => Promise<void>;
   deleteRule: (id: number) => Promise<void>;
   kbuild: () => Promise<KBResult>;
+  kthemes: () => Promise<KBResult>;
   ksynthesize: (category: string) => Promise<KBResult>;
   ensureArticleNote: (articleID: number) => Promise<NoteDTO>;
   getArticleNote: (articleID: number) => Promise<NoteDTO | null>;
@@ -199,6 +200,7 @@ const realApi: APIShape = {
     call("DeleteRule", id).then(() => undefined),
 
   kbuild: () => call("KBuild").then((v) => normalize<KBResult>(v)),
+  kthemes: () => call("KThemes").then((v) => normalize<KBResult>(v)),
   ksynthesize: (category: string) => call("KSynthesize", category).then((v) => normalize<KBResult>(v)),
   ensureArticleNote: (articleID: number) =>
     call("EnsureArticleNote", articleID).then((v) => normalize<NoteDTO>(v)),

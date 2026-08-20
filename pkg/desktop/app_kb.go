@@ -21,6 +21,7 @@ func (a *App) kbService() (*kb.Service, error) {
 		ImportanceThreshold: a.cfg.Classify.ImportanceThreshold,
 		MinOccurrences:      a.cfg.KB.MinOccurrences,
 		AgeDays:             a.cfg.KB.AgeDays,
+		ThemeDays:           a.cfg.KB.ThemeDays,
 		Limit:               a.cfg.KB.Limit,
 		Model:               a.cfg.LLM.Model,
 		UseLLM:              a.cfg.LLM.Enabled && prov != nil,
@@ -34,6 +35,7 @@ type KBResult struct {
 	ElectronsCreated int `json:"electrons_created"`
 	ElectronsUpdated int `json:"electrons_updated"`
 	MoleculesCreated int `json:"molecules_created"`
+	MoleculesUpdated int `json:"molecules_updated"`
 	ArticlesSkipped  int `json:"articles_skipped"`
 	ConceptsTracked  int `json:"concepts_tracked"`
 	AtomsRefreshed   int `json:"atoms_refreshed"`
@@ -58,6 +60,7 @@ func (a *App) KBuild(ctx context.Context) (*KBResult, error) {
 			ElectronsCreated: res.ElectronsCreated,
 			ElectronsUpdated: res.ElectronsUpdated,
 			MoleculesCreated: res.MoleculesCreated,
+			MoleculesUpdated: res.MoleculesUpdated,
 			ArticlesSkipped:  res.ArticlesSkipped,
 			ConceptsTracked:  res.ConceptsTracked,
 			AtomsRefreshed:   res.AtomsRefreshed,
@@ -65,6 +68,30 @@ func (a *App) KBuild(ctx context.Context) (*KBResult, error) {
 			NotesImported:    res.NotesImported,
 		}
 		p.Message(fmt.Sprintf("%d atoms · %d electrons", res.AtomsCreated, res.ElectronsCreated))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// KThemes clusters recent notes into themes and writes a molecule for each.
+// A build does this too; running it alone is for when the graph moved without
+// new articles — a merge, or notes written by hand in the vault.
+func (a *App) KThemes(ctx context.Context) (*KBResult, error) {
+	var result *KBResult
+	err := a.trackJob(ctx, "Gather themes", "kb", func(jctx context.Context, p *jobProgress) error {
+		svc, err := a.kbService()
+		if err != nil {
+			return err
+		}
+		res, err := svc.BuildThemes(jctx)
+		if err != nil {
+			return err
+		}
+		result = &KBResult{MoleculesCreated: res.Created, MoleculesUpdated: res.Updated}
+		p.Message(fmt.Sprintf("%d theme(s) · %d written, %d refreshed", res.Found, res.Created, res.Updated))
 		return nil
 	})
 	if err != nil {

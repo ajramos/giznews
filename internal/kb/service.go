@@ -20,6 +20,7 @@ type Options struct {
 	AgeDays             int // only articles fetched within this window
 	Limit               int // max atoms per run
 	MinOccurrences      int // min atoms citing a concept before an electron is created
+	ThemeDays           int // how far back theme clustering looks (0 = 90 days)
 	Model               string
 	UseLLM              bool
 	Language            string // ISO 639-1 for LLM-generated synthesis
@@ -31,6 +32,7 @@ type BuildResult struct {
 	ElectronsCreated int `json:"electrons_created"`
 	ElectronsUpdated int `json:"electrons_updated"`
 	MoleculesCreated int `json:"molecules_created"`
+	MoleculesUpdated int `json:"molecules_updated"`
 	// ArticlesSkipped counts articles that were selected for the graph but did
 	// not produce an atom (a vault write or insert failed).
 	ArticlesSkipped int `json:"articles_skipped"`
@@ -239,6 +241,17 @@ func (s *Service) Build(ctx context.Context) (*BuildResult, error) {
 	// them a readable one now that they can get it.
 	if err := s.repairConceptNames(ctx, kbRepo, conceptRepo); err != nil && s.logger != nil {
 		s.logger.Printf("kb: concept name repair failed: %v", err)
+	}
+
+	// What the notes have in common is worked out last, from the graph this run
+	// just finished moving: a theme found before the new atoms exist would be
+	// yesterday's theme.
+	if themes, err := s.BuildThemes(ctx); err != nil {
+		if s.logger != nil {
+			s.logger.Printf("kb: theme clustering failed: %v", err)
+		}
+	} else {
+		res.MoleculesCreated, res.MoleculesUpdated = themes.Created, themes.Updated
 	}
 
 	// The vault's entry points are a view over what the build just wrote; a
@@ -828,11 +841,13 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 	return note, nil
 }
 
-// Synthesize creates (or updates) a Molecule note summarizing a category by
-// linking its atoms. Uses the LLM when enabled; degrades to a deterministic
-// listing otherwise.
+// Synthesize creates (or updates) a Molecule note for one category, on demand.
+// Themes are found automatically by a build; this is the manual cut, for when
+// the reader wants everything filed under "research" in one place whether or
+// not those notes cluster.
 func (s *Service) Synthesize(ctx context.Context, category string) (*BuildResult, error) {
 	repo := db.NewKBRepo(s.db)
+	conceptRepo := db.NewConceptRepo(s.db)
 	atoms, err := repo.ByCategory(ctx, category, 100)
 	if err != nil {
 		return nil, err
@@ -843,68 +858,86 @@ func (s *Service) Synthesize(ctx context.Context, category string) (*BuildResult
 
 	refs := make([]atomRef, 0, len(atoms))
 	for _, n := range atoms {
-		refs = append(refs, atomRef{Slug: n.Slug, Title: n.Title})
+		refs = append(refs, atomRef{Slug: n.Slug, Title: n.Title, NoteID: n.ID, Date: noteDay(n)})
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Date != refs[j].Date {
+			return refs[i].Date < refs[j].Date
+		}
+		return refs[i].NoteID < refs[j].NoteID
+	})
+	if len(refs) > themeMaxNotes {
+		refs = refs[len(refs)-themeMaxNotes:]
 	}
 
-	title := "Síntesis de " + category
-	summary := ""
+	concepts, err := s.conceptsOf(ctx, conceptRepo, atoms)
+	if err != nil {
+		return nil, err
+	}
+	view := MoleculeView{Title: "Síntesis de " + category, Concepts: concepts, Notes: refs}
 	if s.opts.UseLLM && s.prov != nil {
-		summary, err = s.summarizeCategory(ctx, category, refs)
+		summary, err := s.summarizeCategory(ctx, category, refs)
 		if err != nil && s.logger != nil {
 			s.logger.Printf("kb: molecule summary failed: %v", err)
 		}
+		view.Summary = summary
 	}
 
-	content := BuildMolecule(title, summary, refs)
-	slug := "sintesis-" + Slugify(category)
-
-	existing, err := repo.GetBySlug(ctx, slug)
-	if err != nil && err != db.ErrNotFound {
+	note, created, err := s.upsertMolecule(ctx, repo, "sintesis-"+Slugify(category), view)
+	if err != nil {
 		return nil, err
 	}
-
 	res := &BuildResult{}
-	fm, _ := json.Marshal(map[string]any{"type": "molecule", "category": category, "tags": []string{"synthesis", "ai"}})
-	tags := []string{"synthesis", "ai"}
-	links := make([]string, 0, len(refs))
-	for _, r := range refs {
-		links = append(links, r.Slug)
-	}
-
-	if existing != nil {
-		existing.Title = title
-		existing.Content = content
-		existing.Frontmatter = string(fm)
-		existing.Tags = tags
-		existing.Wikilinks = links
-		if err := repo.Update(ctx, existing); err != nil {
-			return nil, err
-		}
-		written, err := s.syncNote(SyncInput{
-			NoteType: "molecule", Slug: slug, Content: content,
-			LastHash: existing.ContentHash, LastTags: existing.Tags,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if err := repo.SetContentHash(ctx, existing.ID, written.Hash); err != nil {
-			return nil, err
-		}
-	} else {
-		written, err := s.syncNote(SyncInput{NoteType: "molecule", Slug: slug, Content: content})
-		if err != nil {
-			return nil, err
-		}
-		if _, err := repo.Create(ctx, db.NewKBNote{
-			Type: db.NoteMolecule, Title: title, Slug: slug, Path: written.Path,
-			Frontmatter: string(fm), Content: content, Tags: tags, Wikilinks: links,
-			ContentHash: written.Hash,
-		}); err != nil {
-			return nil, err
-		}
+	if note != nil && created {
 		res.MoleculesCreated = 1
 	}
 	return res, nil
+}
+
+// conceptsOf counts which concepts a set of notes names, most named first. A
+// wikilink pointing at anything that is not a concept is an ordinary note link
+// and says nothing about what the group is about.
+func (s *Service) conceptsOf(ctx context.Context, repo *db.ConceptRepo, notes []*db.KBNote) ([]ThemeConcept, error) {
+	counts := map[string]int{}
+	names := map[string]string{}
+	totals := map[string]int{}
+	for _, n := range notes {
+		seen := map[string]bool{}
+		for _, link := range n.Wikilinks {
+			slug, err := repo.Resolve(ctx, link)
+			if err != nil {
+				return nil, err
+			}
+			if seen[slug] {
+				continue
+			}
+			concept, err := repo.Get(ctx, slug)
+			if errors.Is(err, db.ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			seen[slug] = true
+			counts[concept.Slug]++
+			names[concept.Slug] = concept.Name
+			totals[concept.Slug] = concept.Mentions
+		}
+	}
+	out := make([]ThemeConcept, 0, len(counts))
+	for slug, n := range counts {
+		out = append(out, ThemeConcept{Slug: slug, Name: names[slug], Notes: n, Total: totals[slug]})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Notes != out[j].Notes {
+			return out[i].Notes > out[j].Notes
+		}
+		return out[i].Slug < out[j].Slug
+	})
+	if len(out) > themeMaxConcepts {
+		out = out[:themeMaxConcepts]
+	}
+	return out, nil
 }
 
 func (s *Service) summarizeCategory(ctx context.Context, category string, refs []atomRef) (string, error) {

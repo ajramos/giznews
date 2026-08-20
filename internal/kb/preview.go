@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/ajramos/giznews/internal/db"
 )
@@ -19,6 +20,7 @@ type BuildPreview struct {
 	Importance     int `json:"importance_threshold"`
 
 	Atoms      []PreviewAtom    `json:"atoms"`
+	Themes     []PreviewTheme   `json:"themes"`
 	Promoting  []PreviewConcept `json:"promoting"`
 	Pending    []PreviewConcept `json:"pending"`
 	StaleAtoms int              `json:"stale_atoms"`
@@ -33,6 +35,14 @@ type PreviewAtom struct {
 	Category   string   `json:"category"`
 	Importance int      `json:"importance"`
 	Concepts   []string `json:"concepts"`
+}
+
+// PreviewTheme is a group of notes the build would gather into a molecule.
+type PreviewTheme struct {
+	Slug  string `json:"slug"`
+	Title string `json:"title"`
+	Notes int    `json:"notes"`
+	New   bool   `json:"new"` // no molecule under this slug yet
 }
 
 // PreviewConcept is a concept and where its mention count would land.
@@ -218,6 +228,17 @@ func (s *Service) Preview(ctx context.Context) (*BuildPreview, error) {
 	sortConcepts(out.Promoting)
 	sortConcepts(out.Pending)
 
+	// The themes this run would gather, clustered over the graph as it would
+	// be once these atoms exist. Notes the reader wrote and this run has not
+	// imported yet are left out: they are counted above, but a theme is about
+	// what the feed is saying, and a file that changed a minute ago cannot move
+	// a cluster on its own.
+	themes, err := s.previewThemes(ctx, out.Atoms, names)
+	if err != nil {
+		return nil, err
+	}
+	out.Themes = themes
+
 	// Notes whose article moved on and would be rewritten.
 	stale, err := artRepo.ListStaleNotes(ctx, s.opts.Limit)
 	if err != nil {
@@ -251,4 +272,54 @@ func sortConcepts(list []PreviewConcept) {
 		}
 		return list[i].Slug < list[j].Slug
 	})
+}
+
+// previewThemes clusters the current graph plus the mentions these atoms would
+// add, and says which molecules that would write.
+func (s *Service) previewThemes(ctx context.Context, atoms []PreviewAtom, names map[string]string) ([]PreviewTheme, error) {
+	conceptRepo := db.NewConceptRepo(s.db)
+	themeRepo := db.NewThemeRepo(s.db)
+
+	since := time.Now().UTC().AddDate(0, 0, -s.themeDays()).Format(time.RFC3339)
+	mentions, err := conceptRepo.MentionsSince(ctx, since, themeMaxMentions)
+	if err != nil {
+		return nil, err
+	}
+	stored, err := themeRepo.List(ctx, 200)
+	if err != nil {
+		return nil, err
+	}
+	ours := make(map[int64]bool, len(stored))
+	known := make(map[string]bool, len(stored))
+	for _, t := range stored {
+		if t.NoteID != 0 {
+			ours[t.NoteID] = true
+		}
+		known[t.Slug] = true
+	}
+
+	// The notes this run would write do not exist yet, so they are given ids no
+	// row can have.
+	for i, a := range atoms {
+		for _, slug := range a.Concepts {
+			name := names[slug]
+			if name == "" {
+				name = DisplayName(slug)
+			}
+			mentions = append(mentions, db.ConceptMention{
+				Slug: slug, Name: name, NoteID: int64(-i - 1),
+				NoteSlug: a.Slug, Title: a.Title, NoteType: "atom",
+			})
+		}
+	}
+
+	graph := newConceptGraph(mentions, ours)
+	clusters := graph.cluster(seedOrder(stored, graph))
+	out := make([]PreviewTheme, 0, len(clusters))
+	for _, c := range clusters {
+		out = append(out, PreviewTheme{
+			Slug: c.Slug, Title: c.Title, Notes: len(c.NoteIDs), New: !known[c.Slug],
+		})
+	}
+	return out, nil
 }

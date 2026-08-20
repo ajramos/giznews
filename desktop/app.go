@@ -105,6 +105,9 @@ func (a *App) DeleteRule(id int64) error {
 func (a *App) KBuild() (*gizdesktop.KBResult, error) {
 	return a.api.KBuild(bg())
 }
+func (a *App) KThemes() (*gizdesktop.KBResult, error) {
+	return a.api.KThemes(bg())
+}
 func (a *App) KSynthesize(category string) (*gizdesktop.KBResult, error) {
 	return a.api.KSynthesize(bg(), category)
 }

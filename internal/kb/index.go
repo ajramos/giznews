@@ -100,6 +100,20 @@ func (s *Service) renderIndex(ctx context.Context, repo *db.KBRepo, top []*db.Co
 		b.WriteString("\n")
 	}
 
+	// Themes come before the category listing: a molecule says what the feed is
+	// telling right now, a category only says where a note was filed.
+	molecules, err := repo.List(ctx, db.NoteMolecule, 50)
+	if err != nil {
+		return "", err
+	}
+	if len(molecules) > 0 {
+		b.WriteString("## Themes\n")
+		for _, n := range molecules {
+			b.WriteString("- [[" + n.Slug + "]] — " + n.Title + "\n")
+		}
+		b.WriteString("\n")
+	}
+
 	categories, err := repo.Categories(ctx)
 	if err != nil {
 		return "", err
@@ -122,17 +136,6 @@ func (s *Service) renderIndex(ctx context.Context, repo *db.KBRepo, top []*db.Co
 		b.WriteString("\n")
 	}
 
-	molecules, err := repo.List(ctx, db.NoteMolecule, 50)
-	if err != nil {
-		return "", err
-	}
-	if len(molecules) > 0 {
-		b.WriteString("## Syntheses\n")
-		for _, n := range molecules {
-			b.WriteString("- [[" + n.Slug + "]] — " + n.Title + "\n")
-		}
-		b.WriteString("\n")
-	}
 	return b.String(), nil
 }
 
@@ -180,7 +183,7 @@ func (s *Service) renderDaily(ctx context.Context, repo *db.KBRepo, day string) 
 	}{
 		{"Notes added today", db.NoteAtom},
 		{"Concepts that earned a note", db.NoteElectron},
-		{"Syntheses", db.NoteMolecule},
+		{"Themes gathered today", db.NoteMolecule},
 	}
 	for _, sec := range sections {
 		var lines []string

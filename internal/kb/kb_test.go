@@ -84,12 +84,177 @@ func TestBuildElectron(t *testing.T) {
 }
 
 func TestBuildMolecule(t *testing.T) {
-	content := BuildMolecule("Síntesis de models", "Models dominated.", []atomRef{{Slug: "a", Title: "T"}})
-	if !strings.Contains(content, "🧪") || !strings.Contains(content, "Models dominated.") {
-		t.Fatalf("molecule content:\n%s", content)
+	content := BuildMolecule(MoleculeView{
+		Title:    "Agents · Memory",
+		Summary:  "Models dominated.",
+		Concepts: []ThemeConcept{{Slug: "agents", Name: "Agents", Notes: 3, Total: 9}},
+		Notes:    []atomRef{{Slug: "a", Title: "T", Date: "2026-08-01"}},
+	})
+	for _, want := range []string{
+		"🧪", "Models dominated.", "## How it developed", "2026-08-01 · [[a]] — T",
+		"[[agents]] — Agents · 3 note(s) here, 9 in all",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("missing %q:\n%s", want, content)
+		}
 	}
-	if !strings.Contains(content, "[[a]]") {
-		t.Fatalf("missing link:\n%s", content)
+
+	// Without a model the note still opens with something true, and it never
+	// writes a heading it has nothing to put under.
+	plain := BuildMolecule(MoleculeView{
+		Title:    "Agents · Memory",
+		Concepts: []ThemeConcept{{Slug: "agents", Name: "Agents", Notes: 2}, {Slug: "memory", Name: "Memory", Notes: 2}},
+		Notes:    []atomRef{{Slug: "a", Title: "T", Date: "2026-08-01"}, {Slug: "b", Title: "U", Date: "2026-08-04"}},
+	})
+	if !strings.Contains(plain, "2 note(s) between 2026-08-01 and 2026-08-04 name Agents and Memory together.") {
+		t.Fatalf("fallback central idea:\n%s", plain)
+	}
+	for _, heading := range []string{"## Development", "## Aplicación"} {
+		if strings.Contains(plain, heading) {
+			t.Fatalf("empty section %q still written:\n%s", heading, plain)
+		}
+	}
+}
+
+// A theme is a group of notes that keep naming the same concepts together. It
+// has to hold more than one concept, or it would only restate an electron, and
+// a note tied to it by a single concept does not belong to it.
+func TestThemesClusterNotesSharingConcepts(t *testing.T) {
+	svc, d, vaultRoot, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	for _, title := range []string{"Agents that remember", "Memory for agents", "Long-context agents"} {
+		classifiedArticle(t, d, srcID, title, []string{"agents", "memory"})
+	}
+	classifiedArticle(t, d, srcID, "A new inference chip", []string{"chips"})
+
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.MoleculesCreated != 1 {
+		t.Fatalf("molecules = %d, want 1: %+v", res.MoleculesCreated, res)
+	}
+
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "03-Molecules", "theme-agents.md"))
+	if err != nil {
+		t.Fatalf("molecule file missing: %v", err)
+	}
+	content := string(onDisk)
+	for _, want := range []string{
+		"## Central idea", "## How it developed", "## Concepts in play",
+		"[[agents-that-remember]]", "[[memory-for-agents]]", "[[long-context-agents]]",
+		"[[agents]]", "[[memory]]",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("missing %q:\n%s", want, content)
+		}
+	}
+	if strings.Contains(content, "[[a-new-inference-chip]]") {
+		t.Fatalf("a note sharing no concept with the theme was pulled in:\n%s", content)
+	}
+
+	// Running again refreshes the same note instead of writing a second one
+	// under a slug of its own.
+	res2, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.MoleculesCreated != 0 || res2.MoleculesUpdated != 1 {
+		t.Fatalf("second run = %+v, want 0 created / 1 updated", res2)
+	}
+	molecules, err := db.NewKBRepo(d).List(ctx, db.NoteMolecule, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(molecules) != 1 {
+		t.Fatalf("molecules in the graph = %d, want 1", len(molecules))
+	}
+}
+
+// A dry run has to predict the themes too: a build that quietly writes three
+// molecules the plan never mentioned is not a plan.
+func TestPreviewPredictsTheThemesTheBuildWrites(t *testing.T) {
+	svc, d, _, srcID := buildFixture(t)
+	ctx := context.Background()
+
+	for _, title := range []string{"Agents that remember", "Memory for agents", "Long-context agents"} {
+		classifiedArticle(t, d, srcID, title, []string{"agents", "memory"})
+	}
+
+	plan, err := svc.Preview(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Themes) != 1 {
+		t.Fatalf("planned themes = %+v, want 1", plan.Themes)
+	}
+	if plan.Themes[0].Slug != "theme-agents" || !plan.Themes[0].New || plan.Themes[0].Notes != 3 {
+		t.Fatalf("planned theme = %+v", plan.Themes[0])
+	}
+
+	res, err := svc.Build(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.MoleculesCreated != 1 {
+		t.Fatalf("the build wrote %d molecule(s), the plan said 1", res.MoleculesCreated)
+	}
+	if _, err := db.NewKBRepo(d).GetBySlug(ctx, "theme-agents"); err != nil {
+		t.Fatalf("the theme the plan named was not written: %v", err)
+	}
+
+	// And once it exists, the plan says it would be refreshed, not created.
+	after, err := svc.Preview(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Themes) != 1 || after.Themes[0].New {
+		t.Fatalf("second plan = %+v, want the same theme, no longer new", after.Themes)
+	}
+}
+
+// A theme's summary costs a model call, so it is asked for once and reused
+// while the notes behind it have not changed.
+func TestThemeSummaryIsWrittenOnceAndReused(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	vaultRoot := filepath.Join(t.TempDir(), "vault")
+	prov := &countingProvider{answer: "Agents are being given memory, and it is changing what they can do."}
+	svc, err := NewService(d, vaultRoot, Options{
+		ImportanceThreshold: 2, MinOccurrences: 2, AgeDays: 30, UseLLM: true,
+	}, prov, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	src, err := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Agents that remember", "Memory for agents", "Long-context agents"} {
+		classifiedArticle(t, d, src.ID, title, []string{"agents", "memory"})
+	}
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	onDisk, err := os.ReadFile(filepath.Join(vaultRoot, "03-Molecules", "theme-agents.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(onDisk), "changing what they can do") {
+		t.Fatalf("summary not written:\n%s", onDisk)
+	}
+
+	asked := prov.calls
+	if _, err := svc.Build(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if prov.calls != asked {
+		t.Fatalf("model asked again for an unchanged theme (%d calls, was %d)", prov.calls, asked)
 	}
 }
 

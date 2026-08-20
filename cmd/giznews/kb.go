@@ -11,10 +11,10 @@ import (
 	"github.com/ajramos/giznews/internal/llm"
 )
 
-// runKB manages the knowledge graph: build, list, synth.
+// runKB manages the knowledge graph: build, list, themes, synth.
 func runKB(args []string, logger *log.Logger) {
 	if len(args) == 0 {
-		logger.Fatal("usage: giznews kb <build [--dry-run]|list|synth|index|sync|concepts|merge|alias> [args]")
+		logger.Fatal("usage: giznews kb <build [--dry-run]|list|themes|synth|index|sync|concepts|merge|alias> [args]")
 	}
 
 	cfg, d, ctx := loadAndOpenDB(args[1:], logger)
@@ -40,6 +40,7 @@ func runKB(args []string, logger *log.Logger) {
 		ImportanceThreshold: cfg.Classify.ImportanceThreshold,
 		MinOccurrences:      cfg.KB.MinOccurrences,
 		AgeDays:             cfg.KB.AgeDays,
+		ThemeDays:           cfg.KB.ThemeDays,
 		Limit:               cfg.KB.Limit,
 		Model:               cfg.LLM.Model,
 		UseLLM:              prov != nil,
@@ -67,6 +68,9 @@ func runKB(args []string, logger *log.Logger) {
 		if res.AtomsRefreshed > 0 {
 			fmt.Printf("  %d note(s) refreshed from their article\n", res.AtomsRefreshed)
 		}
+		if res.MoleculesCreated > 0 || res.MoleculesUpdated > 0 {
+			fmt.Printf("  %d theme(s) written, %d refreshed\n", res.MoleculesCreated, res.MoleculesUpdated)
+		}
 		if res.NotesImported > 0 {
 			fmt.Printf("  %d note(s) of your own read into the graph\n", res.NotesImported)
 		}
@@ -89,6 +93,17 @@ func runKB(args []string, logger *log.Logger) {
 		if len(notes) == 0 {
 			fmt.Printf("no %s notes yet — run `giznews kb build`\n", noteType)
 		}
+
+	case "themes":
+		res, err := svc.BuildThemes(ctx)
+		if err != nil {
+			logger.Fatalf("kb themes: %v", err)
+		}
+		if res.Found == 0 {
+			fmt.Println("no themes yet — notes have to name the same concepts together first")
+			break
+		}
+		fmt.Printf("kb themes: %d found, %d molecule(s) created, %d updated\n", res.Found, res.Created, res.Updated)
 
 	case "synth":
 		if len(args) < 2 {
@@ -160,7 +175,7 @@ func runKB(args []string, logger *log.Logger) {
 		fmt.Printf("%q now resolves to %q\n", args[1], args[2])
 
 	default:
-		logger.Fatalf("unknown kb subcommand %q (expected build|list|synth|index|sync|concepts|merge|alias)", args[0])
+		logger.Fatalf("unknown kb subcommand %q (expected build|list|themes|synth|index|sync|concepts|merge|alias)", args[0])
 	}
 	_ = context.Background
 }
@@ -199,6 +214,17 @@ func printPlan(p *kb.BuildPreview) {
 		fmt.Printf("\n%d concept(s) would still be waiting\n", len(p.Pending))
 		for _, c := range p.Pending {
 			fmt.Printf("  %-30s %d → %d mention(s)\n", truncate(c.Slug, 30), c.Mentions, c.After)
+		}
+	}
+
+	if len(p.Themes) > 0 {
+		fmt.Printf("\n%d theme(s) would be gathered into molecules\n", len(p.Themes))
+		for _, t := range p.Themes {
+			state := "refreshed"
+			if t.New {
+				state = "new"
+			}
+			fmt.Printf("  %-30s %2d note(s)  %-9s %s\n", truncate(t.Slug, 30), t.Notes, state, truncate(t.Title, 40))
 		}
 	}
 

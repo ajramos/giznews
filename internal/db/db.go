@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -353,4 +353,27 @@ ALTER TABLE kb_notes ADD COLUMN content_hash TEXT NOT NULL DEFAULT '';
 const schemaV11 = `
 ALTER TABLE concepts ADD COLUMN definition TEXT NOT NULL DEFAULT '';
 ALTER TABLE concepts ADD COLUMN definition_key TEXT NOT NULL DEFAULT '';
+`
+
+// schemaV12 remembers the themes a build found.
+//
+// A molecule is a cluster of notes that keep naming the same concepts
+// together. The cluster is recomputed on every run, but its identity — the
+// concept it is anchored on — has to survive one, or a theme would get a new
+// note every time its second-largest concept overtook its third. The summary
+// is kept for the same reason a definition is: it costs a model call, and the
+// key says what it was written from.
+const schemaV12 = `
+CREATE TABLE IF NOT EXISTS kb_themes (
+	slug        TEXT    PRIMARY KEY,
+	title       TEXT    NOT NULL,
+	seed        TEXT    NOT NULL DEFAULT '',   -- the concept the theme is anchored on
+	concepts    TEXT    NOT NULL DEFAULT '[]', -- JSON array of concept slugs
+	summary     TEXT    NOT NULL DEFAULT '',
+	summary_key TEXT    NOT NULL DEFAULT '',
+	note_id     INTEGER REFERENCES kb_notes(id) ON DELETE SET NULL,
+	created_at  TEXT    NOT NULL,
+	updated_at  TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_kb_themes_seed ON kb_themes(seed);
 `

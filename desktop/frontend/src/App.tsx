@@ -781,6 +781,14 @@ export default function App() {
         notify(`${k.atomsCreated} atoms · ${k.electronsCreated} electrons`);
       });
     } },
+    { name: "kb themes", hint: "Gather recent notes into themes (molecules)", run: () => {
+      setJobsOpen(true);
+      void runCmd(async () => {
+        const k = await api.kthemes();
+        await loadStatus();
+        notify(`${k.moleculesCreated} theme(s) written · ${k.moleculesUpdated} refreshed`);
+      });
+    } },
     { name: "kb synth <category>", hint: "Synthesize a category into a molecule", run: () => setSynthPrompt(true) },
     { name: "search index", hint: "Rebuild search index + embeddings", run: () => {
       setJobsOpen(true);

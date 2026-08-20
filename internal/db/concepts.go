@@ -192,6 +192,49 @@ func (r *ConceptRepo) CoOccurring(ctx context.Context, slug string, limit int) (
 	return out, rows.Err()
 }
 
+// ConceptMention is one note naming one concept. It is the raw material of
+// clustering: two concepts are related because notes name them together, and
+// the notes themselves are what a theme is made of.
+type ConceptMention struct {
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	NoteID   int64  `json:"note_id"`
+	NoteSlug string `json:"note_slug"`
+	Title    string `json:"title"`
+	NoteType string `json:"note_type"`
+	Created  string `json:"created_at"`
+}
+
+// MentionsSince returns every concept mention recorded on or after a date,
+// newest note first. Electrons are left out: a concept note naming other
+// concepts is the graph talking about itself, not a note about the news.
+func (r *ConceptRepo) MentionsSince(ctx context.Context, since string, limit int) ([]ConceptMention, error) {
+	if limit <= 0 {
+		limit = 5000
+	}
+	rows, err := r.db.sql.QueryContext(ctx, `
+		SELECT m.concept_slug, c.name, n.id, n.slug, n.title, n.note_type, m.created_at
+		FROM concept_mentions m
+		JOIN kb_notes n ON n.id = m.note_id
+		JOIN concepts c ON c.slug = m.concept_slug
+		WHERE m.created_at >= ? AND n.note_type != 'electron'
+		ORDER BY m.created_at DESC, n.id DESC, m.concept_slug
+		LIMIT ?`, since, limit)
+	if err != nil {
+		return nil, fmt.Errorf("mentions since %s: %w", since, err)
+	}
+	defer rows.Close()
+	var out []ConceptMention
+	for rows.Next() {
+		var m ConceptMention
+		if err := rows.Scan(&m.Slug, &m.Name, &m.NoteID, &m.NoteSlug, &m.Title, &m.NoteType, &m.Created); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // MentionsByMonth reports when a concept was picked up, oldest month first, so
 // a note can show whether an idea is rising or fading.
 func (r *ConceptRepo) MentionsByMonth(ctx context.Context, slug string) ([]MonthCount, error) {

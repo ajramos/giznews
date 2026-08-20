@@ -111,6 +111,10 @@ type atomRef struct {
 	Slug   string
 	Title  string
 	NoteID int64
+	// Date is the day the note is about (YYYY-MM-DD), when the caller knows
+	// it. A molecule reads as a chronology, so it needs one; an electron lists
+	// its sources and does not.
+	Date string
 }
 
 // BuildAtom produces the Atom note for an article.
@@ -224,28 +228,122 @@ func sparkbar(n int) string {
 	return "  " + strings.Repeat("▁", n)
 }
 
-// BuildMolecule produces a Molecule note synthesizing a category/theme.
-func BuildMolecule(title, summary string, refs []atomRef) string {
+// MoleculeView is everything a Molecule note says about a theme.
+type MoleculeView struct {
+	Title string
+	// Created is the day the theme was first written, so a molecule that has
+	// not moved is not rewritten with a new date on every build.
+	Created  string
+	Summary  string // written by the model when one is available
+	Concepts []ThemeConcept
+	Notes    []atomRef
+}
+
+// ThemeConcept is one concept holding a theme together, and how much of it.
+type ThemeConcept struct {
+	Slug  string `json:"slug"`
+	Name  string `json:"name"`
+	Notes int    `json:"notes"` // notes of this theme naming it
+	Total int    `json:"total"` // mentions across the whole graph
+}
+
+// BuildMolecule produces the Molecule note for a theme: what ties its notes
+// together, how the story moved, and which concepts hold it. It writes no empty
+// section — a heading with nothing under it is a promise the note does not
+// keep, and the reader has to scroll past it on every visit.
+func BuildMolecule(v MoleculeView) string {
+	created := v.Created
+	if created == "" {
+		created = noteTime(time.Now())
+	}
 	fm := frontmatter{
 		Type:    "molecule",
-		Created: noteTime(time.Now()),
+		Created: created,
 		Status:  "active",
-		Tags:    []string{"synthesis", "ai"},
+		Tags:    []string{"synthesis", "ai", "theme"},
 	}
 
 	var b strings.Builder
 	b.WriteString(fm.render())
-	b.WriteString("\n# 🧪 " + title + "\n\n")
-	if summary != "" {
-		b.WriteString("## Central Idea\n" + summary + "\n\n")
+	b.WriteString("\n# 🧪 " + v.Title + "\n\n")
+
+	b.WriteString("## Central idea\n")
+	if v.Summary != "" {
+		b.WriteString(v.Summary + "\n\n")
+	} else {
+		b.WriteString(moleculeGist(v) + "\n\n")
 	}
-	b.WriteString("## Development\n\n")
-	b.WriteString("## Conexiones\n")
-	for _, s := range refs {
-		b.WriteString("- [[" + s.Slug + "]] — " + s.Title + "\n")
+
+	if len(v.Notes) > 0 {
+		b.WriteString("## How it developed\n")
+		for _, n := range v.Notes {
+			if n.Date != "" {
+				b.WriteString("- " + n.Date + " · [[" + n.Slug + "]] — " + n.Title + "\n")
+				continue
+			}
+			b.WriteString("- [[" + n.Slug + "]] — " + n.Title + "\n")
+		}
+		b.WriteString("\n")
 	}
-	b.WriteString("\n## Aplicación\n\n")
+
+	if len(v.Concepts) > 0 {
+		b.WriteString("## Concepts in play\n")
+		for _, c := range v.Concepts {
+			b.WriteString(fmt.Sprintf("- [[%s]] — %s · %d note(s) here, %d in all\n", c.Slug, c.Name, c.Notes, c.Total))
+		}
+		b.WriteString("\n")
+	}
 	return b.String()
+}
+
+// moleculeGist is what the note says when no model wrote it a summary: the
+// shape of the cluster, which is the one thing that is true without asking.
+func moleculeGist(v MoleculeView) string {
+	names := make([]string, 0, len(v.Concepts))
+	for _, c := range v.Concepts {
+		names = append(names, c.Name)
+	}
+	span := ""
+	if first, last := moleculeSpan(v.Notes); first != "" {
+		span = " between " + first + " and " + last
+		if first == last {
+			span = " on " + first
+		}
+	}
+	if len(names) == 0 {
+		return fmt.Sprintf("%d note(s)%s, gathered here.", len(v.Notes), span)
+	}
+	return fmt.Sprintf("%d note(s)%s name %s together.", len(v.Notes), span, joinNames(names))
+}
+
+// moleculeSpan returns the first and last dated day in a run of notes.
+func moleculeSpan(notes []atomRef) (string, string) {
+	first, last := "", ""
+	for _, n := range notes {
+		if n.Date == "" {
+			continue
+		}
+		if first == "" || n.Date < first {
+			first = n.Date
+		}
+		if last == "" || n.Date > last {
+			last = n.Date
+		}
+	}
+	return first, last
+}
+
+// joinNames writes a list the way a sentence would.
+func joinNames(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // BuildRedirect rewrites a merged concept's note into a pointer at the concept

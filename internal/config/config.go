@@ -165,6 +165,10 @@ type KBConfig struct {
 	AgeDays int `json:"age_days"`
 	// Limit caps how many atoms one run writes.
 	Limit int `json:"limit"`
+	// ThemeDays is how far back theme clustering looks for notes to group into
+	// molecules. Wider than AgeDays on purpose: a story told over two months is
+	// still one story, while an article that old is no longer news.
+	ThemeDays int `json:"theme_days"`
 }
 
 // FetchConfig configures article ingestion from sources.
@@ -234,6 +238,7 @@ func DefaultConfig() *Config {
 			MinOccurrences: 2,
 			AgeDays:        30,
 			Limit:          200,
+			ThemeDays:      90,
 		},
 		Extract: ExtractConfig{
 			OnFetch:     true,

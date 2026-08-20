@@ -16,8 +16,21 @@ interface Props {
 export function CommandPalette({ commands, onClose }: Props) {
   const [value, setValue] = useState("");
   const [sel, setSel] = useState(0);
-  const filtered = commands.filter((c) => c.name.includes(value.toLowerCase()));
   const q = value.trim().toLowerCase();
+
+  // Matches are ranked, not just filtered: what you typed exactly comes first,
+  // then what starts with it, then the rest. Without this a command that merely
+  // contains the word can steal it — typing "theme" would open "kb themes"
+  // instead of the theme picker, which is exactly what it is named.
+  const rank = (name: string) => {
+    const n = name.toLowerCase();
+    if (n === q) return 0;
+    if (n.startsWith(q)) return 1;
+    return 2;
+  };
+  const filtered = commands
+    .filter((c) => c.name.toLowerCase().includes(q))
+    .sort((a, b) => rank(a.name) - rank(b.name));
 
   // Allow exact-ish commands to run on Enter even when no fuzzy match.
   const run = (i: number) => {

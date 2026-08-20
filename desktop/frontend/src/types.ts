@@ -88,6 +88,7 @@ export interface KBResult {
   electronsCreated: number;
   electronsUpdated: number;
   moleculesCreated: number;
+  moleculesUpdated: number;
   articlesSkipped: number;
   conceptsTracked: number;
   atomsRefreshed: number;
