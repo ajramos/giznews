@@ -62,29 +62,32 @@ func runRules(args []string, logger *log.Logger) {
 		fmt.Printf("\n%d rule(s). First match wins, in this order.\n", len(rules))
 
 	case "test":
-		fs := flag.NewFlagSet("test", flag.ContinueOnError)
-		named := fs.String("rule", "", "test a stored rule by name instead of a raw regex")
-		limit := fs.Int("limit", 20, "how many matching articles to print")
-		mustParse(fs, args[1:], logger)
+		// Same reason as import: the regex is a positional argument, so a flag
+		// set would stop reading at it and quietly ignore whatever came after.
+		named := flagValue(args[1:], "rule")
+		limit := 20
+		if n, err := strconv.Atoi(flagValue(args[1:], "limit")); err == nil && n > 0 {
+			limit = n
+		}
 
 		query := ""
 		switch {
-		case *named != "":
-			rule, err := ruleByRef(ctx, repo, *named)
+		case named != "":
+			rule, err := ruleByRef(ctx, repo, named)
 			if err != nil {
 				logger.Fatalf("rules test: %v", err)
 			}
 			query = rule.Query
 			fmt.Printf("rule %q: %s\n\n", rule.Name, rule.Query)
 		default:
-			query = fs.Arg(0)
+			query = firstNonFlag(args[1:])
 			if query == "" {
 				logger.Fatal(`usage: giznews rules test "<regex>" | --rule <name>`)
 			}
 		}
 
 		svc := classify.NewService(d, classify.Options{}, nil, logger)
-		matched, total, err := svc.TestQuery(ctx, query, *limit)
+		matched, total, err := svc.TestQuery(ctx, query, limit)
 		if err != nil {
 			logger.Fatalf("rules test: %v", err)
 		}
@@ -379,13 +382,54 @@ func stripConfig(args []string) []string {
 	return out
 }
 
-// firstNonFlag returns the first bare argument, for subcommands that take one
-// reference and no flags of their own.
+// firstNonFlag returns the first bare argument — the one a subcommand takes as
+// its file, its regex or its rule reference. A flag's value is not one of
+// those, so `--rule noise: crypto` never passes for a regex.
 func firstNonFlag(args []string) string {
-	for _, a := range stripConfig(args) {
+	rest := stripConfig(args)
+	for i := 0; i < len(rest); i++ {
+		a := rest[i]
 		if !strings.HasPrefix(a, "-") {
 			return a
 		}
+		if takesValue(a) && i+1 < len(rest) {
+			i++ // this flag ate the next argument
+		}
 	}
 	return ""
+}
+
+// flagValue reads `--name value` or `--name=value` wherever it sits. Go's flag
+// package stops at the first positional argument, and every rules subcommand
+// has one, so the flags have to be found by hand.
+func flagValue(args []string, name string) string {
+	rest := stripConfig(args)
+	for i, a := range rest {
+		if a == "--"+name || a == "-"+name {
+			if i+1 < len(rest) {
+				return rest[i+1]
+			}
+			return ""
+		}
+		if value, ok := strings.CutPrefix(a, "--"+name+"="); ok {
+			return value
+		}
+		if value, ok := strings.CutPrefix(a, "-"+name+"="); ok {
+			return value
+		}
+	}
+	return ""
+}
+
+// takesValue reports whether a flag is followed by its value. The booleans are
+// listed because they are the exception: everything else in `rules` takes one.
+func takesValue(arg string) bool {
+	if strings.Contains(arg, "=") {
+		return false
+	}
+	switch strings.TrimLeft(arg, "-") {
+	case "dry-run", "archive", "keep", "disabled":
+		return false
+	}
+	return true
 }

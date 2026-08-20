@@ -198,3 +198,42 @@ func TestRulesImportIsIdempotent(t *testing.T) {
 		t.Fatal("the dry run wrote to the database")
 	}
 }
+
+// Every rules subcommand takes a positional argument, and Go's flag package
+// stops reading at the first one — which once made `rules import file.json
+// --dry-run` import for real. The flags are found by hand instead, so this is
+// the test that says they are found wherever they sit.
+func TestFlagsAreReadWhereverTheySit(t *testing.T) {
+	cases := []struct {
+		name     string
+		args     []string
+		flag     string
+		want     string
+		dryRun   bool
+		bareWant string
+	}{
+		{"flag after the file", []string{"noise.json", "--dry-run"}, "", "", true, "noise.json"},
+		{"flag before the file", []string{"--dry-run", "noise.json"}, "", "", true, "noise.json"},
+		{"no flag at all", []string{"noise.json"}, "", "", false, "noise.json"},
+		{"value flag after the regex", []string{`\bshares\b`, "--limit", "5"}, "limit", "5", false, `\bshares\b`},
+		{"value flag before the regex", []string{"--limit", "5", `\bshares\b`}, "limit", "5", false, `\bshares\b`},
+		{"value flag with an equals sign", []string{`\bshares\b`, "--limit=5"}, "limit", "5", false, `\bshares\b`},
+		{"a flag's value is not the positional", []string{"--rule", "noise: crypto"}, "rule", "noise: crypto", false, ""},
+		{"config is not the positional", []string{"--config", "/tmp/c.json", "noise.json"}, "", "", false, "noise.json"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := firstNonFlag(tc.args); got != tc.bareWant {
+				t.Errorf("firstNonFlag = %q, want %q", got, tc.bareWant)
+			}
+			if got := hasFlag(tc.args, "dry-run"); got != tc.dryRun {
+				t.Errorf("hasFlag(dry-run) = %v, want %v", got, tc.dryRun)
+			}
+			if tc.flag != "" {
+				if got := flagValue(tc.args, tc.flag); got != tc.want {
+					t.Errorf("flagValue(%s) = %q, want %q", tc.flag, got, tc.want)
+				}
+			}
+		})
+	}
+}
