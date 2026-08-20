@@ -106,23 +106,24 @@ func runRules(args []string, logger *log.Logger) {
 		fmt.Println(" — check every one of them before letting a rule archive it")
 
 	case "import":
-		fs := flag.NewFlagSet("import", flag.ContinueOnError)
-		dryRun := fs.Bool("dry-run", false, "say what would change, write nothing")
-		mustParse(fs, args[1:], logger)
-		path := fs.Arg(0)
+		// --dry-run may sit anywhere, so it is picked out by hand rather than by
+		// a flag set: Go's flag parsing stops at the first positional argument,
+		// so `rules import file.json --dry-run` would otherwise import for real.
+		dryRun := hasFlag(args[1:], "dry-run")
+		path := firstNonFlag(args[1:])
 		if path == "" {
 			logger.Fatal("usage: giznews rules import <file.json> [--dry-run]")
 		}
-		created, updated, unchanged, err := importRules(ctx, repo, path, *dryRun)
+		created, updated, unchanged, err := importRules(ctx, repo, path, dryRun)
 		if err != nil {
 			logger.Fatalf("rules import: %v", err)
 		}
 		verb := "imported"
-		if *dryRun {
+		if dryRun {
 			verb = "would import"
 		}
 		fmt.Printf("%s: %d new, %d updated, %d unchanged\n", verb, created, updated, unchanged)
-		if !*dryRun {
+		if !dryRun {
 			fmt.Println("run `giznews classify --dry-run` before the next classify to see what they claim")
 		}
 
