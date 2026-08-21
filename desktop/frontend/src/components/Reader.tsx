@@ -3,6 +3,18 @@ import { Sparkles, ExternalLink, Archive, Star, Loader2 } from "lucide-react";
 import type { ArticleDTO } from "../types";
 import { Markdown, stars, catClass } from "./Markdown";
 
+// MIN_BODY is the length below which a body is almost certainly a feed summary,
+// not the extracted article. Matches the extract package's MinLength.
+const MIN_BODY = 200;
+
+// formatDate renders a timestamp as the readable date of the article.
+function formatDate(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
+
 interface Props {
   article: ArticleDTO | null;
   summarizing: boolean;
@@ -47,6 +59,9 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
         <div className="reader-meta">
           {article.sourceName && <span className="src">{article.sourceName}</span>}
           {article.author && <span>{article.author}</span>}
+          {(article.published || article.fetchedAt) && (
+            <span className="time" title={article.published || article.fetchedAt}>{formatDate(article.published || article.fetchedAt)}</span>
+          )}
           <span title={`Importance: ${article.importance}/3`}>{stars(article.importance)}</span>
           {article.category && <span className={`cat-chip ${catClass(article.category)}`}>{article.category}</span>}
           {(article.tags?.length ?? 0) > 0 && (
@@ -90,7 +105,19 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
             <Loader2 size={24} className="spin" /> Extracting the article…
           </div>
         ) : article.contentMD ? (
-          <Markdown content={article.contentMD} />
+          <>
+            <Markdown content={article.contentMD} />
+            {/* A short body is a feed summary, not the article. Some sites (e.g.
+                OpenAI) sit behind Cloudflare + JS, so a plain fetch can never get
+                the real text — point the reader at the source instead. */}
+            {!contentLoading && article.contentMD.length < MIN_BODY && (
+              <div className="empty with-icon" style={{ marginTop: 10 }}>
+                <ExternalLink size={22} />
+                <span>This looks like a summary, not the full article (the page may not be extractable).</span>
+                <button onClick={onOpenLink}>Open in browser (O)</button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="empty with-icon">
             <ExternalLink size={26} />
