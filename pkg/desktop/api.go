@@ -33,6 +33,7 @@ type API interface {
 	Fetch(ctx context.Context) (*FetchResult, error)
 	Classify(ctx context.Context, limit int) (*ClassifyResult, error)
 	ClassifyArticles(ctx context.Context, ids []int64) (*ClassifyResult, error)
+	ClassifyRules(ctx context.Context, limit int) (*ClassifyResult, error)
 	SummarizeArticle(ctx context.Context, id int64) (*ArticleDTO, error)
 	Digest(ctx context.Context) (*DigestDTO, error)
 	ListDigests(ctx context.Context) ([]*DigestMeta, error)

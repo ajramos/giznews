@@ -117,6 +117,7 @@ export interface APIShape {
   fetch: () => Promise<FetchResult>;
   classify: (limit: number) => Promise<ClassifyResult>;
   classifyArticles: (ids: number[]) => Promise<ClassifyResult>;
+  classifyRules: (limit: number) => Promise<ClassifyResult>;
   summarizeArticle: (id: number) => Promise<ArticleDTO>;
   digest: () => Promise<DigestDTO>;
   listDigests: () => Promise<DigestMeta[]>;
@@ -180,6 +181,7 @@ const realApi: APIShape = {
   fetch: () => call("Fetch").then((v) => normalize<FetchResult>(v)),
   classify: (limit: number) => call("Classify", limit).then((v) => normalize<ClassifyResult>(v)),
   classifyArticles: (ids: number[]) => call("ClassifyArticles", ids).then((v) => normalize<ClassifyResult>(v)),
+  classifyRules: (limit: number) => call("ClassifyRules", limit).then((v) => normalize<ClassifyResult>(v)),
   summarizeArticle: (id: number) =>
     call("SummarizeArticle", id).then((v) => normalize<ArticleDTO>(v)),
   digest: () => call("Digest").then((v) => normalize<DigestDTO>(v)),

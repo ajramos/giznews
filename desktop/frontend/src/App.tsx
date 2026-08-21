@@ -775,6 +775,15 @@ export default function App() {
         notify(`${c.classified} classified (${c.byRules} rules · ${c.byLLM} LLM)`);
       });
     } },
+    { name: "classify rules-only", hint: "Apply deterministic rules only (leave the rest for the LLM)", run: () => {
+      setJobsOpen(true);
+      void runCmd(async () => {
+        const c = await api.classifyRules(200);
+        await loadArticles();
+        void refreshReader();
+        notify(`${c.byRules} resolved by rules (${c.archived ?? 0} archived) · ${c.pending ?? 0} left for LLM`);
+      });
+    } },
     { name: "kb build", hint: "Generate atoms/electrons", run: () => {
       setJobsOpen(true);
       void runCmd(async () => {

@@ -34,9 +34,13 @@ type Classification struct {
 type Result struct {
 	Classified   int      `json:"classified"`
 	ByRules      int      `json:"by_rules"`
+	Archived     int      `json:"archived"`
 	Boosted      int      `json:"boosted"`
 	ByLLM        int      `json:"by_llm"`
 	SkippedNoLLM int      `json:"skipped_no_llm"`
 	Batches      int      `json:"batches"`
-	Errors       []string `json:"errors,omitempty"`
+	// Pending counts articles a rules-only run left unclassified, waiting for
+	// the model.
+	Pending int      `json:"pending"`
+	Errors  []string `json:"errors,omitempty"`
 }

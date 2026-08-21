@@ -384,3 +384,70 @@ func TestBoostOutranksArchive(t *testing.T) {
 		t.Fatalf("importance = %d, want 3", got.Importance)
 	}
 }
+
+// A rules-only run applies the deterministic rules and leaves everything else
+// pending: no LLM, no deterministic fallback, no boost floors — those are a
+// floor over what the model decides, and the model has not run.
+func TestRulesOnlyLeavesTheRestPending(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	seed := func(guid, title string) {
+		_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: guid, Title: title, URL: "https://x.com/" + guid})
+	}
+	seed("a", "Bitcoin rips past $120k")          // archive
+	seed("b", "OpenAI details its safety framework") // keep
+	seed("c", "Nvidia builds a supercomputer")    // boost (floor deferred)
+	seed("d", "A quiet paper on retrieval")       // unmatched
+
+	ruleRepo := db.NewRuleRepo(d)
+	_, _ = ruleRepo.Create(ctx, db.NewRule{
+		Name: "noise: crypto", Query: `\b(bitcoin|crypto)\b`,
+		Actions: []db.RuleAction{{Type: "archive"}}, Enabled: true,
+	})
+	_, _ = ruleRepo.Create(ctx, db.NewRule{
+		Name: "keep: labs", Query: `\bopenai\b`,
+		Actions: []db.RuleAction{{Type: "keep"}}, Enabled: true,
+	})
+	_, _ = ruleRepo.Create(ctx, db.NewRule{
+		Name: "boost: compute", Query: `\bsupercomputer\b`,
+		Actions: []db.RuleAction{{Type: "boost", Value: "3"}}, Enabled: true,
+	})
+
+	svc := NewService(d, Options{RulesOnly: true, UseLLM: false, BatchSize: 10, AgeDays: 30}, nil, nil)
+	res, err := svc.ClassifyAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Classified != 1 || res.ByRules != 1 || res.Archived != 1 || res.Pending != 3 {
+		t.Fatalf("res = %+v, want 1 classified by rule, 1 archived, 3 pending", res)
+	}
+	if res.ByLLM != 0 || res.SkippedNoLLM != 0 {
+		t.Fatalf("res = %+v, want no LLM/fallback", res)
+	}
+
+	archived, _ := artRepo.Get(ctx, 1)
+	if archived.Status != db.StatusArchived {
+		t.Fatalf("the archive rule did not run: %+v", archived)
+	}
+	// The boost floor is not applied yet: the article is still pending, and its
+	// importance is whatever it started at.
+	boosted, _ := artRepo.Get(ctx, 3)
+	if boosted.Importance != 0 {
+		t.Fatalf("floor applied early: importance = %d", boosted.Importance)
+	}
+
+	pending, err := artRepo.ListUnclassified(ctx, 10, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 3 {
+		t.Fatalf("pending = %d, want 3 (keep, boost, unmatched)", len(pending))
+	}
+}

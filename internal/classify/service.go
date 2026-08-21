@@ -20,6 +20,11 @@ type Options struct {
 	UseLLM    bool
 	Model     string
 	Language  string // ISO 639-1 for LLM-generated summaries/headlines
+	// RulesOnly applies the deterministic rules and stops, leaving every
+	// article no rule resolved — keep, boost and unmatched — unclassified for
+	// a later LLM run. Boost floors are not applied here: they are a floor over
+	// what the model decides, and the model has not run.
+	RulesOnly bool
 	// OnProgress, when set, reports phase progress ("rules" or "llm").
 	OnProgress func(phase string, done, total int)
 }
@@ -87,6 +92,9 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 			floors[a.ID] = d.Floor
 		}
 		if !d.ToLLM() {
+			if d.Action.Archive {
+				res.Archived++
+			}
 			if err := s.apply(ctx, repo, a, d.Action); err != nil {
 				res.Errors = append(res.Errors, fmt.Sprintf("#%d: %v", a.ID, err))
 				continue
@@ -99,6 +107,13 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 	}
 
 	s.progress("rules", len(articles), len(articles))
+
+	// A rules-only run stops here: the articles no rule resolved stay pending,
+	// and no floor is applied — that happens once the model has classified them.
+	if s.opts.RulesOnly {
+		res.Pending = len(llmBatch)
+		return res, nil
+	}
 
 	// Phase 2: LLM.
 	if s.opts.UseLLM && s.prov != nil && len(llmBatch) > 0 {

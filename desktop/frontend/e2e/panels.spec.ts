@@ -214,6 +214,17 @@ test.describe("workflows", () => {
     await page.keyboard.press("Escape");
   });
 
+  test(":classify rules-only applies the prefilter and leaves the rest pending", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("classify rules-only");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".jobs-picker")).toBeVisible();
+    await expect(page.locator(".job-item", { hasText: "Apply rules" })).toHaveCount(1, { timeout: 10000 });
+    await expect(page.locator(".toast")).toContainText("resolved by rules", { timeout: 6000 });
+    await page.keyboard.press("Escape");
+  });
+
   test(":status opens the status modal", async ({ page }) => {
     await gotoApp(page);
     await page.keyboard.press(":");

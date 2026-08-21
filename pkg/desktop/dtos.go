@@ -102,9 +102,11 @@ type DigestDTO struct {
 type ClassifyResult struct {
 	Classified   int      `json:"classified"`
 	ByRules      int      `json:"by_rules"`
+	Archived     int      `json:"archived"`
 	ByLLM        int      `json:"by_llm"`
 	SkippedNoLLM int      `json:"skipped_no_llm"`
 	Batches      int      `json:"batches"`
+	Pending      int      `json:"pending"`
 	Errors       []string `json:"errors,omitempty"`
 }
 

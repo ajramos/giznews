@@ -271,6 +271,17 @@ export const mockBackend: APIShape = {
     finishJob(id);
     return { classified: ids.length, byRules: 0, byLLM: ids.length, skippedNoLLM: 0, batches: 1, errors: [] };
   },
+  classifyRules: async (_limit: number): Promise<ClassifyResult> => {
+    const id = beginJob("Apply rules", "classify");
+    patchJob(id, { phase: "rules", done: 8, total: 8 });
+    await delay(50);
+    // The mock's noise rule archives the one importance-0 item; everything else
+    // stays pending for a later LLM classify.
+    const noise = ARTICLES.filter((a) => a.importance === 0 && a.status === "unread");
+    for (const a of noise) a.status = "archived";
+    finishJob(id);
+    return { classified: noise.length, byRules: noise.length, archived: noise.length, byLLM: 0, skippedNoLLM: 0, batches: 0, pending: ARTICLES.length - noise.length, errors: [] };
+  },
   summarizeArticle: async (id: number): Promise<ArticleDTO> => {
     const jid = beginJob("Summarize article", "summarize");
     await delay(80);

@@ -77,9 +77,11 @@ export interface FetchResult {
 export interface ClassifyResult {
   classified: number;
   byRules: number;
+  archived?: number;
   byLLM: number;
   skippedNoLLM: number;
   batches: number;
+  pending?: number;
   errors: string[];
 }
 

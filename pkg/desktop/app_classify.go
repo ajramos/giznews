@@ -107,6 +107,40 @@ func (a *App) ClassifyArticles(ctx context.Context, ids []int64) (*ClassifyResul
 	return result, nil
 }
 
+// ClassifyRules applies the deterministic rules only, leaving every article no
+// rule resolved — keep, boost and unmatched — pending for a later LLM classify.
+// It never calls the model, so it needs no provider.
+func (a *App) ClassifyRules(ctx context.Context, limit int) (*ClassifyResult, error) {
+	var result *ClassifyResult
+	err := a.trackJob(ctx, "Apply rules", "classify", func(jctx context.Context, p *jobProgress) error {
+		svc := classify.NewService(a.db, classify.Options{
+			Limit:     limit,
+			RulesOnly: true,
+			OnProgress: func(phase string, done, total int) {
+				p.Progress(phase, done, total)
+			},
+		}, nil, a.logger())
+
+		res, err := svc.ClassifyAll(jctx)
+		if err != nil {
+			return err
+		}
+		result = &ClassifyResult{
+			Classified: res.Classified,
+			ByRules:    res.ByRules,
+			Archived:   res.Archived,
+			Pending:    res.Pending,
+			Errors:     res.Errors,
+		}
+		p.Message(fmt.Sprintf("%d resolved by rules (%d archived) · %d left for LLM", res.ByRules, res.Archived, res.Pending))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // SummarizeArticle generates a summary for one article and persists it.
 func (a *App) SummarizeArticle(ctx context.Context, id int64) (*ArticleDTO, error) {
 	var out *ArticleDTO
