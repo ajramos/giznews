@@ -108,6 +108,13 @@ func (r *ArticleRepo) Get(ctx context.Context, id int64) (*Article, error) {
 	return scanArticle(row)
 }
 
+// FindByURL returns the first article with a given URL, or ErrNotFound.
+func (r *ArticleRepo) FindByURL(ctx context.Context, url string) (*Article, error) {
+	row := r.db.sql.QueryRowContext(ctx,
+		"SELECT "+articleColumns+articleFrom+" WHERE a.url = ? LIMIT 1", url)
+	return scanArticle(row)
+}
+
 // GetByIDs returns articles by their ids, preserving the input order. Unknown
 // ids are skipped.
 func (r *ArticleRepo) GetByIDs(ctx context.Context, ids []int64) ([]*Article, error) {

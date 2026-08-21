@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -48,6 +49,18 @@ func (a *App) IngestURL(ctx context.Context, raw string) (*ArticleDTO, error) {
 
 	var out *ArticleDTO
 	err := a.trackJob(ctx, "Ingest URL", "ingest", func(jctx context.Context, p *jobProgress) error {
+		repo := db.NewArticleRepo(a.db)
+
+		// Already imported (from a feed or a previous :url): don't stack a
+		// second copy under a different GUID. Return the existing row.
+		if existing, err := repo.FindByURL(jctx, raw); err == nil {
+			p.Progress("done", 1, 1)
+			out = toArticleDTO(existing)
+			return nil
+		} else if !errors.Is(err, db.ErrNotFound) {
+			return err
+		}
+
 		src, err := a.ensureManualSource(jctx)
 		if err != nil {
 			return err
@@ -64,7 +77,6 @@ func (a *App) IngestURL(ctx context.Context, raw string) (*ArticleDTO, error) {
 			title = raw
 		}
 
-		repo := db.NewArticleRepo(a.db)
 		id, _, err := repo.Upsert(jctx, db.NewArticle{
 			SourceID:    src.ID,
 			GUID:        sha256Hex(raw),

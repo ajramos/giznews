@@ -115,3 +115,42 @@ func TestStatus(t *testing.T) {
 		t.Fatalf("provider = %q", st.LLMProvider)
 	}
 }
+
+// Importing a URL that is already in the database (via a feed, or an earlier
+// :url) must not stack a second copy under a different GUID. The dedup returns
+// the existing row before any network fetch.
+func TestIngestURLEarlyReturnsExisting(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	const url = "https://example.com/some-post"
+	src, err := app.AddSource(ctx, "Feed", "rss", "https://feed.example/rss", "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, _, err := db.NewArticleRepo(app.db).Upsert(ctx, db.NewArticle{
+		SourceID: src.ID, GUID: "feed-guid", URL: url, Title: "Some post", Status: db.StatusUnread,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := app.IngestURL(ctx, url)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+	if got.ID != id {
+		t.Fatalf("ingest returned article %d, want the existing %d", got.ID, id)
+	}
+	if got.Title != "Some post" {
+		t.Fatalf("title = %q, want the original", got.Title)
+	}
+
+	all, err := db.NewArticleRepo(app.db).List(ctx, db.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("articles after re-import = %d, want 1", len(all))
+	}
+}
