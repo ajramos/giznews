@@ -7,8 +7,9 @@ como notas Zettelkasten en un vault compatible con Obsidian.
 
 ## Lo que hace
 
-- **Agrega** noticias de RSS/Atom, Hacker News, arXiv y newsletters de Gmail
-  con dedupe por simhash (una historia repetida en varias fuentes cuenta una).
+- **Agrega** noticias de RSS/Atom, Hacker News, arXiv y newsletters de Gmail,
+  agrupando en **una historia** lo que varios medios cuentan a la vez — cuántos
+  la cubrieron es la señal de importancia más fuerte del feed.
 - **Clasifica** con reglas deterministas ⚡ (instantáneas) + LLM en batch:
   categoría, importancia (0-3), tags, entidades y resumen por artículo.
 - **Digiere**: un *digest diario* por temas con overview escrito por la IA.
@@ -65,15 +66,57 @@ go run ./cmd/giznews kb concepts        # conceptos por menciones (electron | pe
 go run ./cmd/giznews kb merge gpt4 gpt-5  # funde dos conceptos y reescribe los enlaces
 go run ./cmd/giznews digest     # digest diario
 
-# 4. Búsqueda semántica
+# 4. Desatendido
+go run ./cmd/giznews serve          # bucle: fetch → classify → kb → index → digest
+go run ./cmd/giznews serve --once   # una pasada y sale (para cron)
+
+# 5. Búsqueda semántica
 go run ./cmd/giznews search "watermarking"
 
-# 5. App desktop
+# 6. App desktop
 cd desktop && wails build && open build/bin/giznews.app
 ```
 
 El vault se abre con Obsidian en `~/Documents/obsidian/chronicles-ai`
 (configurable en `~/.config/giznews/config.json`).
+
+## Dejarlo funcionando solo
+
+`giznews serve` mantiene el pipeline al día: cada etapa tiene su cadencia y el
+digest su hora del día (`serve` en `config.json`; una cadencia vacía apaga esa
+etapa). Una etapa que falla se registra y **el bucle sigue**: que el modelo esté
+caído no puede impedir que el feed siga trayendo noticias. `Ctrl-C` o `SIGTERM`
+salen entre dos etapas, nunca a mitad de una escritura.
+
+Un solo proceso a la vez: el pipeline toma un lock (que caduca solo, así que un
+proceso muerto no bloquea nada) y los comandos manuales lo respetan.
+
+```jsonc
+"serve": {
+  "fetch_every": "30m",
+  "classify_every": "30m",
+  "kb_every": "6h",
+  "index_every": "12h",
+  "digest_at": "08:00"      // hora local
+}
+```
+
+Si prefieres cron o launchd, `--once` hace una pasada y sale:
+
+```sh
+# cron: cada media hora
+*/30 * * * * /usr/local/bin/giznews serve --once >> ~/.local/state/giznews.log 2>&1
+```
+
+```xml
+<!-- launchd: ~/Library/LaunchAgents/com.giznews.pipeline.plist -->
+<dict>
+  <key>Label</key><string>com.giznews.pipeline</string>
+  <key>ProgramArguments</key>
+  <array><string>/usr/local/bin/giznews</string><string>serve</string><string>--once</string></array>
+  <key>StartInterval</key><integer>1800</integer>
+</dict>
+```
 
 ## Arquitectura
 

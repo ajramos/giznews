@@ -51,6 +51,32 @@ digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digest
 search ──► FTS5 (keyword) ⊕ embeddings (Ollama, coseno) con RRF
 ```
 
+## Desatendido
+
+`giznews serve` es el bucle: cada etapa lleva su cadencia (`serve.*_every`) y el
+digest una hora del día en la zona horaria de la máquina, porque un digest se lee
+por la mañana y no a la hora que decida UTC. Una cadencia vacía —o ilegible— apaga
+la etapa: un typo no puede convertirse en una etapa corriendo cada nanosegundo.
+
+Tres propiedades que son la razón de que exista:
+
+- **Una etapa que falla no se lleva a las demás.** Un feed que deja de
+  actualizarse porque el modelo estaba caído es peor que un feed con un hueco en
+  sus notas.
+- **Parar es limpio.** `SIGINT`/`SIGTERM` cancelan el contexto y el bucle
+  termina entre dos etapas, nunca en mitad de una escritura.
+- **Un solo pipeline a la vez.** SQLite en WAL admite varios procesos, así que un
+  daemon y un `giznews fetch` a mano ingerirían los mismos feeds. `locks` es un
+  lock consultivo que **caduca solo**: un proceso que muere no deja nada
+  bloqueado, y el siguiente lo toma pasado el plazo. El dueño es único por
+  *titular*, no por proceso, así que dos trabajos dentro del mismo programa se
+  excluyen igual que dos programas.
+
+Las etapas viven en `internal/pipeline`, no en `cmd/`: el bucle y la persona en
+la terminal ejecutan exactamente lo mismo. `--once` hace una pasada y sale, que
+es lo que cron necesita —y devuelve error si no pudo hacer el trabajo, para que
+cron no informe de un éxito que no ocurrió—.
+
 ## Lo que aprende de ti
 
 Hasta ahora un artículo solo guardaba su estado final, sobreescrito: uno

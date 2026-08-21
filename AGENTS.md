@@ -54,6 +54,18 @@ Everything must be green before committing.
 - Article states: `unread | read | archived | starred` — all logical, nothing
   is physically deleted. Archiving offers undo.
 
+## Unattended runs
+
+Stages live in `internal/pipeline` (`Runner`), so `serve` and the CLI run the
+same code. `serve` schedules them (`serve.*_every`, `digest_at` in local time);
+`--once` does one pass for cron and returns an error when it could not work.
+
+Invariants: a failing stage never stops the loop, cancellation lands between
+stages, and only one pipeline runs at a time — `locks` is an advisory lock that
+expires on its own, with an owner unique per holder rather than per process.
+Commands that mutate (`fetch`, `classify`, `kb build`) take the same lock via
+`pipeline.WithLock`.
+
 ## Learning from the reader
 
 `article_events` records what happens to an article **and who did it**

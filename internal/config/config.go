@@ -88,6 +88,9 @@ type Config struct {
 	// KB configures how the knowledge graph is built.
 	KB KBConfig `json:"kb"`
 
+	// Serve configures the unattended loop (`giznews serve`).
+	Serve ServeConfig `json:"serve"`
+
 	// Extract configures full-article content extraction (readability) during
 	// fetch, so bodies are ready before you open them.
 	Extract ExtractConfig `json:"extract"`
@@ -196,6 +199,37 @@ type LearnConfig struct {
 	MaxDelta int `json:"max_delta"`
 }
 
+// ServeConfig configures the unattended loop. Every interval is a duration
+// string ("30m", "4h"); an empty one switches that stage off.
+type ServeConfig struct {
+	FetchEvery    string `json:"fetch_every"`
+	ClassifyEvery string `json:"classify_every"`
+	KBEvery       string `json:"kb_every"`
+	IndexEvery    string `json:"index_every"`
+	// DigestAt is a time of day in the machine's own timezone ("07:30"),
+	// because a digest is read in the morning, not at an hour UTC chose.
+	DigestAt string `json:"digest_at"`
+}
+
+// FetchInterval and friends parse the configured cadences, treating anything
+// unreadable as off: a typo must not turn into a stage running every
+// nanosecond.
+func (s ServeConfig) FetchInterval() time.Duration    { return parseEvery(s.FetchEvery) }
+func (s ServeConfig) ClassifyInterval() time.Duration { return parseEvery(s.ClassifyEvery) }
+func (s ServeConfig) KBInterval() time.Duration       { return parseEvery(s.KBEvery) }
+func (s ServeConfig) IndexInterval() time.Duration    { return parseEvery(s.IndexEvery) }
+
+func parseEvery(v string) time.Duration {
+	if v == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		return 0
+	}
+	return d
+}
+
 // FetchConfig configures article ingestion from sources.
 type FetchConfig struct {
 	// MaxAgeDays drops feed items published more than N days ago, so archive
@@ -266,6 +300,13 @@ func DefaultConfig() *Config {
 		},
 		Fetch: FetchConfig{
 			MaxAgeDays: 30,
+		},
+		Serve: ServeConfig{
+			FetchEvery:    "30m",
+			ClassifyEvery: "30m",
+			KBEvery:       "6h",
+			IndexEvery:    "12h",
+			DigestAt:      "08:00",
 		},
 		KB: KBConfig{
 			MinOccurrences: 2,

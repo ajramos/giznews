@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/ajramos/giznews/internal/fetch"
+	"github.com/ajramos/giznews/internal/pipeline"
 	"github.com/ajramos/giznews/internal/sources"
 )
 
@@ -28,8 +29,12 @@ func runFetch(args []string, logger *log.Logger) {
 		svc.SetExtraction(cfg.Extract.Limit, cfg.Extract.Concurrency)
 	}
 
-	res, err := svc.FetchAll(ctx)
-	if err != nil {
+	var res *fetch.Result
+	if err := pipeline.WithLock(ctx, d, logger, func(ctx context.Context) error {
+		var err error
+		res, err = svc.FetchAll(ctx)
+		return err
+	}); err != nil {
 		logger.Fatalf("fetch: %v", err)
 	}
 

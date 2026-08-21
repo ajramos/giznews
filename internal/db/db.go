@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13, schemaV14}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13, schemaV14, schemaV15}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -423,5 +423,20 @@ CREATE TABLE IF NOT EXISTS signals (
 	delta      INTEGER NOT NULL DEFAULT 0,    -- importance adjustment, bounded
 	updated_at TEXT    NOT NULL,
 	PRIMARY KEY (kind, key)
+);
+`
+
+// schemaV15 keeps two copies of giznews from doing the same work twice.
+//
+// The database allows several processes at once (WAL), so a daemon fetching on
+// a schedule and someone running `giznews fetch` by hand would both ingest the
+// same feeds and both write the same notes. The lock is advisory and expires on
+// its own: a process that dies takes nothing with it.
+const schemaV15 = `
+CREATE TABLE IF NOT EXISTS locks (
+	name       TEXT    PRIMARY KEY,
+	owner      TEXT    NOT NULL,
+	acquired_at TEXT   NOT NULL,
+	expires_at TEXT    NOT NULL
 );
 `

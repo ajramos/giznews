@@ -56,7 +56,10 @@ func runSources(args []string, logger *log.Logger) {
 		srcType := fs.String("type", "rss", "rss | hackernews | arxiv | gmail")
 		group := fs.String("group", "general", "group name")
 		url := fs.String("url", "", "feed URL")
-		_ = fs.Parse(addArgs)
+		// --config is a global and may sit anywhere; this flag set does not
+		// declare it, and without taking it out first the parse fails loudly
+		// over a flag that was perfectly valid.
+		_ = fs.Parse(stripConfig(addArgs))
 		if *name == "" || *url == "" {
 			logger.Fatal("usage: giznews sources add --name NAME --url URL [--type rss] [--group GROUP]")
 		}

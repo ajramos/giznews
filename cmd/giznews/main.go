@@ -80,7 +80,7 @@ Commands:
   rules     Manage the ⚡ prefilter (list, test, import, export, suggest, add, rm)
   learn     Report what your reading says, and store it as an adjustment
   gmail-auth  Run the Gmail OAuth flow (newsletters)
-  serve     Run the daemon (background fetch on schedule)
+  serve     Run the pipeline unattended (--once for cron)
   version   Show version
   help      Show this help
 

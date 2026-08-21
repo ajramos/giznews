@@ -9,6 +9,7 @@ import (
 	"github.com/ajramos/giznews/internal/db"
 	"github.com/ajramos/giznews/internal/kb"
 	"github.com/ajramos/giznews/internal/llm"
+	"github.com/ajramos/giznews/internal/pipeline"
 )
 
 // runKB manages the knowledge graph: build, list, themes, synth.
@@ -59,8 +60,12 @@ func runKB(args []string, logger *log.Logger) {
 			printPlan(plan)
 			return
 		}
-		res, err := svc.Build(ctx)
-		if err != nil {
+		var res *kb.BuildResult
+		if err := pipeline.WithLock(ctx, d, logger, func(ctx context.Context) error {
+			var err error
+			res, err = svc.Build(ctx)
+			return err
+		}); err != nil {
 			logger.Fatalf("kb build: %v", err)
 		}
 		fmt.Printf("kb build: %d atoms, %d concepts tracked, %d electrons created, %d updated, %d articles skipped\n",

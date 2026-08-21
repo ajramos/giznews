@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 14 {
-		t.Fatalf("user_version = %d, want 14", version)
+	if version != 15 {
+		t.Fatalf("user_version = %d, want 15", version)
 	}
 }
 
@@ -100,8 +100,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 14 {
-		t.Fatalf("user_version after reopen = %d, want 14", version)
+	if version != 15 {
+		t.Fatalf("user_version after reopen = %d, want 15", version)
 	}
 	// Columns must exist now.
 	var n int

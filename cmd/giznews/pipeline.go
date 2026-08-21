@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
 	"github.com/ajramos/giznews/internal/classify"
 	"github.com/ajramos/giznews/internal/digest"
 	"github.com/ajramos/giznews/internal/llm"
+	"github.com/ajramos/giznews/internal/pipeline"
 )
 
 // buildProvider creates the LLM provider from config (nil when disabled).
@@ -49,8 +51,12 @@ func runClassify(args []string, logger *log.Logger) {
 		return
 	}
 
-	res, err := svc.ClassifyAll(ctx)
-	if err != nil {
+	var res *classify.Result
+	if err := pipeline.WithLock(ctx, d, logger, func(ctx context.Context) error {
+		var err error
+		res, err = svc.ClassifyAll(ctx)
+		return err
+	}); err != nil {
 		logger.Fatalf("classify: %v", err)
 	}
 	fmt.Printf("classified %d articles (rules: %d, llm: %d, skipped-no-llm: %d)\n",
