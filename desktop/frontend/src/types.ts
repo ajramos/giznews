@@ -27,6 +27,9 @@ export interface ArticleDTO {
   starred?: boolean;
   published?: string;
   fetchedAt: string;
+  // How many outlets ran this story, and which. Absent when nobody else did.
+  storySize?: number;
+  storySources?: string[];
 }
 
 export interface NoteDTO {

@@ -403,7 +403,7 @@ func (s *Service) refreshStaleAtoms(ctx context.Context, kbRepo *db.KBRepo, conc
 		if err != nil {
 			return err
 		}
-		content := BuildAtom(a, links)
+		content := BuildAtom(a, links, s.storyCoverage(ctx, a))
 		if content == note.Content {
 			// Nothing a reader would notice changed (an archive, a status flip):
 			// mark the note fresh so it stops being reported, leave the file be.
@@ -465,7 +465,7 @@ func (s *Service) resolveConcepts(ctx context.Context, kbRepo *db.KBRepo, concep
 // it in SQLite and marks the article ingested. A failed insert removes the file
 // again so the vault never keeps a note the database does not know about.
 func (s *Service) writeAtom(ctx context.Context, kbRepo *db.KBRepo, ingestRepo *db.IngestRepo, a *db.Article, slug string, links []string) (*db.KBNote, error) {
-	content := BuildAtom(a, links)
+	content := BuildAtom(a, links, s.storyCoverage(ctx, a))
 	written, err := s.syncNote(SyncInput{NoteType: "atom", Slug: slug, Content: content})
 	if err != nil {
 		return nil, err
@@ -488,6 +488,33 @@ func (s *Service) writeAtom(ctx context.Context, kbRepo *db.KBRepo, ingestRepo *
 		return nil, err
 	}
 	return note, nil
+}
+
+// storyCoverage names the other outlets that ran the same story. An article
+// nobody else covered has none, and the note says nothing about it.
+func (s *Service) storyCoverage(ctx context.Context, a *db.Article) []atomSource {
+	if a.StorySize < 2 || a.StoryID == 0 {
+		return nil
+	}
+	members, err := db.NewArticleRepo(s.db).StoryMembers(ctx, a.StoryID)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Printf("kb: story coverage for #%d: %v", a.ID, err)
+		}
+		return nil
+	}
+	out := make([]atomSource, 0, len(members))
+	for _, m := range members {
+		if m.ID == a.ID || m.URL == "" {
+			continue
+		}
+		name := m.SourceName
+		if name == "" {
+			name = m.URL
+		}
+		out = append(out, atomSource{Name: name, URL: m.URL})
+	}
+	return out
 }
 
 // electronView gathers what an Electron note says: the concept's definition —
@@ -783,7 +810,7 @@ func (s *Service) EnsureArticleNote(ctx context.Context, articleID int64) (*db.K
 		}
 	}
 
-	content := BuildAtom(art, links)
+	content := BuildAtom(art, links, s.storyCoverage(ctx, art))
 	fm, _ := json.Marshal(map[string]any{
 		"type": "atom", "category": art.Category, "source": art.SourceName,
 		"url": art.URL, "rating": art.Importance, "tags": art.Tags,

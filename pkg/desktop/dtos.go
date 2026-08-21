@@ -36,6 +36,10 @@ type ArticleDTO struct {
 	Starred    bool     `json:"starred"`
 	Published  string   `json:"published,omitempty"`
 	FetchedAt  string   `json:"fetched_at"`
+	// StorySize is how many outlets ran this story, and StorySources who they
+	// are. 0/empty means nobody else covered it.
+	StorySize    int      `json:"story_size,omitempty"`
+	StorySources []string `json:"story_sources,omitempty"`
 }
 
 // NoteDTO is a knowledge-graph note.
@@ -136,6 +140,7 @@ func toArticleDTO(a *db.Article) *ArticleDTO {
 		Title: a.Title, Author: a.Author, ContentMD: a.ContentMD, Summary: a.Summary,
 		Category: a.Category, Tags: a.Tags, Importance: a.Importance,
 		Status: string(a.Status), Starred: a.Starred, Published: a.Published, FetchedAt: a.FetchedAt,
+		StorySize: a.StorySize, StorySources: a.StorySources,
 	}
 }
 

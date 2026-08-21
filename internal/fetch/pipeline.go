@@ -14,13 +14,18 @@ import (
 )
 
 // dedupHammingThreshold is the max Hamming distance for two articles to be
-// considered near-duplicates.
+// considered the same document. It catches a feed republishing a piece
+// verbatim; two newsrooms writing the same story is a different question, and
+// SameStory answers it.
 const dedupHammingThreshold = 3
 
 // Result reports what a fetch run did.
 type Result struct {
-	NewArticles    int      `json:"new_articles"`
-	Updated        int      `json:"updated"`
+	NewArticles int `json:"new_articles"`
+	Updated     int `json:"updated"`
+	// Grouped counts copies filed under a story that was already here — a
+	// second outlet running the same piece.
+	Grouped        int      `json:"grouped"`
 	Duplicates     int      `json:"duplicates"`
 	SourcesFetched int      `json:"sources_fetched"`
 	SourcesFailed  int      `json:"sources_failed"`
@@ -32,19 +37,31 @@ type Result struct {
 // Service runs the fetch pipeline: fetch → normalize → dedupe → persist, and
 // optionally extracts full article bodies in batch.
 type Service struct {
-	db    *db.DB
-	man   *sources.Manager
+	db     *db.DB
+	man    *sources.Manager
 	logger *log.Logger
 
-	extractor *extract.Service
-	extractLimit    int
-	extractWorkers  int
+	extractor      *extract.Service
+	extractLimit   int
+	extractWorkers int
 
 	maxAge time.Duration // 0 = unlimited
 
+	// The dedup caches map a fingerprint to the article that carries it, not
+	// merely to "seen": a copy has to know which story it belongs to.
 	mu         sync.RWMutex
-	recentHash map[uint64]bool
-	knownURLs  map[string]bool
+	recentHash map[uint64]int64
+	knownURLs  map[string]int64
+	// Headlines are matched by their words, indexed by token so a new item is
+	// only compared against the few articles that share one.
+	titles     map[int64]titleEntry
+	titleIndex map[string][]int64
+}
+
+// titleEntry is one recent headline and the story it belongs to.
+type titleEntry struct {
+	tokens []string
+	anchor int64
 }
 
 // NewService builds a fetch pipeline service.
@@ -53,8 +70,10 @@ func NewService(database *db.DB, man *sources.Manager, logger *log.Logger) (*Ser
 		db:         database,
 		man:        man,
 		logger:     logger,
-		recentHash: map[uint64]bool{},
-		knownURLs:  map[string]bool{},
+		recentHash: map[uint64]int64{},
+		knownURLs:  map[string]int64{},
+		titles:     map[int64]titleEntry{},
+		titleIndex: map[string][]int64{},
 	}
 	if err := s.warmDedup(); err != nil {
 		return nil, fmt.Errorf("warm dedup cache: %w", err)
@@ -79,8 +98,11 @@ func (s *Service) warmDedup() error {
 	defer cancel()
 
 	cutoff := time.Now().Add(-30 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	// The anchor is what a new copy joins, so a story already three deep does
+	// not fork into a second one.
 	rows, err := s.db.SQL().QueryContext(ctx, `
-		SELECT url, simhash FROM articles WHERE simhash != 0 AND fetched_at >= ?`, cutoff)
+		SELECT id, url, title, simhash, CASE WHEN story_id = 0 THEN id ELSE story_id END
+		FROM articles WHERE fetched_at >= ?`, cutoff)
 	if err != nil {
 		return err
 	}
@@ -90,18 +112,22 @@ func (s *Service) warmDedup() error {
 	defer s.mu.Unlock()
 	for rows.Next() {
 		var (
-			u string
-			h int64
+			id     int64
+			u      string
+			title  string
+			h      int64
+			anchor int64
 		)
-		if err := rows.Scan(&u, &h); err != nil {
+		if err := rows.Scan(&id, &u, &title, &h, &anchor); err != nil {
 			return err
 		}
 		if h != 0 {
-			s.recentHash[uint64(h)] = true
+			s.recentHash[uint64(h)] = anchor
 		}
 		if u != "" {
-			s.knownURLs[NormalizeURL(u)] = true
+			s.knownURLs[NormalizeURL(u)] = id
 		}
+		s.rememberTitle(id, title, anchor)
 	}
 	return rows.Err()
 }
@@ -162,14 +188,16 @@ func (s *Service) FetchAll(ctx context.Context) (*Result, error) {
 				inserted++
 			case ingestUpdated:
 				res.Updated++
-			case ingestDuplicate:
+			case ingestGrouped:
+				res.Grouped++
+			case ingestSkipped:
 				res.Duplicates++
 			}
 		}
 		res.NewArticles += inserted
 		if s.logger != nil {
-			s.logger.Printf("source %s: %d new, %d updated, %d dups",
-				src.Name, inserted, res.Updated, res.Duplicates)
+			s.logger.Printf("source %s: %d new, %d updated, %d joined a story, %d skipped",
+				src.Name, inserted, res.Updated, res.Grouped, res.Duplicates)
 		}
 	}
 
@@ -194,39 +222,43 @@ type ingestKind int
 const (
 	ingestNew ingestKind = iota
 	ingestUpdated
-	ingestDuplicate
+	ingestGrouped // another outlet's copy of a story already here
+	ingestSkipped // the same article again, or too old to want
 )
 
-// ingest normalizes, de-duplicates and persists a single item.
+// ingest normalizes, groups and persists a single item.
 func (s *Service) ingest(ctx context.Context, src *db.Source, it *sources.Item, now string) (ingestKind, error) {
 	url := NormalizeURL(it.URL)
 	if url == "" {
-		return ingestDuplicate, nil // no usable URL → skip
+		return ingestSkipped, nil // no usable URL → skip
 	}
 
 	// Drop stale archive items (e.g. a blog feed exposing its whole history).
 	if s.maxAge > 0 && !it.Published.IsZero() && time.Since(it.Published) > s.maxAge {
-		return ingestDuplicate, nil
+		return ingestSkipped, nil
 	}
 
-	// Cross-source dedup by URL.
+	// The same URL from two feeds is the same article, not a story: nothing to
+	// keep a second copy of.
 	s.mu.RLock()
 	seenURL := s.knownURLs[url]
 	s.mu.RUnlock()
-	if seenURL {
-		return ingestDuplicate, nil
+	if seenURL != 0 {
+		return ingestSkipped, nil
 	}
 
-	// Cross-source dedup by simhash over title + first bit of content.
+	// A different URL with the same fingerprint is another outlet running the
+	// same story. That copy is kept and filed under the first one: how many
+	// outlets picked a story up is the strongest signal the feed produces, and
+	// dropping the copies used to throw it away.
+	tokens := TitleTokens(it.Title)
 	sim := SimHash(strings.TrimSpace(it.Title) + " " + truncate(it.ContentMD, 400))
-	if sim != 0 {
-		s.mu.RLock()
-		dup := s.isNearDuplicate(sim)
-		s.mu.RUnlock()
-		if dup {
-			return ingestDuplicate, nil
-		}
+	s.mu.RLock()
+	anchor := s.storyOf(tokens)
+	if anchor == 0 && sim != 0 {
+		anchor = s.nearDuplicateOf(sim) // the same document, republished
 	}
+	s.mu.RUnlock()
 
 	na := db.NewArticle{
 		SourceID:    src.ID,
@@ -244,34 +276,104 @@ func (s *Service) ingest(ctx context.Context, src *db.Source, it *sources.Item, 
 		na.Title = url
 	}
 
-	id, created, err := db.NewArticleRepo(s.db).Upsert(ctx, na)
+	repo := db.NewArticleRepo(s.db)
+	id, created, err := repo.Upsert(ctx, na)
 	if err != nil {
 		return ingestNew, err
 	}
-	_ = id
-
-	s.mu.Lock()
-	if sim != 0 {
-		s.recentHash[sim] = true
+	if anchor != 0 && anchor != id {
+		if err := repo.JoinStory(ctx, id, anchor); err != nil {
+			return ingestNew, err
+		}
 	}
-	s.knownURLs[url] = true
+
+	story := anchor
+	if story == 0 {
+		story = id
+	}
+	s.mu.Lock()
+	s.rememberTitle(id, it.Title, story)
+	if sim != 0 {
+		// A copy points at the story, not at itself, so the next outlet to run
+		// it lands in the same one.
+		if anchor != 0 {
+			s.recentHash[sim] = anchor
+		} else {
+			s.recentHash[sim] = id
+		}
+	}
+	s.knownURLs[url] = id
 	s.mu.Unlock()
 
-	if created {
+	switch {
+	case anchor != 0 && anchor != id:
+		return ingestGrouped, nil
+	case created:
 		return ingestNew, nil
 	}
 	return ingestUpdated, nil
 }
 
-// isNearDuplicate reports whether sim is within threshold of a cached hash.
-// Caller holds the read lock.
-func (s *Service) isNearDuplicate(sim uint64) bool {
-	for h := range s.recentHash {
-		if HammingDistance(sim, h) <= dedupHammingThreshold {
-			return true
+// storyOf finds the story a headline belongs to: the closest recent headline
+// that passes SameStory, or 0 when nobody has reported it yet. Only articles
+// sharing a word are considered, so the cost is in the tokens, not in the
+// month of history. Caller holds the read lock.
+func (s *Service) storyOf(tokens []string) int64 {
+	if len(tokens) == 0 {
+		return 0
+	}
+	candidates := map[int64]bool{}
+	for _, w := range tokens {
+		for _, id := range s.titleIndex[w] {
+			candidates[id] = true
 		}
 	}
-	return false
+	best, bestScore := int64(0), 0.0
+	for id := range candidates {
+		entry, ok := s.titles[id]
+		if !ok || !SameStory(tokens, entry.tokens) {
+			continue
+		}
+		// The closest match wins, so a headline near two stories does not join
+		// whichever one the map happened to yield first.
+		if score := TitleSimilarity(tokens, entry.tokens); score > bestScore {
+			best, bestScore = entry.anchor, score
+		}
+	}
+	return best
+}
+
+// rememberTitle indexes a headline against the story it belongs to. Caller
+// holds the write lock (or owns the service, during warm-up).
+func (s *Service) rememberTitle(id int64, title string, anchor int64) {
+	tokens := TitleTokens(title)
+	if len(tokens) == 0 {
+		return
+	}
+	if _, seen := s.titles[id]; seen {
+		s.titles[id] = titleEntry{tokens: tokens, anchor: anchor}
+		return
+	}
+	s.titles[id] = titleEntry{tokens: tokens, anchor: anchor}
+	indexed := map[string]bool{}
+	for _, w := range tokens {
+		if indexed[w] {
+			continue
+		}
+		indexed[w] = true
+		s.titleIndex[w] = append(s.titleIndex[w], id)
+	}
+}
+
+// nearDuplicateOf returns the story an article belongs to, or 0 when it is the
+// first to report it. Caller holds the read lock.
+func (s *Service) nearDuplicateOf(sim uint64) int64 {
+	for h, anchor := range s.recentHash {
+		if HammingDistance(sim, h) <= dedupHammingThreshold {
+			return anchor
+		}
+	}
+	return 0
 }
 
 func truncate(s string, n int) string {

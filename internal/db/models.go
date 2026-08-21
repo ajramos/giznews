@@ -63,6 +63,15 @@ type Article struct {
 	Published   string        `json:"published,omitempty"` // RFC3339
 	FetchedAt   string        `json:"fetched_at"`
 	UpdatedAt   string        `json:"updated_at"`
+
+	// StoryID is the article this one duplicates — the first copy of the story
+	// to arrive. 0 means nobody else covered it. An article whose StoryID is its
+	// own ID is the one the story is filed under.
+	StoryID int64 `json:"story_id,omitempty"`
+	// StorySize is how many copies of the story exist, and StorySources the
+	// outlets that ran it. Both are read alongside the row, not stored.
+	StorySize    int      `json:"story_size,omitempty"`
+	StorySources []string `json:"story_sources,omitempty"`
 }
 
 // NewSource is the input when creating or updating a source.

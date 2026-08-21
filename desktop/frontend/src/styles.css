@@ -508,6 +508,12 @@ select option { background: var(--bg-panel); color: var(--fg); }
 .article-meta { display: flex; gap: 8px; align-items: center; margin-top: 2px; flex-wrap: wrap; }
 .article-meta .src { font-size: 11px; color: var(--fg-dim); }
 .article-meta .time { font-size: 11px; color: var(--fg-dim); }
+/* How many other outlets ran the same story: the one signal in the list that
+   nobody wrote on purpose. */
+.article-meta .src-count {
+  font-size: 10px; padding: 0 6px; border-radius: 999px;
+  color: var(--accent); border: 1px solid var(--accent-dim);
+}
 .cat-chip {
   font-size: 10px; padding: 0 7px; border-radius: 999px; border: 1px solid transparent;
 }

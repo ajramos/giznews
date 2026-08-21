@@ -45,13 +45,18 @@ func (a *App) Fetch(ctx context.Context) (*FetchResult, error) {
 		}
 		result = &FetchResult{
 			NewArticles:    res.NewArticles,
+			Grouped:        res.Grouped,
 			Updated:        res.Updated,
 			SourcesFetched: res.SourcesFetched,
 			SourcesFailed:  res.SourcesFailed,
 			Extracted:      res.Extracted,
 			ElapsedMs:      res.ElapsedMs,
 		}
-		p.Message(fmt.Sprintf("%d new · %d extracted", res.NewArticles, res.Extracted))
+		msg := fmt.Sprintf("%d new · %d extracted", res.NewArticles, res.Extracted)
+		if res.Grouped > 0 {
+			msg += fmt.Sprintf(" · %d joined a story", res.Grouped)
+		}
+		p.Message(msg)
 		return nil
 	})
 	if err != nil {

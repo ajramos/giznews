@@ -58,6 +58,11 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
         <h1>{article.title}</h1>
         <div className="reader-meta">
           {article.sourceName && <span className="src">{article.sourceName}</span>}
+          {(article.storySize ?? 0) > 1 && (
+            <span className="src-count" title={(article.storySources ?? []).join(", ")}>
+              covered by {article.storySize} outlets
+            </span>
+          )}
           {article.author && <span>{article.author}</span>}
           {(article.published || article.fetchedAt) && (
             <span className="time" title={article.published || article.fetchedAt}>{formatDate(article.published || article.fetchedAt)}</span>

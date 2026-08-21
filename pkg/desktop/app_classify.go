@@ -25,12 +25,14 @@ func (a *App) Classify(ctx context.Context, limit int) (*ClassifyResult, error) 
 			return err
 		}
 		svc := classify.NewService(a.db, classify.Options{
-			Limit:       limit,
-			BatchSize:   a.cfg.Classify.BatchSize,
-			Concurrency: a.cfg.Classify.Concurrency,
-			UseLLM:      a.cfg.Classify.UseLLM && prov != nil,
-			Model:       a.cfg.LLM.Model,
-			Language:    a.cfg.LLM.Language,
+			Limit:           limit,
+			BatchSize:       a.cfg.Classify.BatchSize,
+			Concurrency:     a.cfg.Classify.Concurrency,
+			CoverageSources: a.cfg.Classify.CoverageSources,
+			CoverageFloor:   a.cfg.Classify.CoverageFloor,
+			UseLLM:          a.cfg.Classify.UseLLM && prov != nil,
+			Model:           a.cfg.LLM.Model,
+			Language:        a.cfg.LLM.Language,
 			OnProgress: func(phase string, done, total int) {
 				p.Progress(phase, done, total)
 			},
@@ -71,12 +73,14 @@ func (a *App) ClassifyArticles(ctx context.Context, ids []int64) (*ClassifyResul
 			return err
 		}
 		svc := classify.NewService(a.db, classify.Options{
-			Limit:       0,
-			BatchSize:   a.cfg.Classify.BatchSize,
-			Concurrency: a.cfg.Classify.Concurrency,
-			UseLLM:      a.cfg.Classify.UseLLM && prov != nil,
-			Model:       a.cfg.LLM.Model,
-			Language:    a.cfg.LLM.Language,
+			Limit:           0,
+			BatchSize:       a.cfg.Classify.BatchSize,
+			Concurrency:     a.cfg.Classify.Concurrency,
+			CoverageSources: a.cfg.Classify.CoverageSources,
+			CoverageFloor:   a.cfg.Classify.CoverageFloor,
+			UseLLM:          a.cfg.Classify.UseLLM && prov != nil,
+			Model:           a.cfg.LLM.Model,
+			Language:        a.cfg.LLM.Language,
 			OnProgress: func(phase string, done, total int) {
 				p.Progress(phase, done, total)
 			},

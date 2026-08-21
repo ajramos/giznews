@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -376,4 +376,16 @@ CREATE TABLE IF NOT EXISTS kb_themes (
 	updated_at  TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_kb_themes_seed ON kb_themes(seed);
+`
+
+// schemaV13 groups near-duplicate articles into stories.
+//
+// Cross-source duplicates used to be dropped at ingest, which threw away the
+// strongest importance signal the feed produces: six outlets covering the same
+// launch within two hours *is* the news. Now every copy is kept and points at
+// the article that arrived first — story_id 0 means an article nobody else
+// covered, a story of one.
+const schemaV13 = `
+ALTER TABLE articles ADD COLUMN story_id INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_articles_story ON articles(story_id);
 `

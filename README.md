@@ -49,7 +49,7 @@ go run ./cmd/giznews sources add --name "HN RSS" --url https://news.ycombinator.
 go run ./cmd/giznews sources add --name "DeepMind" --url https://deepmind.google/blog/rss.xml --group labs
 
 # 3. Pipeline completo
-go run ./cmd/giznews fetch      # + extrae cuerpos en batch
+go run ./cmd/giznews fetch      # + extrae cuerpos en batch, agrupa historias
 go run ./cmd/giznews rules import docs/rules/noise.json       # prefiltro: mata el ruido
 go run ./cmd/giznews rules import docs/rules/high-value.json  # y marca lo que va a ★3
 go run ./cmd/giznews classify --dry-run  # qué reclama cada regla, sin clasificar nada

@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 12 {
-		t.Fatalf("user_version = %d, want 12", version)
+	if version != 13 {
+		t.Fatalf("user_version = %d, want 13", version)
 	}
 }
 
@@ -78,6 +78,14 @@ func TestMigrateFromV1(t *testing.T) {
 	if _, err := d.sql.Exec("ALTER TABLE kb_notes DROP COLUMN content_hash;"); err != nil {
 		t.Fatal(err)
 	}
+	// v13 added story_id; same treatment, or the replay hits a column that is
+	// already there.
+	if _, err := d.sql.Exec("DROP INDEX IF EXISTS idx_articles_story;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN story_id;"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
 		t.Fatal(err)
 	}
@@ -92,8 +100,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 12 {
-		t.Fatalf("user_version after reopen = %d, want 12", version)
+	if version != 13 {
+		t.Fatalf("user_version after reopen = %d, want 13", version)
 	}
 	// Columns must exist now.
 	var n int
@@ -154,6 +162,14 @@ func TestMigrateV8BackfillsGraph(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := d.sql.Exec("ALTER TABLE kb_notes DROP COLUMN content_hash;"); err != nil {
+		t.Fatal(err)
+	}
+	// v13 added story_id; strip it too, or the replay hits a column that is
+	// already there.
+	if _, err := d.sql.Exec("DROP INDEX IF EXISTS idx_articles_story;"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN story_id;"); err != nil {
 		t.Fatal(err)
 	}
 	// Three atoms citing "rag" (never promoted) and an existing "mamba" electron

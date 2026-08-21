@@ -54,6 +54,20 @@ Everything must be green before committing.
 - Article states: `unread | read | archived | starred` — all logical, nothing
   is physically deleted. Archiving offers undo.
 
+## Stories
+
+Near-duplicate articles are **grouped, not dropped**: `articles.story_id` points
+at the first copy that arrived (0 = nobody else covered it), and everything
+downstream works on that anchor (`storyAnchor` in `internal/db/articles.go`) —
+one list row, one classification, one atom, however many outlets ran it. How
+many did is an importance signal in its own right (`classify.coverage_sources`
+/ `coverage_floor`), and the atom cites every outlet.
+
+Matching is by headline tokens (`fetch.SameStory`), not simhash: one extra word
+moves a simhash 11-14 bits on a headline. Simhash stays for the same document
+republished. The matcher errs towards *not* grouping — a missed pair is a
+visible duplicate row, a false pair hides an article.
+
 ## Classification prefilter
 
 Rules run before the LLM: regex over `title + author + URL`, **first match
