@@ -38,6 +38,16 @@ test.describe("UI render", () => {
     await expect(page.locator(".reader-head h1")).toHaveText(firstTitle);
   });
 
+  test("a story several outlets ran shows how many", async ({ page }) => {
+    await gotoApp(page);
+    const row = page.locator(".article-row").first();
+    await expect(row.locator(".src-count")).toHaveText("+3 more");
+    await expect(row.locator(".src-count")).toHaveAttribute("title", /The Verge/);
+    // And the reader names them.
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".reader-meta .src-count")).toContainText("covered by 4 outlets");
+  });
+
   test("reader shows AI summary when present", async ({ page }) => {
     await gotoApp(page);
     await page.keyboard.press("Enter");

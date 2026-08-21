@@ -76,11 +76,12 @@ type API interface {
 
 // FetchResult reports what a fetch run ingested.
 type FetchResult struct {
-	NewArticles    int `json:"new_articles"`
-	Updated        int `json:"updated"`
-	SourcesFetched int `json:"sources_fetched"`
-	SourcesFailed  int `json:"sources_failed"`
-	Extracted      int `json:"extracted"`
+	NewArticles    int   `json:"new_articles"`
+	Updated        int   `json:"updated"`
+	Grouped        int   `json:"grouped"`
+	SourcesFetched int   `json:"sources_fetched"`
+	SourcesFailed  int   `json:"sources_failed"`
+	Extracted      int   `json:"extracted"`
 	ElapsedMs      int64 `json:"elapsed_ms"`
 }
 

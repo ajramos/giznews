@@ -174,6 +174,11 @@ export function ArticleList({ articles, selectedIndex, loading, archived, starre
                   <span className="article-meta">
                     {a.category && <span className={`cat-chip ${catClass(a.category)}`}>{a.category}</span>}
                     <span className="src">{a.sourceName}</span>
+                    {(a.storySize ?? 0) > 1 && (
+                      <span className="src-count" title={`Also covered by: ${(a.storySources ?? []).join(", ")}`}>
+                        +{(a.storySize ?? 1) - 1} more
+                      </span>
+                    )}
                     <span className="time" title={a.published || a.fetchedAt}>{timeAgo(a.published || a.fetchedAt)}</span>
                   </span>
                 </span>

@@ -19,6 +19,7 @@ type Plan struct {
 	Archived int        `json:"archived"`
 	Kept     int        `json:"kept"`
 	Boosted  int        `json:"boosted"`
+	Covered  int        `json:"covered"` // raised by how many outlets ran the story
 	ToLLM    int        `json:"to_llm"`
 	Batches  int        `json:"batches"`
 	Rules    []RulePlan `json:"rules"`
@@ -73,6 +74,10 @@ func (s *Service) Preview(ctx context.Context) (*Plan, error) {
 
 	for _, a := range articles {
 		d := Decide(rules, a)
+		covered := s.coverageFloor(a) > 0
+		if covered {
+			plan.Covered++
+		}
 		if d.Floor > 0 {
 			plan.Boosted++
 			count(d.BoostedBy, a.Title)
@@ -80,14 +85,14 @@ func (s *Service) Preview(ctx context.Context) (*Plan, error) {
 		// A boost decides the article's fate on its own, so the rule that would
 		// otherwise have acted is not counted: every article appears once in a
 		// plan, under whatever actually happens to it.
-		if d.Action != nil && d.Floor == 0 {
+		if d.Action != nil && d.Floor == 0 && !covered {
 			count(d.ActionBy, a.Title)
 		}
-		if d.ToLLM() {
+		if d.ToLLM() || covered {
 			plan.ToLLM++
 			switch {
-			case d.Floor > 0:
-				// counted as boosted already
+			case d.Floor > 0 || covered:
+				// counted above, as boosted or as widely covered
 			case d.Action != nil && d.Action.Keep:
 				plan.Kept++
 			default:

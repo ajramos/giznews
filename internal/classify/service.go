@@ -13,13 +13,18 @@ import (
 
 // Options configures a classification run.
 type Options struct {
-	Limit     int // max articles per run (0 = config default)
-	BatchSize int // articles per LLM call (0 = config default)
+	Limit       int // max articles per run (0 = config default)
+	BatchSize   int // articles per LLM call (0 = config default)
 	Concurrency int // parallel LLM batches (0 = sequential)
-	AgeDays   int // only articles fetched within this window
-	UseLLM    bool
-	Model     string
-	Language  string // ISO 639-1 for LLM-generated summaries/headlines
+	AgeDays     int // only articles fetched within this window
+	// CoverageSources is how many outlets running the same story make it
+	// important on its own; CoverageFloor is the importance it then gets at
+	// least. 0 sources disables it.
+	CoverageSources int
+	CoverageFloor   int
+	UseLLM          bool
+	Model           string
+	Language        string // ISO 639-1 for LLM-generated summaries/headlines
 	// OnProgress, when set, reports phase progress ("rules" or "llm").
 	OnProgress func(phase string, done, total int)
 }
@@ -83,8 +88,17 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 	floors := map[int64]int{} // article -> importance floor a boost rule gave it
 	for _, a := range articles {
 		d := Decide(rules, a)
-		if d.Floor > 0 {
-			floors[a.ID] = d.Floor
+		floor := d.Floor
+		if c := s.coverageFloor(a); c > floor {
+			floor = c
+			res.ByCoverage++
+		}
+		if floor > 0 {
+			floors[a.ID] = floor
+		}
+		if floor > 0 {
+			llmBatch = append(llmBatch, a) // covered widely, or boosted: the model still sees it
+			continue
 		}
 		if !d.ToLLM() {
 			if err := s.apply(ctx, repo, a, d.Action); err != nil {
@@ -129,6 +143,19 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 	res.Boosted = boosted
 
 	return res, nil
+}
+
+// coverageFloor is the importance a story earns purely by how many outlets ran
+// it. Six newsrooms deciding the same morning that something matters is a
+// judgement no regex can fake and no summary can convey.
+func (s *Service) coverageFloor(a *db.Article) int {
+	if s.opts.CoverageSources <= 0 || s.opts.CoverageFloor <= 0 {
+		return 0
+	}
+	if a.StorySize < s.opts.CoverageSources {
+		return 0
+	}
+	return s.opts.CoverageFloor
 }
 
 // applyFloors raises the importance of the articles a boost rule claimed, once

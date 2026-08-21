@@ -30,10 +30,12 @@ func runClassify(args []string, logger *log.Logger) {
 	}
 
 	svc := classify.NewService(d, classify.Options{
-		BatchSize: cfg.Classify.BatchSize,
-		AgeDays:   14,
-		UseLLM:    cfg.Classify.UseLLM && prov != nil,
-		Model:     cfg.LLM.Model,
+		BatchSize:       cfg.Classify.BatchSize,
+		AgeDays:         14,
+		CoverageSources: cfg.Classify.CoverageSources,
+		CoverageFloor:   cfg.Classify.CoverageFloor,
+		UseLLM:          cfg.Classify.UseLLM && prov != nil,
+		Model:           cfg.LLM.Model,
 	}, prov, logger)
 
 	if hasFlag(args, "dry-run") {
@@ -51,6 +53,12 @@ func runClassify(args []string, logger *log.Logger) {
 	}
 	fmt.Printf("classified %d articles (rules: %d, llm: %d, skipped-no-llm: %d)\n",
 		res.Classified, res.ByRules, res.ByLLM, res.SkippedNoLLM)
+	if res.ByCoverage > 0 {
+		fmt.Printf("  %d story(ies) met the coverage floor\n", res.ByCoverage)
+	}
+	if res.Boosted > 0 {
+		fmt.Printf("  %d article(s) raised to their floor\n", res.Boosted)
+	}
 	for _, e := range res.Errors {
 		fmt.Printf("  ! %s\n", e)
 	}
@@ -79,6 +87,9 @@ func printClassifyPlan(p *classify.Plan) {
 	}
 	if p.Boosted > 0 {
 		fmt.Printf("%d boosted: classified by the model, then raised to their floor.\n", p.Boosted)
+	}
+	if p.Covered > 0 {
+		fmt.Printf("%d raised by coverage: enough outlets ran the same story.\n", p.Covered)
 	}
 	fmt.Printf("\n%d would go to the model, in %d batch(es):\n", p.ToLLM, p.Batches)
 	for _, title := range p.Unmatched {

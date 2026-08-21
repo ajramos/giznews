@@ -46,6 +46,11 @@ export function Reader({ article, summarizing, contentLoading, llmAvailable, onS
         <h1>{article.title}</h1>
         <div className="reader-meta">
           {article.sourceName && <span className="src">{article.sourceName}</span>}
+          {(article.storySize ?? 0) > 1 && (
+            <span className="src-count" title={(article.storySources ?? []).join(", ")}>
+              covered by {article.storySize} outlets
+            </span>
+          )}
           {article.author && <span>{article.author}</span>}
           <span title={`Importance: ${article.importance}/3`}>{stars(article.importance)}</span>
           {article.category && <span className={`cat-chip ${catClass(article.category)}`}>{article.category}</span>}

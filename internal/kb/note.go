@@ -117,9 +117,17 @@ type atomRef struct {
 	Date string
 }
 
+// atomSource is one outlet that ran the story an atom is about.
+type atomSource struct {
+	Name string
+	URL  string
+}
+
 // BuildAtom produces the Atom note for an article.
-// concepts are the electron slugs this atom links out to.
-func BuildAtom(a *db.Article, concepts []string) string {
+// concepts are the electron slugs this atom links out to, and coverage the
+// other outlets that ran the same story — how many picked it up is part of what
+// the note is worth, and it is the only place that record survives.
+func BuildAtom(a *db.Article, concepts []string, coverage []atomSource) string {
 	fm := frontmatter{
 		Type:     "atom",
 		Created:  noteTime(articleTime(a)),
@@ -147,7 +155,14 @@ func BuildAtom(a *db.Article, concepts []string) string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("## Fuente\n[" + a.SourceName + "](" + a.URL + ")\n\n")
+	b.WriteString("## Fuente\n[" + a.SourceName + "](" + a.URL + ")\n")
+	if len(coverage) > 0 {
+		b.WriteString(fmt.Sprintf("\nAlso covered by %d other outlet(s):\n", len(coverage)))
+		for _, c := range coverage {
+			b.WriteString("- [" + c.Name + "](" + c.URL + ")\n")
+		}
+	}
+	b.WriteString("\n")
 
 	if len(concepts) > 0 {
 		b.WriteString("## Conexiones\n")

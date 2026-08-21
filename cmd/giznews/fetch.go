@@ -34,7 +34,8 @@ func runFetch(args []string, logger *log.Logger) {
 	}
 
 	fmt.Printf("fetch complete in %dms\n", res.ElapsedMs)
-	fmt.Printf("  new: %d   updated: %d   duplicates: %d   extracted: %d\n", res.NewArticles, res.Updated, res.Duplicates, res.Extracted)
+	fmt.Printf("  new: %d   updated: %d   joined a story: %d   skipped: %d   extracted: %d\n",
+		res.NewArticles, res.Updated, res.Grouped, res.Duplicates, res.Extracted)
 	fmt.Printf("  sources ok: %d   failed: %d\n", res.SourcesFetched, res.SourcesFailed)
 	for _, e := range res.Errors {
 		fmt.Printf("  ! %s\n", e)

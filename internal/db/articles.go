@@ -23,7 +23,16 @@ func NewArticleRepo(db *DB) *ArticleRepo {
 const articleColumns = `
 	a.id, a.source_id, s.name, a.guid, a.url, a.title, a.author,
 	a.content_html, a.content_md, a.summary, a.category, a.tags, a.entities,
-	a.importance, a.simhash, a.status, a.starred, a.published, a.fetched_at, a.updated_at`
+	a.importance, a.simhash, a.status, a.starred, a.published, a.fetched_at, a.updated_at,
+	a.story_id,
+	CASE WHEN a.story_id = 0 THEN 1
+	     ELSE (SELECT COUNT(*) FROM articles m WHERE m.story_id = a.story_id) END`
+
+// storyAnchor selects the copy a story is filed under: the first one that
+// arrived, or an article nobody else covered. Everything downstream — the list,
+// the classifier, the knowledge base — works on anchors, so a story costs one
+// row of attention however many outlets ran it.
+const storyAnchor = `(a.story_id = 0 OR a.story_id = a.id)`
 
 const articleFrom = `
 	FROM articles a
@@ -157,6 +166,7 @@ type ListOptions struct {
 	Unclassified    bool          // only articles not yet classified
 	Summarized      bool          // only articles with an AI summary
 	Query           string        // LIKE filter on title/author; empty = all
+	AllCopies       bool          // include every copy of a story, not just its anchor
 	Limit           int           // 0 = default 200
 	Offset          int
 }
@@ -209,6 +219,13 @@ func (r *ArticleRepo) List(ctx context.Context, opts ListOptions) ([]*Article, e
 		args = append(args, q, q)
 	}
 
+	// One row per story, not per copy. Duplicates used to be dropped at ingest,
+	// so this keeps the list exactly as long as it was — with the difference
+	// that the copies are still there to be counted and named.
+	if !opts.AllCopies {
+		conds = append(conds, storyAnchor)
+	}
+
 	where := ""
 	if len(conds) > 0 {
 		where = " WHERE " + strings.Join(conds, " AND ")
@@ -234,7 +251,81 @@ func (r *ArticleRepo) List(ctx context.Context, opts ListOptions) ([]*Article, e
 		}
 		out = append(out, a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := r.attachStorySources(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// attachStorySources names the outlets that ran each story. Only rows that
+// actually have copies are asked about, so a feed with no duplicates pays
+// nothing for the feature.
+func (r *ArticleRepo) attachStorySources(ctx context.Context, articles []*Article) error {
+	for _, a := range articles {
+		if a.StorySize < 2 || a.StoryID == 0 {
+			continue
+		}
+		rows, err := r.db.sql.QueryContext(ctx, `
+			SELECT DISTINCT s.name FROM articles m
+			LEFT JOIN sources s ON s.id = m.source_id
+			WHERE m.story_id = ? AND s.name != '' ORDER BY s.name`, a.StoryID)
+		if err != nil {
+			return fmt.Errorf("story sources: %w", err)
+		}
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				rows.Close()
+				return err
+			}
+			a.StorySources = append(a.StorySources, name)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		rows.Close()
+	}
+	return nil
+}
+
+// StoryMembers returns every copy of a story, oldest first — the anchor plus
+// everyone who ran it after.
+func (r *ArticleRepo) StoryMembers(ctx context.Context, anchorID int64) ([]*Article, error) {
+	rows, err := r.db.sql.QueryContext(ctx,
+		"SELECT "+articleColumns+articleFrom+" WHERE a.story_id = ? ORDER BY a.id", anchorID)
+	if err != nil {
+		return nil, fmt.Errorf("story members: %w", err)
+	}
+	defer rows.Close()
+	var out []*Article
+	for rows.Next() {
+		a, err := scanArticle(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
 	return out, rows.Err()
+}
+
+// JoinStory files an article as another copy of anchorID's story, opening the
+// story if the anchor was still on its own.
+func (r *ArticleRepo) JoinStory(ctx context.Context, id, anchorID int64) error {
+	now := Now()
+	if _, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET story_id = id, updated_at = ? WHERE id = ? AND story_id = 0", now, anchorID); err != nil {
+		return fmt.Errorf("open story: %w", err)
+	}
+	res, err := r.db.sql.ExecContext(ctx,
+		"UPDATE articles SET story_id = ?, updated_at = ? WHERE id = ?", anchorID, now, id)
+	if err != nil {
+		return fmt.Errorf("join story: %w", err)
+	}
+	return checkAffected(res, "join story")
 }
 
 // SetStatus updates the triage status of an article.
@@ -307,7 +398,7 @@ func (r *ArticleRepo) ListUnclassified(ctx context.Context, limit, ageDays int) 
 	cutoff := time.Now().Add(-time.Duration(ageDays) * 24 * time.Hour).UTC().Format(time.RFC3339)
 	rows, err := r.db.sql.QueryContext(ctx, `
 		SELECT `+articleColumns+articleFrom+`
-		WHERE a.status != 'archived' AND a.classified = 0 AND a.fetched_at >= ?
+		WHERE a.status != 'archived' AND a.classified = 0 AND `+storyAnchor+` AND a.fetched_at >= ?
 		  AND (a.published IS NULL OR a.published = '' OR a.published >= ?)
 		ORDER BY a.published IS NULL, a.published DESC
 		LIMIT ?`, cutoff, cutoff, limit)
@@ -398,7 +489,7 @@ func (r *ArticleRepo) ListForKB(ctx context.Context, importanceMin, ageDays, lim
 	cutoff := time.Now().Add(-time.Duration(ageDays) * 24 * time.Hour).UTC().Format(time.RFC3339)
 	rows, err := r.db.sql.QueryContext(ctx, `
 		SELECT `+articleColumns+articleFrom+`
-		WHERE a.status != 'archived' AND a.classified = 1 AND a.importance >= ?
+		WHERE a.status != 'archived' AND a.classified = 1 AND `+storyAnchor+` AND a.importance >= ?
 		  AND a.fetched_at >= ?
 		  AND NOT EXISTS (
 			SELECT 1 FROM ingests i WHERE i.ref_type = 'article' AND i.ref_id = CAST(a.id AS TEXT)
@@ -486,7 +577,7 @@ func (r *ArticleRepo) ListPending(ctx context.Context, limit int) ([]*Article, e
 func (r *ArticleRepo) CountUnclassified(ctx context.Context) (int, error) {
 	var n int
 	err := r.db.sql.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM articles WHERE status != 'archived' AND classified = 0").Scan(&n)
+		`SELECT COUNT(*) FROM articles a WHERE a.status != 'archived' AND a.classified = 0 AND `+storyAnchor).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count unclassified: %w", err)
 	}
@@ -536,7 +627,7 @@ func (r *ArticleRepo) ListPendingExtract(ctx context.Context, limit int) ([]*Art
 	}
 	rows, err := r.db.sql.QueryContext(ctx, `
 		SELECT `+articleColumns+articleFrom+`
-		WHERE a.extracted = 0 AND LENGTH(a.content_md) < 200 AND a.url != ''
+		WHERE a.extracted = 0 AND LENGTH(a.content_md) < 200 AND a.url != '' AND `+storyAnchor+`
 		ORDER BY a.importance DESC, a.fetched_at DESC
 		LIMIT ?`, limit)
 	if err != nil {
@@ -579,6 +670,7 @@ func scanArticle(row scanner) (*Article, error) {
 		&a.ID, &a.SourceID, &a.SourceName, &a.GUID, &a.URL, &a.Title, &a.Author,
 		&a.ContentHTML, &a.ContentMD, &a.Summary, &a.Category, &tagsRaw, &entRaw,
 		&a.Importance, &simHash, &a.Status, &starred, &a.Published, &a.FetchedAt, &a.UpdatedAt,
+		&a.StoryID, &a.StorySize,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound

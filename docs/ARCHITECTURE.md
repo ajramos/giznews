@@ -33,7 +33,7 @@ flowchart LR
 ```
 
 ```
-fetch ──► normalize + dedupe (simhash/URL) ──► SQLite
+fetch ──► normalize + agrupar historias (titular/simhash/URL) ──► SQLite
    │
    ├──► extract (batch, readability → markdown, cacheado en content_md)
    │
@@ -50,6 +50,34 @@ digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digest
    │
 search ──► FTS5 (keyword) ⊕ embeddings (Ollama, coseno) con RRF
 ```
+
+## Historias, no recortes
+
+Seis medios cubriendo el mismo lanzamiento no son seis artículos, y tampoco uno:
+son **una historia con seis copias**, y cuántos la recogieron es la señal de
+importancia más fuerte que produce el feed. Antes las copias se descartaban en el
+ingest, así que esa señal se destruía antes de que nadie pudiera verla.
+
+Ahora se guardan todas. `articles.story_id` apunta a la primera copia que llegó
+—0 significa que nadie más la cubrió— y todo lo de aguas abajo trabaja sobre esa
+primera copia (`storyAnchor`): la lista muestra una fila, el clasificador ve un
+artículo, el vault escribe un atom. Una historia cuesta una unidad de atención,
+la cubran los medios que la cubran, pero el atom cita a todos.
+
+El emparejado **no** usa el simhash. El simhash es para documentos: en un titular
+de nueve palabras, añadir una sola (`… today`, `… rules`) lo mueve 11-14 bits,
+mucho más allá de cualquier umbral que no junte también historias distintas — y
+dos redacciones jamás escriben las mismas palabras. Lo que sí comparten dos
+crónicas del mismo hecho son los sustantivos, así que `SameStory` compara los
+*conjuntos de palabras* del titular (Jaccard, sin las palabras que todo titular
+tiene) con dos guardas: un mínimo de palabras compartidas —"Apple lleva la IA al
+iPhone" y "…al iPad" se solapan igual que una reescritura real y difieren en la
+única palabra que importa— y que las versiones coincidan (GPT-5 no es GPT-4.5).
+El simhash se queda para lo que sí sabe hacer: el mismo documento republicado.
+
+Ante la duda, no agrupa: perder un par cuesta una fila duplicada que el lector ve
+e ignora; agrupar de más esconde un artículo detrás de otro, donde nadie lo va a
+buscar.
 
 ## El prefiltro determinista (⚡)
 

@@ -35,6 +35,7 @@ type Result struct {
 	Classified   int      `json:"classified"`
 	ByRules      int      `json:"by_rules"`
 	Boosted      int      `json:"boosted"`
+	ByCoverage   int      `json:"by_coverage"`
 	ByLLM        int      `json:"by_llm"`
 	SkippedNoLLM int      `json:"skipped_no_llm"`
 	Batches      int      `json:"batches"`

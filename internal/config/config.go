@@ -153,6 +153,12 @@ type ClassifyConfig struct {
 	Concurrency int `json:"concurrency"`
 	// ImportanceThreshold: articles at/above this importance surface in the UI.
 	ImportanceThreshold int `json:"importance_threshold"`
+	// CoverageSources is how many outlets must run the same story before it is
+	// treated as important on that basis alone — the one signal a regex cannot
+	// fake and the model cannot see. 0 disables it.
+	CoverageSources int `json:"coverage_sources"`
+	// CoverageFloor is the importance such a story gets at least.
+	CoverageFloor int `json:"coverage_floor"`
 }
 
 // KBConfig configures a knowledge-graph build. The defaults suit a personal
@@ -230,6 +236,8 @@ func DefaultConfig() *Config {
 			BatchSize:           20,
 			Concurrency:         2,
 			ImportanceThreshold: 2,
+			CoverageSources:     3,
+			CoverageFloor:       2,
 		},
 		Fetch: FetchConfig{
 			MaxAgeDays: 30,

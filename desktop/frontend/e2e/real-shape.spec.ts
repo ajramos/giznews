@@ -13,7 +13,7 @@ const FAKE = `
     ],
     ListArticles: async (opts) => {
       const items = [
-        { id: 1, source_id: 1, source_name: "HN RSS", url: "https://x.com/1", title: "Wire-shape article one", content_md: "# One\\n\\nBody with enough content to render markdown in the reader panel.", summary: "s1", importance: 3, status: "unread", starred: false, category: "models", tags: ["ai"], published: new Date().toISOString(), fetched_at: new Date().toISOString() },
+        { id: 1, source_id: 1, source_name: "HN RSS", url: "https://x.com/1", title: "Wire-shape article one", content_md: "# One\\n\\nBody with enough content to render markdown in the reader panel.", summary: "s1", importance: 3, status: "unread", starred: false, category: "models", tags: ["ai"], published: new Date().toISOString(), fetched_at: new Date().toISOString(), story_size: 3, story_sources: ["HN RSS", "DeepMind", "Reuters"] },
         { id: 2, source_id: 2, source_name: "DeepMind", url: "https://x.com/2", title: "Wire-shape article two", content_md: "", importance: 1, status: "read", starred: true, category: "tools", tags: [], published: new Date().toISOString(), fetched_at: new Date().toISOString() },
       ];
       return opts && opts.source_id ? items.filter(i => i.source_id === opts.source_id) : items;
@@ -46,6 +46,8 @@ test("real Wails snake_case wire shape renders correctly", async ({ page }) => {
   await expect(page.locator(".article-row")).toHaveCount(2);
   await expect(page.locator(".article-row").first()).toContainText("Wire-shape article one");
   await expect(page.locator(".list-head .view-count").first()).toHaveText("1");
+  // story_size / story_sources map through to the coverage badge
+  await expect(page.locator(".article-row").first().locator(".src-count")).toHaveText("+2 more");
   // starred field maps through (article two is starred + read, stays in Active)
   await expect(page.locator(".article-row .star-badge")).toHaveCount(1);
   // LLM enabled + reachable → green pill with provider name

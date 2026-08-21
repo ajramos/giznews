@@ -258,7 +258,7 @@ func (s *Service) Preview(ctx context.Context) (*BuildPreview, error) {
 		if err != nil {
 			return nil, err
 		}
-		if BuildAtom(a, links) != note.Content {
+		if BuildAtom(a, links, s.storyCoverage(ctx, a)) != note.Content {
 			out.StaleAtoms++
 		}
 	}

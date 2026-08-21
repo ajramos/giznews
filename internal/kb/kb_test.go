@@ -37,7 +37,7 @@ func TestBuildAtom(t *testing.T) {
 		Importance: 3, Category: "models", Summary: "Big release.",
 		Tags: []string{"gpt-5"}, Entities: []db.Entity{{Name: "OpenAI", Type: "org"}},
 	}
-	content := BuildAtom(a, []string{"openai"})
+	content := BuildAtom(a, []string{"openai"}, nil)
 
 	if !strings.HasPrefix(content, "---\ntype: atom\n") {
 		t.Fatalf("missing frontmatter:\n%s", content)
@@ -985,7 +985,7 @@ func TestAtomFrontmatterParses(t *testing.T) {
 		Tags:       []string{"anthropic", "#policy", "cost: high"},
 		Published:  "2026-03-04T07:30:00Z",
 	}
-	content := BuildAtom(a, []string{"anthropic"})
+	content := BuildAtom(a, []string{"anthropic"}, nil)
 
 	block, _, found := strings.Cut(strings.TrimPrefix(content, "---\n"), "\n---\n")
 	if !found {
@@ -1020,10 +1020,10 @@ func TestAtomFrontmatterParses(t *testing.T) {
 // Without a publication date the fetch time stands in, and only then the clock.
 func TestAtomDateFallsBackToFetch(t *testing.T) {
 	a := &db.Article{Title: "T", URL: "u", FetchedAt: "2026-05-06T12:00:00Z"}
-	if got := BuildAtom(a, nil); !strings.Contains(got, "created: \"2026-05-06 12:00\"") {
+	if got := BuildAtom(a, nil, nil); !strings.Contains(got, "created: \"2026-05-06 12:00\"") {
 		t.Fatalf("created not taken from fetched_at:\n%s", got)
 	}
-	bare := BuildAtom(&db.Article{Title: "T", URL: "u"}, nil)
+	bare := BuildAtom(&db.Article{Title: "T", URL: "u"}, nil, nil)
 	if !strings.Contains(bare, "created: ") {
 		t.Fatalf("missing created:\n%s", bare)
 	}
