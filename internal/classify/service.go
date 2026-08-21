@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ajramos/giznews/internal/db"
+	"github.com/ajramos/giznews/internal/learn"
 	"github.com/ajramos/giznews/internal/llm"
 )
 
@@ -22,9 +23,13 @@ type Options struct {
 	// least. 0 sources disables it.
 	CoverageSources int
 	CoverageFloor   int
-	UseLLM          bool
-	Model           string
-	Language        string // ISO 639-1 for LLM-generated summaries/headlines
+	// Learn applies what `giznews learn` worked out from the reader's own
+	// history; MaxDelta bounds how far it may move anything.
+	Learn    bool
+	MaxDelta int
+	UseLLM   bool
+	Model    string
+	Language string // ISO 639-1 for LLM-generated summaries/headlines
 	// RulesOnly applies the deterministic rules and stops, leaving every
 	// article no rule resolved — keep, boost and unmatched — unclassified for
 	// a later LLM run. Boost and coverage floors are not applied here: they are
@@ -149,13 +154,17 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 		}
 	}
 
-	// The floors go on last, over whatever the model (or the fallback) decided:
-	// a boost raises an article's importance, it never lowers it.
-	boosted, err := s.applyFloors(ctx, repo, llmBatch, floors)
+	// Importance is settled last, over whatever the model (or the fallback)
+	// decided: what the reader has taught the app, then the floors a rule set.
+	learned, err := s.adjustments(ctx)
 	if err != nil {
 		res.Errors = append(res.Errors, err.Error())
 	}
-	res.Boosted = boosted
+	boosted, adjusted, err := s.settleImportance(ctx, repo, llmBatch, floors, learned)
+	if err != nil {
+		res.Errors = append(res.Errors, err.Error())
+	}
+	res.Boosted, res.Adjusted = boosted, adjusted
 
 	return res, nil
 }
@@ -173,28 +182,69 @@ func (s *Service) coverageFloor(a *db.Article) int {
 	return s.opts.CoverageFloor
 }
 
-// applyFloors raises the importance of the articles a boost rule claimed, once
-// they have been classified.
-func (s *Service) applyFloors(ctx context.Context, repo *db.ArticleRepo, batch []*db.Article, floors map[int64]int) (int, error) {
-	n := 0
+// adjustments loads what the reader has taught the app. Nothing is applied
+// until somebody runs `giznews learn`, and turning Learn off ignores it without
+// throwing it away.
+func (s *Service) adjustments(ctx context.Context) (learn.Adjustments, error) {
+	if !s.opts.Learn {
+		return nil, nil
+	}
+	return learn.Load(ctx, s.db)
+}
+
+// settleImportance is the last word on how important an article is, applied
+// once the model has had its say.
+//
+// The order is the argument. What the reader has taught the app moves the
+// model's number by at most one step, in either direction; then a floor from a
+// rule or from coverage raises it if it is still too low. So a rule someone
+// wrote on purpose always beats a habit inferred from history, and history
+// beats nothing but the model's guess.
+func (s *Service) settleImportance(ctx context.Context, repo *db.ArticleRepo, batch []*db.Article,
+	floors map[int64]int, learned learn.Adjustments) (boosted, adjusted int, err error) {
+
 	for _, a := range batch {
-		floor, ok := floors[a.ID]
-		if !ok {
+		floor := floors[a.ID]
+		if floor == 0 && len(learned) == 0 {
 			continue
 		}
 		current, err := repo.Get(ctx, a.ID)
 		if err != nil {
-			return n, fmt.Errorf("boost #%d: %w", a.ID, err)
+			return boosted, adjusted, fmt.Errorf("importance #%d: %w", a.ID, err)
 		}
-		if current.Importance >= floor {
-			continue // the model agreed, or went higher
+
+		want := current.Importance
+		if delta := learned.For(current.SourceID, current.Tags, s.opts.MaxDelta); delta != 0 {
+			want = clampImportance(want + delta)
 		}
-		if err := repo.SetImportance(ctx, a.ID, floor); err != nil {
-			return n, fmt.Errorf("boost #%d: %w", a.ID, err)
+		moved := want != current.Importance
+		if want < floor {
+			want = floor // a rule said so, and a rule outranks a habit
 		}
-		n++
+		if want == current.Importance {
+			continue
+		}
+		if err := repo.SetImportance(ctx, a.ID, want); err != nil {
+			return boosted, adjusted, fmt.Errorf("importance #%d: %w", a.ID, err)
+		}
+		if moved {
+			adjusted++
+		}
+		if floor > 0 && want == floor && current.Importance < floor {
+			boosted++
+		}
 	}
-	return n, nil
+	return boosted, adjusted, nil
+}
+
+func clampImportance(n int) int {
+	switch {
+	case n < 0:
+		return 0
+	case n > 3:
+		return 3
+	}
+	return n
 }
 
 // runBatches classifies articles in LLM batches (optionally in parallel). It
@@ -311,7 +361,9 @@ func (s *Service) apply(ctx context.Context, repo *db.ArticleRepo, a *db.Article
 	status := a.Status
 	if actions.Archive {
 		status = db.StatusArchived
-		if err := repo.SetStatus(ctx, a.ID, status); err != nil {
+		// A rule archiving something is the pipeline's decision, not the
+		// reader's: it must never come back as a preference.
+		if err := repo.SetStatus(ctx, a.ID, status, db.ActorSystem); err != nil {
 			return err
 		}
 	}

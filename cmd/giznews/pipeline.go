@@ -34,6 +34,8 @@ func runClassify(args []string, logger *log.Logger) {
 		AgeDays:         14,
 		CoverageSources: cfg.Classify.CoverageSources,
 		CoverageFloor:   cfg.Classify.CoverageFloor,
+		Learn:           cfg.Classify.Learn.Enabled,
+		MaxDelta:        cfg.Classify.Learn.MaxDelta,
 		UseLLM:          cfg.Classify.UseLLM && prov != nil,
 		Model:           cfg.LLM.Model,
 	}, prov, logger)
@@ -58,6 +60,9 @@ func runClassify(args []string, logger *log.Logger) {
 	}
 	if res.Boosted > 0 {
 		fmt.Printf("  %d article(s) raised to their floor\n", res.Boosted)
+	}
+	if res.Adjusted > 0 {
+		fmt.Printf("  %d article(s) moved by what your reading taught it\n", res.Adjusted)
 	}
 	for _, e := range res.Errors {
 		fmt.Printf("  ! %s\n", e)
@@ -90,6 +95,10 @@ func printClassifyPlan(p *classify.Plan) {
 	}
 	if p.Covered > 0 {
 		fmt.Printf("%d raised by coverage: enough outlets ran the same story.\n", p.Covered)
+	}
+	if p.Learned > 0 {
+		fmt.Printf("%d would be moved by what your reading taught it (%d up, %d down).\n",
+			p.Learned, p.LearnedUp, p.Learned-p.LearnedUp)
 	}
 	fmt.Printf("\n%d would go to the model, in %d batch(es):\n", p.ToLLM, p.Batches)
 	for _, title := range p.Unmatched {

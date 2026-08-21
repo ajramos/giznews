@@ -14,15 +14,17 @@ import (
 // A plan says which rule claims which article, and how many are left for the
 // model, before any of it is applied.
 type Plan struct {
-	Pending  int        `json:"pending"`
-	ByRules  int        `json:"by_rules"`
-	Archived int        `json:"archived"`
-	Kept     int        `json:"kept"`
-	Boosted  int        `json:"boosted"`
-	Covered  int        `json:"covered"` // raised by how many outlets ran the story
-	ToLLM    int        `json:"to_llm"`
-	Batches  int        `json:"batches"`
-	Rules    []RulePlan `json:"rules"`
+	Pending   int        `json:"pending"`
+	ByRules   int        `json:"by_rules"`
+	Archived  int        `json:"archived"`
+	Kept      int        `json:"kept"`
+	Boosted   int        `json:"boosted"`
+	Covered   int        `json:"covered"` // raised by how many outlets ran the story
+	Learned   int        `json:"learned"` // moved by what the reader taught the app
+	LearnedUp int        `json:"learned_up"`
+	ToLLM     int        `json:"to_llm"`
+	Batches   int        `json:"batches"`
+	Rules     []RulePlan `json:"rules"`
 	// Unmatched is a sample of what would reach the model, so a queue full of
 	// something the rules could have caught is visible.
 	Unmatched []string `json:"unmatched"`
@@ -114,6 +116,20 @@ func (s *Service) Preview(ctx context.Context) (*Plan, error) {
 			plan.Rules[i] = *rp
 		}
 	}
+	// What the reader has taught the app only moves an article after the model
+	// has classified it, so a plan can only say how many it would touch.
+	if learned, err := s.adjustments(ctx); err == nil && len(learned) > 0 {
+		for _, a := range articles {
+			switch d := learned.For(a.SourceID, a.Tags, s.opts.MaxDelta); {
+			case d > 0:
+				plan.Learned++
+				plan.LearnedUp++
+			case d < 0:
+				plan.Learned++
+			}
+		}
+	}
+
 	if plan.ToLLM > 0 && s.opts.BatchSize > 0 {
 		plan.Batches = (plan.ToLLM + s.opts.BatchSize - 1) / s.opts.BatchSize
 	}

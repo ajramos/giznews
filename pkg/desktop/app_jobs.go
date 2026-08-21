@@ -80,7 +80,7 @@ func (a *App) BulkSetStatus(ctx context.Context, ids []int64, status string) (*B
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			if err := repo.SetStatus(ctx, id, st); err != nil {
+			if err := repo.SetStatus(ctx, id, st, db.ActorUser); err != nil {
 				return fmt.Errorf("article %d: %w", id, err)
 			}
 			res.Updated++

@@ -51,6 +51,36 @@ digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digest
 search ──► FTS5 (keyword) ⊕ embeddings (Ollama, coseno) con RRF
 ```
 
+## Lo que aprende de ti
+
+Hasta ahora un artículo solo guardaba su estado final, sobreescrito: uno
+archivado podía haberse leído antes o haberse tirado sin abrir, y después no
+había forma de saberlo. Son veredictos opuestos, y son la señal entera. Ahora
+`article_events` guarda el historial —con **quién** lo hizo: un artículo que
+archivó una regla no dice nada de los gustos de nadie, y contarlo enseñaría a
+las reglas a que les guste lo que ya hacen—.
+
+`giznews learn` lee ese historial y calcula, por fuente y por tag, tres tasas:
+cuánto abres, cuánto tiras sin abrir y cuánto marcas. De ahí sale un **delta
+acotado (±1)** que se guarda en `signals`. No hay modelo: es una tabla que
+puedes leer, discutir y apagar (`classify.learn.enabled`), y no pasa nada hasta
+que ejecutas el comando al menos una vez.
+
+Dos decisiones que conviene conocer:
+
+- **La tasa de lectura se muestra pero no se usa.** La lista abre sola el
+  artículo bajo el cursor, así que "leído" habla tanto del orden de la lista
+  como del artículo. Marcar y tirar sí son actos deliberados; esos deciden.
+- **El orden de la última palabra sobre la importancia** (`settleImportance`):
+  primero lo que el modelo decidió, luego el delta aprendido —como mucho un
+  escalón, arriba o abajo—, y por último los suelos de una regla o de la
+  cobertura. Así una regla escrita a propósito siempre gana a una costumbre
+  inferida, y la costumbre solo gana a la conjetura del modelo.
+
+`giznews rules suggest` va un paso más allá: una fuente que tiras sin abrir el
+85% de las veces se propone como regla `archive` —**apagada**— para que pase por
+el mismo camino de revisión que una escrita a mano.
+
 ## Historias, no recortes
 
 Seis medios cubriendo el mismo lanzamiento no son seis artículos, y tampoco uno:

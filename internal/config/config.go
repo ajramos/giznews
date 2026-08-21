@@ -159,6 +159,10 @@ type ClassifyConfig struct {
 	CoverageSources int `json:"coverage_sources"`
 	// CoverageFloor is the importance such a story gets at least.
 	CoverageFloor int `json:"coverage_floor"`
+	// Learn applies what `giznews learn` worked out from your own history:
+	// what you star, and what you throw away without opening. Nothing happens
+	// until that command has been run at least once.
+	Learn LearnConfig `json:"learn"`
 }
 
 // KBConfig configures a knowledge-graph build. The defaults suit a personal
@@ -175,6 +179,21 @@ type KBConfig struct {
 	// molecules. Wider than AgeDays on purpose: a story told over two months is
 	// still one story, while an article that old is no longer news.
 	ThemeDays int `json:"theme_days"`
+}
+
+// LearnConfig configures the adjustment learned from the reader's history.
+// Deliberately conservative: a personal feed produces little evidence, and an
+// adjustment nobody can explain is worse than none.
+type LearnConfig struct {
+	// Enabled applies the stored adjustments during classification.
+	Enabled bool `json:"enabled"`
+	// WindowDays is how far back a learning pass looks.
+	WindowDays int `json:"window_days"`
+	// MinSamples is how many articles a source or tag needs before it is
+	// allowed to move anything at all.
+	MinSamples int `json:"min_samples"`
+	// MaxDelta bounds the move, in either direction.
+	MaxDelta int `json:"max_delta"`
 }
 
 // FetchConfig configures article ingestion from sources.
@@ -238,6 +257,12 @@ func DefaultConfig() *Config {
 			ImportanceThreshold: 2,
 			CoverageSources:     3,
 			CoverageFloor:       2,
+			Learn: LearnConfig{
+				Enabled:    true,
+				WindowDays: 90,
+				MinSamples: 20,
+				MaxDelta:   1,
+			},
 		},
 		Fetch: FetchConfig{
 			MaxAgeDays: 30,

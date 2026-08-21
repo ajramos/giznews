@@ -101,7 +101,7 @@ func (a *App) GetArticleContent(ctx context.Context, id int64) (*ArticleDTO, err
 }
 
 func (a *App) SetArticleStatus(ctx context.Context, id int64, status string) error {
-	return db.NewArticleRepo(a.db).SetStatus(ctx, id, db.ArticleStatus(status))
+	return db.NewArticleRepo(a.db).SetStatus(ctx, id, db.ArticleStatus(status), db.ActorUser)
 }
 
 func (a *App) SetArticleStarred(ctx context.Context, id int64, starred bool) error {

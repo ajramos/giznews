@@ -54,6 +54,21 @@ Everything must be green before committing.
 - Article states: `unread | read | archived | starred` — all logical, nothing
   is physically deleted. Archiving offers undo.
 
+## Learning from the reader
+
+`article_events` records what happens to an article **and who did it**
+(`db.ActorUser` / `db.ActorSystem`). Anything a rule or the pipeline decides is
+`system` and must never come back as taste — `SetStatus` takes the actor
+explicitly for exactly that reason.
+
+`giznews learn` turns that history into a bounded (±1) delta per source and per
+tag, stored in `signals`; `classify` applies it in `settleImportance`, in this
+order: model → learned delta → rule/coverage floors, so an explicit rule always
+outranks an inferred habit. Read rate is computed but never acted on (the list
+auto-opens what the cursor lands on). Nothing applies until `learn` has run;
+`classify.learn.enabled` turns application off without discarding what was
+learned. `rules suggest` proposes rules from the same data, always switched off.
+
 ## Stories
 
 Near-duplicate articles are **grouped, not dropped**: `articles.story_id` points

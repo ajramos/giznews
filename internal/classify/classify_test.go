@@ -2,10 +2,12 @@ package classify
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/ajramos/giznews/internal/db"
+	"github.com/ajramos/giznews/internal/learn"
 )
 
 func TestParseClassificationsFences(t *testing.T) {
@@ -333,12 +335,12 @@ func TestBoostIsAFloorAppliedAfterClassification(t *testing.T) {
 	if err := artRepo.SetImportance(ctx, 2, 3); err != nil {
 		t.Fatal(err)
 	}
-	raised, err := svc.applyFloors(ctx, artRepo, []*db.Article{{ID: 2}}, map[int64]int{2: 1})
+	raised, _, err := svc.settleImportance(ctx, artRepo, []*db.Article{{ID: 2}}, map[int64]int{2: 1}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if raised != 0 {
-		t.Fatalf("applyFloors touched %d article(s), want 0", raised)
+		t.Fatalf("the floor touched %d article(s), want 0", raised)
 	}
 	after, _ := artRepo.Get(ctx, 2)
 	if after.Importance != 3 {
@@ -401,10 +403,10 @@ func TestRulesOnlyLeavesTheRestPending(t *testing.T) {
 	seed := func(guid, title string) {
 		_, _, _ = artRepo.Upsert(ctx, db.NewArticle{SourceID: src.ID, GUID: guid, Title: title, URL: "https://x.com/" + guid})
 	}
-	seed("a", "Bitcoin rips past $120k")          // archive
+	seed("a", "Bitcoin rips past $120k")             // archive
 	seed("b", "OpenAI details its safety framework") // keep
-	seed("c", "Nvidia builds a supercomputer")    // boost (floor deferred)
-	seed("d", "A quiet paper on retrieval")       // unmatched
+	seed("c", "Nvidia builds a supercomputer")       // boost (floor deferred)
+	seed("d", "A quiet paper on retrieval")          // unmatched
 
 	ruleRepo := db.NewRuleRepo(d)
 	_, _ = ruleRepo.Create(ctx, db.NewRule{
@@ -449,5 +451,82 @@ func TestRulesOnlyLeavesTheRestPending(t *testing.T) {
 	}
 	if len(pending) != 3 {
 		t.Fatalf("pending = %d, want 3 (keep, boost, unmatched)", len(pending))
+	}
+}
+
+// The order of the last word on importance is the argument for the whole
+// feature: a rule someone wrote beats a habit inferred from history, and
+// history beats nothing but the model's guess.
+func TestARuleOutranksWhatWasLearned(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "Wire", Type: db.SourceRSS, URL: "https://wire.example/f"})
+	artRepo := db.NewArticleRepo(d)
+	// Two articles from a source the reader throws away.
+	for _, title := range []string{"Ordinary wire item", "Anthropic releases a system card"} {
+		id, _, err := artRepo.Upsert(ctx, db.NewArticle{
+			SourceID: src.ID, GUID: title, URL: "https://wire.example/" + title, Title: title,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = id
+	}
+	// A boost rule claims the second one.
+	ruleRepo := db.NewRuleRepo(d)
+	if _, err := ruleRepo.Create(ctx, db.NewRule{
+		Name: "high: system cards", Query: `system card`,
+		Actions: []db.RuleAction{{Type: "boost", Value: "3"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// And the reader's history says everything from this source is worth less.
+	for i := 0; i < 25; i++ {
+		id, _, err := artRepo.Upsert(ctx, db.NewArticle{
+			SourceID: src.ID, GUID: fmt.Sprintf("old%d", i), URL: fmt.Sprintf("https://wire.example/old%d", i),
+			Title: "Old wire item",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := artRepo.ApplyClassification(ctx, id, "industry", "", nil, nil, 2); err != nil {
+			t.Fatal(err)
+		}
+		if err := artRepo.SetStatus(ctx, id, db.StatusArchived, db.ActorUser); err != nil {
+			t.Fatal(err)
+		}
+	}
+	signals, err := learn.Compute(ctx, d, learn.Options{MinSamples: 20, MaxDelta: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := learn.Store(ctx, d, signals); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(d, Options{UseLLM: false, BatchSize: 10, AgeDays: 30, Learn: true, MaxDelta: 1}, nil, nil)
+	if _, err := svc.ClassifyAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	plain, err := artRepo.Get(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// defaultImportance would have given it 1; the history takes it down.
+	if plain.Importance != 0 {
+		t.Fatalf("unclaimed article = %d, want 0 (moved down by history)", plain.Importance)
+	}
+	claimed, err := artRepo.Get(ctx, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed.Importance != 3 {
+		t.Fatalf("boosted article = %d, want 3 — a rule outranks a habit", claimed.Importance)
 	}
 }

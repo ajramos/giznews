@@ -50,6 +50,8 @@ func main() {
 		runSources(args, logger)
 	case "rules":
 		runRules(args, logger)
+	case "learn":
+		runLearn(args, logger)
 	case "gmail-auth":
 		runGmailAuth(args, logger)
 	case "help", "--help", "-h":
@@ -75,7 +77,8 @@ Commands:
   kb        Knowledge-graph operations (build, list, sync)
   search    Semantic + keyword search over notes and articles
   sources   Manage news sources (list, add, enable, disable)
-  rules     Manage the ⚡ prefilter (list, test, import, export, add, rm)
+  rules     Manage the ⚡ prefilter (list, test, import, export, suggest, add, rm)
+  learn     Report what your reading says, and store it as an adjustment
   gmail-auth  Run the Gmail OAuth flow (newsletters)
   serve     Run the daemon (background fetch on schedule)
   version   Show version

@@ -54,6 +54,9 @@ go run ./cmd/giznews rules import docs/rules/noise.json       # prefiltro: mata 
 go run ./cmd/giznews rules import docs/rules/high-value.json  # y marca lo que va a ★3
 go run ./cmd/giznews classify --dry-run  # qué reclama cada regla, sin clasificar nada
 go run ./cmd/giznews classify   # reglas ⚡ + LLM
+go run ./cmd/giznews learn --dry-run     # qué dice tu forma de leer, sin guardar nada
+go run ./cmd/giznews learn               # lo guarda: ajusta importancia de ahí en adelante
+go run ./cmd/giznews rules suggest       # reglas propuestas desde tu historial (llegan apagadas)
 go run ./cmd/giznews kb build --dry-run  # qué haría, sin tocar el vault
 go run ./cmd/giznews kb build   # genera atoms/electrons/molecules + Index.md en el vault
 go run ./cmd/giznews kb themes          # reagrupa los temas (lo hace también el build)

@@ -335,14 +335,44 @@ func (r *ArticleRepo) JoinStory(ctx context.Context, id, anchorID int64) error {
 	return checkAffected(res, "join story")
 }
 
-// SetStatus updates the triage status of an article.
-func (r *ArticleRepo) SetStatus(ctx context.Context, id int64, status ArticleStatus) error {
+// Actor says who moved an article. A reader archiving something is a verdict
+// worth learning from; a prefilter rule archiving it is the machine agreeing
+// with itself, and counting that as taste would teach the rules to like
+// whatever they already do.
+type Actor string
+
+const (
+	ActorUser   Actor = "user"
+	ActorSystem Actor = "system"
+)
+
+// SetStatus updates the triage status of an article and records who did it.
+func (r *ArticleRepo) SetStatus(ctx context.Context, id int64, status ArticleStatus, by Actor) error {
 	res, err := r.db.sql.ExecContext(ctx,
 		"UPDATE articles SET status = ?, updated_at = ? WHERE id = ?", string(status), Now(), id)
 	if err != nil {
 		return fmt.Errorf("set article status: %w", err)
 	}
-	return checkAffected(res, "set article status")
+	if err := checkAffected(res, "set article status"); err != nil {
+		return err
+	}
+	return r.recordEvent(ctx, id, string(status), by)
+}
+
+// recordEvent appends to an article's history. The history is what tells an
+// article that was read and then archived from one that was thrown away
+// unopened — opposite verdicts that the status column alone cannot keep apart.
+func (r *ArticleRepo) recordEvent(ctx context.Context, id int64, event string, by Actor) error {
+	if by == "" {
+		by = ActorUser
+	}
+	_, err := r.db.sql.ExecContext(ctx,
+		"INSERT INTO article_events (article_id, event, actor, created_at) VALUES (?, ?, ?, ?)",
+		id, event, string(by), Now())
+	if err != nil {
+		return fmt.Errorf("record article event: %w", err)
+	}
+	return nil
 }
 
 // SetStarred toggles the orthogonal starred flag (independent of status).
@@ -352,7 +382,15 @@ func (r *ArticleRepo) SetStarred(ctx context.Context, id int64, starred bool) er
 	if err != nil {
 		return fmt.Errorf("set article starred: %w", err)
 	}
-	return checkAffected(res, "set article starred")
+	if err := checkAffected(res, "set article starred"); err != nil {
+		return err
+	}
+	event := "starred"
+	if !starred {
+		event = "unstarred"
+	}
+	// Starring is only ever a person's doing.
+	return r.recordEvent(ctx, id, event, ActorUser)
 }
 
 // SetImportance updates the importance score of an article.

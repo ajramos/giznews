@@ -13,6 +13,7 @@ import (
 
 	"github.com/ajramos/giznews/internal/classify"
 	"github.com/ajramos/giznews/internal/db"
+	"github.com/ajramos/giznews/internal/learn"
 )
 
 // ruleFile is the on-disk format of a ruleset. Rules deserve to live in a file
@@ -36,7 +37,7 @@ type fileRule struct {
 // runRules manages the deterministic prefilter: list, test, import, export.
 func runRules(args []string, logger *log.Logger) {
 	if len(args) == 0 {
-		logger.Fatal("usage: giznews rules <list|test|import|export|add|rm|enable|disable> [args]")
+		logger.Fatal("usage: giznews rules <list|test|import|export|suggest|add|rm|enable|disable> [args]")
 	}
 	cfg, d, ctx := loadAndOpenDB(args[1:], logger)
 	defer d.Close()
@@ -130,6 +131,18 @@ func runRules(args []string, logger *log.Logger) {
 			fmt.Println("run `giznews classify --dry-run` before the next classify to see what they claim")
 		}
 
+	case "suggest":
+		opts := learn.Options{
+			WindowDays: cfg.Classify.Learn.WindowDays,
+			MinSamples: cfg.Classify.Learn.MinSamples,
+			MaxDelta:   cfg.Classify.Learn.MaxDelta,
+		}
+		signals, err := learn.Compute(ctx, d, opts)
+		if err != nil {
+			logger.Fatalf("rules suggest: %v", err)
+		}
+		suggestRules(args[1:], signals, logger)
+
 	case "export":
 		rules, err := repo.List(ctx)
 		if err != nil {
@@ -217,9 +230,8 @@ func runRules(args []string, logger *log.Logger) {
 		fmt.Printf("rule %d %q is now %s\n", rule.ID, rule.Name, map[bool]string{true: "on", false: "off"}[on])
 
 	default:
-		logger.Fatalf("unknown rules subcommand %q (expected list|test|import|export|add|rm|enable|disable)", args[0])
+		logger.Fatalf("unknown rules subcommand %q (expected list|test|import|export|suggest|add|rm|enable|disable)", args[0])
 	}
-	_ = cfg
 }
 
 // importRules applies a ruleset file, matching stored rules by name so the file

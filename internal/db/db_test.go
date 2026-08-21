@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 13 {
-		t.Fatalf("user_version = %d, want 13", version)
+	if version != 14 {
+		t.Fatalf("user_version = %d, want 14", version)
 	}
 }
 
@@ -100,8 +100,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 13 {
-		t.Fatalf("user_version after reopen = %d, want 13", version)
+	if version != 14 {
+		t.Fatalf("user_version after reopen = %d, want 14", version)
 	}
 	// Columns must exist now.
 	var n int
@@ -366,7 +366,7 @@ func TestArticleUpsertAndQuery(t *testing.T) {
 		t.Fatalf("entities = %v", got.Entities)
 	}
 
-	if err := repo.SetStatus(ctx, id1, StatusRead); err != nil {
+	if err := repo.SetStatus(ctx, id1, StatusRead, ActorUser); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = repo.Get(ctx, id1)

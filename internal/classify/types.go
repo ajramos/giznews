@@ -32,14 +32,15 @@ type Classification struct {
 
 // Result summarizes a classification run.
 type Result struct {
-	Classified   int      `json:"classified"`
-	ByRules      int      `json:"by_rules"`
-	Archived     int      `json:"archived"`
-	Boosted      int      `json:"boosted"`
-	ByCoverage   int      `json:"by_coverage"`
-	ByLLM        int      `json:"by_llm"`
-	SkippedNoLLM int      `json:"skipped_no_llm"`
-	Batches      int      `json:"batches"`
+	Classified   int `json:"classified"`
+	ByRules      int `json:"by_rules"`
+	Archived     int `json:"archived"`
+	Boosted      int `json:"boosted"`
+	ByCoverage   int `json:"by_coverage"`
+	Adjusted     int `json:"adjusted"`
+	ByLLM        int `json:"by_llm"`
+	SkippedNoLLM int `json:"skipped_no_llm"`
+	Batches      int `json:"batches"`
 	// Pending counts articles a rules-only run left unclassified, waiting for
 	// the model.
 	Pending int      `json:"pending"`

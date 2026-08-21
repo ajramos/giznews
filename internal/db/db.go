@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13, schemaV14}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -388,4 +388,40 @@ CREATE INDEX IF NOT EXISTS idx_kb_themes_seed ON kb_themes(seed);
 const schemaV13 = `
 ALTER TABLE articles ADD COLUMN story_id INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_articles_story ON articles(story_id);
+`
+
+// schemaV14 records what the reader does, and what a run of the pipeline
+// decided on its own.
+//
+// Until now an article kept only its final state, overwritten in place: an
+// archived one could have been read first or thrown away unopened, and there
+// was no way to tell afterwards. Those are opposite verdicts, and they are the
+// whole signal. The actor column keeps them honest — an article a prefilter
+// rule archived says nothing about anyone's taste.
+//
+// signals holds what has been learned from those events, so a classification
+// run reads a number instead of recomputing a history.
+const schemaV14 = `
+CREATE TABLE IF NOT EXISTS article_events (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+	event      TEXT    NOT NULL,              -- read | archived | unread | starred | unstarred
+	actor      TEXT    NOT NULL DEFAULT 'user', -- user | system
+	created_at TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_article_events_article ON article_events(article_id);
+CREATE INDEX IF NOT EXISTS idx_article_events_event ON article_events(event, actor);
+
+CREATE TABLE IF NOT EXISTS signals (
+	kind       TEXT    NOT NULL,              -- source | tag
+	key        TEXT    NOT NULL,              -- source id, or the tag itself
+	label      TEXT    NOT NULL DEFAULT '',   -- what to call it in a report
+	samples    INTEGER NOT NULL DEFAULT 0,
+	read_rate  REAL    NOT NULL DEFAULT 0,
+	drop_rate  REAL    NOT NULL DEFAULT 0,    -- archived without ever opening it
+	star_rate  REAL    NOT NULL DEFAULT 0,
+	delta      INTEGER NOT NULL DEFAULT 0,    -- importance adjustment, bounded
+	updated_at TEXT    NOT NULL,
+	PRIMARY KEY (kind, key)
+);
 `
