@@ -66,6 +66,18 @@ Questions retrieve differently from the search box: `questionQuery` strips
 question words and matches the rest as alternatives, because a phrase match on
 a natural question finds nothing. Both go through `retrieve`.
 
+## Watches
+
+A watch is a rule with a `notify` action — written, tested and imported like any
+other. Like `boost` it annotates rather than claims, so the chain carries on and
+a watch composes with a boost on the same article. Hits are recorded during
+`classify` in `watch_hits`, keyed by article: **announced once, ever**.
+
+Delivery is threefold so it never depends on the app being open: OS notification
+(macOS, `osascript`; a no-op elsewhere), a `## Watchlist` block at the top of the
+vault's daily note, and a section in the digest. Seeing them in `:watch` marks
+them seen.
+
 ## Digest export
 
 `digest.Markdown` / `digest.HTML` are pure functions of the digest — nothing

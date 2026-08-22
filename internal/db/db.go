@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13, schemaV14, schemaV15, schemaV16}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13, schemaV14, schemaV15, schemaV16, schemaV17}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -454,4 +454,22 @@ ALTER TABLE sources ADD COLUMN last_error TEXT NOT NULL DEFAULT '';
 ALTER TABLE sources ADD COLUMN last_ok TEXT;
 ALTER TABLE sources ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE sources ADD COLUMN empty_cycles INTEGER NOT NULL DEFAULT 0;
+`
+
+// schemaV17 remembers what a watch caught.
+//
+// Everything else in giznews is pull: the news is there when you next open it,
+// whether it arrived a minute or three days ago. For the handful of things a
+// reader is actually waiting on, that is the wrong shape. A hit is recorded
+// once per article and never again — the primary key is the article, so a
+// re-fetch or a second classify cannot re-announce something you have already
+// been told about.
+const schemaV17 = `
+CREATE TABLE IF NOT EXISTS watch_hits (
+	article_id INTEGER PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+	rule       TEXT    NOT NULL,
+	seen       INTEGER NOT NULL DEFAULT 0, -- the reader has been shown this one
+	created_at TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_watch_hits_seen ON watch_hits(seen, created_at DESC);
 `

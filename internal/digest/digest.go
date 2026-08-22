@@ -30,6 +30,9 @@ type Digest struct {
 	Date     string   `json:"date"`
 	Overview string   `json:"overview"`
 	Themes   []*Theme `json:"themes"`
+	// Watchlist is what the reader asked to be told about, first because it is
+	// the part they were waiting for.
+	Watchlist []*db.WatchHit `json:"watchlist,omitempty"`
 }
 
 // Options configures digest generation.
@@ -95,6 +98,14 @@ func (s *Service) Generate(ctx context.Context) (*Digest, error) {
 			arts = arts[:s.opts.MaxArticlesPerTheme]
 		}
 		d.Themes = append(d.Themes, &Theme{Name: name, Articles: arts})
+	}
+
+	// What the watches caught today rides along: the digest is the copy that
+	// leaves the machine, so it is where a watch reaches a phone.
+	if hits, err := db.NewWatchRepo(s.db).Since(ctx, d.Date, 20); err == nil {
+		d.Watchlist = hits
+	} else if s.logger != nil {
+		s.logger.Printf("digest: could not read the watchlist: %v", err)
 	}
 
 	// LLM enrichment (overview + per-theme summaries) in one call.

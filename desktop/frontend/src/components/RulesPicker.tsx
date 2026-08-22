@@ -15,6 +15,7 @@ interface Props {
 // mean opposite things in the same position.
 function ruleEffect(r: RuleDTO): string {
   if (!r.enabled) return "off";
+  if (r.actions.some((a) => a.type === "notify") && r.actions.length === 1) return "watch";
   const boost = r.actions.find((a) => a.type === "boost");
   if (boost) return `boost ★${boost.value}`;
   if (r.actions.some((a) => a.type === "keep")) return "keep";

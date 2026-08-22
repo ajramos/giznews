@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
+	goruntime "runtime"
+	"strings"
 
 	gizdesktop "github.com/ajramos/giznews/pkg/desktop"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -114,6 +117,31 @@ func (a *App) KThemes() (*gizdesktop.KBResult, error) {
 func (a *App) KSynthesize(category string) (*gizdesktop.KBResult, error) {
 	return a.api.KSynthesize(bg(), category)
 }
+func (a *App) ListWatchHits(onlyUnseen bool) ([]*gizdesktop.WatchHitDTO, error) {
+	return a.api.ListWatchHits(bg(), onlyUnseen)
+}
+func (a *App) MarkWatchHitsSeen(ids []int64) error {
+	return a.api.MarkWatchHitsSeen(bg(), ids)
+}
+
+// NotifyOS raises a desktop notification. macOS only, which is what this app
+// ships on; anywhere else it quietly does nothing rather than failing a job.
+func (a *App) NotifyOS(title, body string) error {
+	if runtimeGOOS() != "darwin" {
+		return nil
+	}
+	script := fmt.Sprintf("display notification %s with title %s",
+		appleQuote(body), appleQuote(title))
+	return exec.Command("osascript", "-e", script).Start()
+}
+
+// appleQuote makes a string safe inside an AppleScript literal.
+func appleQuote(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
+
+func runtimeGOOS() string { return goruntime.GOOS }
+
 func (a *App) ExportDigest(date, format string) (string, error) {
 	return a.api.ExportDigest(bg(), date, format)
 }

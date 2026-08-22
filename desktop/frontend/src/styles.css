@@ -923,3 +923,15 @@ kbd {
   padding: 8px 16px; font-size: 11px; color: var(--fg-dim);
   border-bottom: 1px solid var(--border);
 }
+
+/* Watchlist: the rules you asked to be told about, above what they caught. */
+.watch-rules {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.watch-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  border: 1px solid var(--accent-dim); color: var(--accent);
+}
+.watch-chip[data-on="false"] { color: var(--fg-dim); border-color: var(--border); }

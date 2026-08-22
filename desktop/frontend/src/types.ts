@@ -91,6 +91,7 @@ export interface ClassifyResult {
   batches: number;
   pending?: number;
   errors: string[];
+  watched?: number;
 }
 
 export interface KBResult {
@@ -226,4 +227,13 @@ export interface AnswerDTO {
   sources: SearchResultDTO[];
   grounded: boolean;
   dropped?: string[];
+}
+
+// An article a watch rule caught. `seen` is false until the watchlist has been
+// opened: nothing announces the same article twice.
+export interface WatchHitDTO {
+  rule: string;
+  seen: boolean;
+  createdAt: string;
+  article: ArticleDTO;
 }

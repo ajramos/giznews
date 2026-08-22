@@ -23,6 +23,7 @@ import type {
   SearchResultDTO,
   SourceDTO,
   StatusDTO,
+  WatchHitDTO,
 } from "./types";
 import type { APIShape } from "./api";
 
@@ -106,6 +107,8 @@ const mockRules: RuleDTO[] = [
   // The two shapes the shipped ruleset is made of: a shield and a noise rule.
   { id: 3, name: "keep: labs and models", query: "\\b(openai|anthropic|gemini)\\b", actions: [{ type: "keep", value: "" }], enabled: true },
   { id: 4, name: "noise: crypto", query: "\\b(bitcoin|crypto|web3)\\b", actions: [{ type: "archive", value: "" }], enabled: true },
+  // A watch: an ordinary rule that only asks to be told.
+  { id: 5, name: "watch: gpt-5 ships", query: "gpt-?5", actions: [{ type: "notify", value: "" }], enabled: true },
 ];
 
 // A promotion queue with a couple of concepts already promoted, so the picker
@@ -413,6 +416,16 @@ export const mockBackend: APIShape = {
     finishJob(id);
     return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, moleculesUpdated: 0, articlesSkipped: 0, conceptsTracked: 0, atomsRefreshed: 0, editedNotesKept: 0, notesImported: 0 };
   },
+  listWatchHits: async (onlyUnseen: boolean): Promise<WatchHitDTO[]> => {
+    await delay();
+    const hits: WatchHitDTO[] = [
+      { rule: "watch: gpt-5 ships", seen: false, createdAt: "2026-08-14T09:00:00Z", article: ARTICLES[0] },
+      { rule: "watch: eu ai act", seen: true, createdAt: "2026-08-13T09:00:00Z", article: ARTICLES[1] },
+    ];
+    return onlyUnseen ? hits.filter((h) => !h.seen) : hits;
+  },
+  markWatchHitsSeen: async (_ids: number[]): Promise<void> => { await delay(); },
+  notifyOS: async (_title: string, _body: string): Promise<void> => { await delay(10); },
   exportDigest: async (date: string, format: string): Promise<string> => {
     await delay();
     if (date === "1999-01-01") throw new Error(`no digest stored for ${date}`);

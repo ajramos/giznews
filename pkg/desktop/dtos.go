@@ -124,14 +124,17 @@ type DigestDTO struct {
 
 // ClassifyResult reports what a classification run did.
 type ClassifyResult struct {
-	Classified   int      `json:"classified"`
-	ByRules      int      `json:"by_rules"`
-	Archived     int      `json:"archived"`
-	ByLLM        int      `json:"by_llm"`
-	SkippedNoLLM int      `json:"skipped_no_llm"`
-	Batches      int      `json:"batches"`
-	Pending      int      `json:"pending"`
-	Errors       []string `json:"errors,omitempty"`
+	Classified   int `json:"classified"`
+	ByRules      int `json:"by_rules"`
+	Archived     int `json:"archived"`
+	ByLLM        int `json:"by_llm"`
+	SkippedNoLLM int `json:"skipped_no_llm"`
+	Batches      int `json:"batches"`
+	Pending      int `json:"pending"`
+	// Watched counts articles a watch rule caught for the first time, so the
+	// app can tell the reader about them instead of waiting to be asked.
+	Watched int      `json:"watched"`
+	Errors  []string `json:"errors,omitempty"`
 }
 
 // ListArticlesOptions mirrors db.ListOptions in JSON-friendly form.

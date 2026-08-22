@@ -76,6 +76,25 @@ Tres decisiones:
 Además, la primera pregunta construye el índice si estaba vacío: "no hay nada
 sobre eso" tiene que significar eso y no "nadie ha indexado todavía".
 
+## Vigilancias
+
+Una vigilancia no es un concepto nuevo: es una regla con la acción `notify`. Se
+escribe, se prueba con `rules test` y se importa igual que las demás, y —como
+`boost`— **anota** el artículo en vez de reclamarlo, así que la cadena sigue y un
+artículo puede estar vigilado y subido a la vez.
+
+Los avisos se registran durante `classify`, que es donde corren las reglas, y
+`watch_hits` tiene el artículo como clave primaria: **una vez y ya**. Ser avisado
+dos veces del mismo artículo es peor que no serlo, porque enseña a ignorar el
+aviso.
+
+La entrega va por tres caminos para no depender de que la app esté abierta:
+notificación del sistema (macOS, vía `osascript`; en otros sistemas no hace nada
+en vez de fallar), el bloque `## Watchlist` **arriba** de la nota del día —el
+vault es la entrega que nunca falla— y una sección en el digest, que es la copia
+que sale de la máquina. `:watch` lista las vigilancias y lo cazado, y verlas
+cuenta como que te lo han dicho.
+
 ## El digest, fuera de la base de datos
 
 `internal/digest` renderiza a markdown y a HTML. Las dos son funciones puras del

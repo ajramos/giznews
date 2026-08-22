@@ -72,6 +72,9 @@ func runClassify(args []string, logger *log.Logger) {
 	if res.Boosted > 0 {
 		fmt.Printf("  %d article(s) raised to their floor\n", res.Boosted)
 	}
+	if res.Watched > 0 {
+		fmt.Printf("  %d article(s) caught by a watch\n", res.Watched)
+	}
 	if res.Adjusted > 0 {
 		fmt.Printf("  %d article(s) moved by what your reading taught it\n", res.Adjusted)
 	}
@@ -106,6 +109,9 @@ func printClassifyPlan(p *classify.Plan) {
 	}
 	if p.Covered > 0 {
 		fmt.Printf("%d raised by coverage: enough outlets ran the same story.\n", p.Covered)
+	}
+	if p.Watched > 0 {
+		fmt.Printf("%d would be announced by a watch.\n", p.Watched)
 	}
 	if p.Learned > 0 {
 		fmt.Printf("%d would be moved by what your reading taught it (%d up, %d down).\n",

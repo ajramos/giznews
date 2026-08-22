@@ -58,6 +58,7 @@ go run ./cmd/giznews classify   # reglas ⚡ + LLM
 go run ./cmd/giznews learn --dry-run     # qué dice tu forma de leer, sin guardar nada
 go run ./cmd/giznews learn               # lo guarda: ajusta importancia de ahí en adelante
 go run ./cmd/giznews rules suggest       # reglas propuestas desde tu historial (llegan apagadas)
+go run ./cmd/giznews rules add --name "watch: gpt-5" --query "gpt-?5" --notify  # avísame cuando salga
 go run ./cmd/giznews kb build --dry-run  # qué haría, sin tocar el vault
 go run ./cmd/giznews kb build   # genera atoms/electrons/molecules + Index.md en el vault
 go run ./cmd/giznews kb themes          # reagrupa los temas (lo hace también el build)
@@ -86,6 +87,28 @@ cd desktop && wails build && open build/bin/giznews.app
 
 El vault se abre con Obsidian en `~/Documents/obsidian/chronicles-ai`
 (configurable en `~/.config/giznews/config.json`).
+
+## Que te avise
+
+Todo lo demás aquí es *pull*: la noticia está ahí cuando abres, llegara hace un
+minuto o hace tres días. Para las cuatro cosas que de verdad estás esperando,
+esa es la forma equivocada.
+
+Una vigilancia **es una regla** con la acción `notify`, así que se escribe, se
+prueba (`rules test`) y se versiona como cualquier otra. No reclama el artículo
+ni le toca la importancia: solo pide que te lo cuenten, y compone con un `boost`
+sobre el mismo artículo.
+
+```sh
+giznews rules add --name "watch: gpt-5 ships" --query "gpt-?5" --notify
+giznews rules test --rule "watch: gpt-5 ships"   # qué habría cazado hasta hoy
+```
+
+Se avisa **una vez por artículo, para siempre**: un re-fetch o un segundo
+classify no vuelven a anunciarlo. Y llega por tres caminos, así que no depende
+de tener la app abierta: notificación del sistema si está corriendo, un bloque
+`## Watchlist` arriba de la nota del día en el vault, y una sección en el digest.
+`:watch` lista tus vigilancias y lo que han cazado.
 
 ## Sacar el digest de la app
 

@@ -27,6 +27,7 @@ import type {
   SearchResultDTO,
   SourceDTO,
   StatusDTO,
+  WatchHitDTO,
 } from "./types";
 
 declare global {
@@ -122,6 +123,9 @@ export interface APIShape {
   summarizeArticle: (id: number) => Promise<ArticleDTO>;
   digest: () => Promise<DigestDTO>;
   exportDigest: (date: string, format: string) => Promise<string>;
+  listWatchHits: (onlyUnseen: boolean) => Promise<WatchHitDTO[]>;
+  markWatchHitsSeen: (ids: number[]) => Promise<void>;
+  notifyOS: (title: string, body: string) => Promise<void>;
   listDigests: () => Promise<DigestMeta[]>;
   getDigest: (date: string) => Promise<DigestDTO | null>;
   flow: () => Promise<FlowStatus>;
@@ -189,6 +193,9 @@ const realApi: APIShape = {
     call("SummarizeArticle", id).then((v) => normalize<ArticleDTO>(v)),
   digest: () => call("Digest").then((v) => normalize<DigestDTO>(v)),
   exportDigest: (date: string, format: string) => call("ExportDigest", date, format).then((v) => String(v ?? "")),
+  listWatchHits: (onlyUnseen: boolean) => call("ListWatchHits", onlyUnseen).then((v) => arr<WatchHitDTO>(v)),
+  markWatchHitsSeen: (ids: number[]) => call("MarkWatchHitsSeen", ids).then(() => undefined),
+  notifyOS: (title: string, body: string) => call("NotifyOS", title, body).then(() => undefined),
   listDigests: () => call("ListDigests").then((v) => arr<DigestMeta>(v)),
   getDigest: (date: string) =>
     call("GetDigest", date).then((v) => (v ? normalize<DigestDTO>(v) : null)),

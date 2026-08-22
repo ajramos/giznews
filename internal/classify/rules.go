@@ -29,6 +29,10 @@ type RuleActions struct {
 	// a summary and entities for. A boost says "whatever the model decides,
 	// this is at least an N" and leaves the rest of the pipeline alone.
 	Boost int
+	// Notify asks to be told when this article arrives, rather than waiting to
+	// come across it. Like Boost it says something about an article instead of
+	// claiming it, so it composes with whatever else a rule chain decides.
+	Notify bool
 }
 
 // compiledRule is a rule with its matcher compiled. It embeds the parsed
@@ -69,6 +73,8 @@ func ParseRule(r *db.Rule) (*RuleActions, error) {
 			if n, err := strconv.Atoi(act.Value); err == nil && n > 0 && n <= 3 {
 				ra.Boost = n
 			}
+		case "notify":
+			ra.Notify = true
 		}
 	}
 	return ra, nil
@@ -116,6 +122,10 @@ type Decision struct {
 	BoostedBy string // the rule that set that floor
 	Action    *RuleActions
 	ActionBy  string
+	// WatchedBy is the first watch rule that wants this article announced,
+	// empty when none does. A watch neither claims the article nor changes its
+	// importance: it only asks to be told.
+	WatchedBy string
 }
 
 // ToLLM reports whether the article still has to be classified by the model.
@@ -130,11 +140,18 @@ func Decide(rules []*compiledRule, a *db.Article) Decision {
 		if !r.Match(a) {
 			continue
 		}
+		if r.Notify && d.WatchedBy == "" {
+			d.WatchedBy = r.Name
+		}
 		if r.Boost > 0 {
 			if r.Boost > d.Floor {
 				d.Floor, d.BoostedBy = r.Boost, r.Name
 			}
 			continue // a boost annotates; it does not claim the article
+		}
+		if r.Notify && r.Boost == 0 && !r.Archive && !r.Keep &&
+			r.Category == "" && r.Importance == 0 && len(r.Tags) == 0 {
+			continue // a rule that only watches lets the chain carry on
 		}
 		if d.Action == nil {
 			d.Action, d.ActionBy = r.RuleActions, r.Name

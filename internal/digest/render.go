@@ -21,6 +21,13 @@ func Markdown(d *Digest) string {
 	if d.Overview != "" {
 		b.WriteString(d.Overview + "\n\n")
 	}
+	if len(d.Watchlist) > 0 {
+		b.WriteString("## Watchlist\n\n")
+		for _, hit := range d.Watchlist {
+			fmt.Fprintf(&b, "- [%s](%s) — *%s*\n", hit.Article.Title, hit.Article.URL, hit.Rule)
+		}
+		b.WriteString("\n")
+	}
 	for _, th := range d.Themes {
 		fmt.Fprintf(&b, "## %s\n\n", th.Name)
 		if th.Summary != "" {
@@ -88,6 +95,20 @@ func HTML(d *Digest) string {
 		fmt.Fprintf(&b, "<p class=\"overview\">%s</p>\n", html.EscapeString(d.Overview))
 	}
 
+	if len(d.Watchlist) > 0 {
+		b.WriteString("<h2>watchlist</h2>\n<ul>\n")
+		for _, hit := range d.Watchlist {
+			b.WriteString("<li>")
+			if hit.Article.URL != "" {
+				fmt.Fprintf(&b, "<a href=\"%s\">%s</a>",
+					html.EscapeString(hit.Article.URL), html.EscapeString(hit.Article.Title))
+			} else {
+				b.WriteString(html.EscapeString(hit.Article.Title))
+			}
+			fmt.Fprintf(&b, "<div class=\"source\">%s</div></li>\n", html.EscapeString(hit.Rule))
+		}
+		b.WriteString("</ul>\n")
+	}
 	for _, th := range d.Themes {
 		fmt.Fprintf(&b, "<h2>%s</h2>\n", html.EscapeString(th.Name))
 		if th.Summary != "" {

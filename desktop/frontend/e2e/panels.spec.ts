@@ -292,6 +292,30 @@ test.describe("workflows", () => {
   });
 });
 
+test.describe("watchlist", () => {
+  test(":watch lists the watches and what they caught", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("watch");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toBeVisible();
+
+    // The watches themselves: ordinary rules carrying a notify action.
+    await expect(page.locator('[data-testid="watch-rules"]')).toContainText("watch: gpt-5 ships");
+    // And what they caught, unseen ones marked.
+    const hits = page.locator('[data-testid="watch-hit"]');
+    await expect(hits).toHaveCount(2);
+    await expect(hits.first().locator(".sp-dot")).toHaveAttribute("data-on", "true");
+    await expect(hits.nth(1).locator(".sp-dot")).toHaveAttribute("data-on", "false");
+    await shot(page, "22-watchlist");
+
+    // Enter opens the article it caught.
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toHaveCount(0);
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
+  });
+});
+
 test.describe("digest export", () => {
   test(":digest export writes a file and says where", async ({ page }) => {
     await gotoApp(page);
