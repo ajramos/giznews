@@ -76,6 +76,29 @@ Tres decisiones:
 Además, la primera pregunta construye el índice si estaba vacío: "no hay nada
 sobre eso" tiene que significar eso y no "nadie ha indexado todavía".
 
+## Retención
+
+No había un solo `DELETE FROM articles` en el repo. Archivar es lógico, que es
+el comportamiento correcto, y exactamente por eso el fichero solo crecía.
+
+`internal/prune` va en etapas, de lo barato a lo destructivo:
+
+1. **El cuerpo** (`body_days`, 180): un artículo leído pierde `content_md` y
+   `content_html` y conserva fila, título y clasificación. Se le deja
+   `extracted = 1` a propósito: sin eso el extractor vería un cuerpo corto y
+   volvería a descargar el artículo, deshaciendo la poda y bajándose un año de
+   noticias para hacerlo.
+2. **La fila** (`row_days`, 365): se borra entera. `article_events` cae por
+   cascada; las filas de `articles_fts` se borran a mano, porque el índice
+   guarda su **propia copia del texto** y si no se quedaría con todos los bytes
+   que la poda venía a liberar.
+3. **`VACUUM`**, y se informa del tamaño antes y después.
+
+Intocable a cualquier edad: marcado, sin leer, o con una nota en el vault
+(`ingests`). Y una historia se poda como unidad: borrar el ancla dejando sus
+copias las dejaría apuntando a una fila que ya no existe, y `storyAnchor` no
+volvería a mostrarlas nunca.
+
 ## Desatendido
 
 `giznews serve` es el bucle: cada etapa lleva su cadencia (`serve.*_every`) y el

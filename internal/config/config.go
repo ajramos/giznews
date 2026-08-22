@@ -91,6 +91,9 @@ type Config struct {
 	// Serve configures the unattended loop (`giznews serve`).
 	Serve ServeConfig `json:"serve"`
 
+	// Prune configures how long articles are kept (`giznews prune`).
+	Prune PruneConfig `json:"prune"`
+
 	// Extract configures full-article content extraction (readability) during
 	// fetch, so bodies are ready before you open them.
 	Extract ExtractConfig `json:"extract"`
@@ -199,6 +202,16 @@ type LearnConfig struct {
 	MaxDelta int `json:"max_delta"`
 }
 
+// PruneConfig configures what `giznews prune` reclaims. Both windows are
+// deliberately long: nothing here is reversible.
+type PruneConfig struct {
+	// BodyDays is when a read article loses its extracted body — most of the
+	// space, almost none of the meaning.
+	BodyDays int `json:"body_days"`
+	// RowDays is when it goes entirely.
+	RowDays int `json:"row_days"`
+}
+
 // ServeConfig configures the unattended loop. Every interval is a duration
 // string ("30m", "4h"); an empty one switches that stage off.
 type ServeConfig struct {
@@ -305,6 +318,10 @@ func DefaultConfig() *Config {
 		Fetch: FetchConfig{
 			MaxAgeDays:      30,
 			SourceWarnAfter: 3,
+		},
+		Prune: PruneConfig{
+			BodyDays: 180,
+			RowDays:  365,
 		},
 		Serve: ServeConfig{
 			FetchEvery:    "30m",

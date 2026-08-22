@@ -54,6 +54,8 @@ func main() {
 		runRules(args, logger)
 	case "learn":
 		runLearn(args, logger)
+	case "prune":
+		runPrune(args, logger)
 	case "gmail-auth":
 		runGmailAuth(args, logger)
 	case "help", "--help", "-h":
@@ -82,6 +84,7 @@ Commands:
   sources   Manage news sources (list, add, enable, disable)
   rules     Manage the ⚡ prefilter (list, test, import, export, suggest, add, rm)
   learn     Report what your reading says, and store it as an adjustment
+  prune     Reclaim space from old articles (--dry-run to see what would go)
   gmail-auth  Run the Gmail OAuth flow (newsletters)
   serve     Run the pipeline unattended (--once for cron)
   version   Show version

@@ -66,20 +66,45 @@ go run ./cmd/giznews kb concepts        # conceptos por menciones (electron | pe
 go run ./cmd/giznews kb merge gpt4 gpt-5  # funde dos conceptos y reescribe los enlaces
 go run ./cmd/giznews digest     # digest diario
 
-# 4. Desatendido
+# 4. Mantenimiento
+go run ./cmd/giznews prune --dry-run   # qué se liberaría, sin borrar nada
+go run ./cmd/giznews prune             # libera el espacio y compacta el fichero
+
+# 5. Desatendido
 go run ./cmd/giznews serve          # bucle: fetch → classify → kb → index → digest
 go run ./cmd/giznews serve --once   # una pasada y sale (para cron)
 
-# 5. Búsqueda semántica y preguntas
+# 6. Búsqueda semántica y preguntas
 go run ./cmd/giznews search "watermarking"
 go run ./cmd/giznews ask "¿qué sé de sparse attention?"   # responde citando tus notas
 
-# 6. App desktop
+# 7. App desktop
 cd desktop && wails build && open build/bin/giznews.app
 ```
 
 El vault se abre con Obsidian en `~/Documents/obsidian/chronicles-ai`
 (configurable en `~/.config/giznews/config.json`).
+
+## Recuperar espacio
+
+Archivar es lógico —siempre puedes volver— y por eso el fichero solo crecía:
+cada artículo guardaba su cuerpo extraído, su embedding y su fila en el índice
+de búsqueda, para siempre.
+
+`giznews prune` va de lo barato a lo destructivo: a los 180 días un artículo
+leído pierde el **cuerpo** (casi todo el espacio, casi nada del significado) y
+conserva su fila, su título y su clasificación; a los 365 se va entero. Luego
+`VACUUM`.
+
+Nunca se toca, tenga la edad que tenga: lo **marcado**, lo que sigue **sin
+leer** y lo que tiene una **nota en el vault**. Y las copias de una misma
+historia se podan juntas: borrar la copia bajo la que está archivada dejaría
+huérfanas a las demás.
+
+```sh
+giznews prune --dry-run                      # cuántas y cuántos bytes, sin tocar nada
+giznews prune --older-than 6m --delete-after 2y
+```
 
 ## Dejarlo funcionando solo
 

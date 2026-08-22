@@ -66,6 +66,16 @@ Questions retrieve differently from the search box: `questionQuery` strips
 question words and matches the rest as alternatives, because a phrase match on
 a natural question finds nothing. Both go through `retrieve`.
 
+## Retention
+
+`internal/prune` is the only thing in the repo that deletes articles, and it is
+staged: bodies at `prune.body_days`, whole rows at `prune.row_days`, then
+VACUUM. Never prunable at any age: starred, still unread, or with a note in the
+vault — and a story is pruned as a unit, since deleting its anchor would strand
+the copies. Dropping a body sets `extracted = 1` so the extractor does not
+re-download it, and `articles_fts` rows are deleted explicitly because the index
+keeps its own copy of the text.
+
 ## Unattended runs
 
 Stages live in `internal/pipeline` (`Runner`), so `serve` and the CLI run the
