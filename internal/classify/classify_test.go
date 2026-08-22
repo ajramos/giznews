@@ -572,3 +572,112 @@ func TestRulesOnlySweepsMoreThanTheRunCap(t *testing.T) {
 		t.Fatalf("pending = %d, want 0 — the queue was not swept", res.Pending)
 	}
 }
+
+// A watch asks to be told, once. Being told twice about the same article is
+// worse than not being told: it teaches you to ignore the notification.
+func TestAWatchAnnouncesAnArticleOnce(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	for _, title := range []string{"OpenAI ships GPT-5 at last", "An ordinary piece of news"} {
+		if _, _, err := artRepo.Upsert(ctx, db.NewArticle{
+			SourceID: src.ID, GUID: title, URL: "https://x/" + title, Title: title,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.NewRuleRepo(d).Create(ctx, db.NewRule{
+		Name: "watch: gpt-5 ships", Query: `gpt-?5`,
+		Actions: []db.RuleAction{{Type: "notify"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(d, Options{UseLLM: false, BatchSize: 10, AgeDays: 30}, nil, nil)
+	res, err := svc.ClassifyAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Watched != 1 {
+		t.Fatalf("watched = %d, want 1", res.Watched)
+	}
+	// A watch is not a classification: the article still went to the model
+	// (here, to the fallback) rather than being resolved by the rule.
+	if res.ByRules != 0 {
+		t.Fatalf("a watch claimed an article: %+v", res)
+	}
+
+	hits, err := db.NewWatchRepo(d).List(ctx, false, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].Article.Title != "OpenAI ships GPT-5 at last" {
+		t.Fatalf("hits = %+v", hits)
+	}
+	if hits[0].Rule != "watch: gpt-5 ships" {
+		t.Fatalf("hit does not name the watch that caught it: %+v", hits[0])
+	}
+
+	// Classifying it again — a re-fetch, a re-run — announces nothing new.
+	if _, err := svc.ClassifyIDs(ctx, []int64{1}); err != nil {
+		t.Fatal(err)
+	}
+	again, err := db.NewWatchRepo(d).List(ctx, false, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again) != 1 {
+		t.Fatalf("the same article was announced %d times", len(again))
+	}
+}
+
+// A watch says nothing about how important an article is, so it composes with
+// a boost on the same article instead of competing with it.
+func TestAWatchComposesWithABoost(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	if _, _, err := artRepo.Upsert(ctx, db.NewArticle{
+		SourceID: src.ID, GUID: "a", URL: "https://x/a", Title: "Acme releases GPT-5 competitor",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ruleRepo := db.NewRuleRepo(d)
+	if _, err := ruleRepo.Create(ctx, db.NewRule{
+		Name: "watch: gpt-5", Query: `gpt-?5`,
+		Actions: []db.RuleAction{{Type: "notify"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ruleRepo.Create(ctx, db.NewRule{
+		Name: "high: releases", Query: `releases`,
+		Actions: []db.RuleAction{{Type: "boost", Value: "3"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(d, Options{UseLLM: false, BatchSize: 10, AgeDays: 30}, nil, nil)
+	res, err := svc.ClassifyAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Watched != 1 {
+		t.Fatalf("the watch did not fire alongside the boost: %+v", res)
+	}
+	got, _ := artRepo.Get(ctx, 1)
+	if got.Importance != 3 {
+		t.Fatalf("importance = %d, want 3 — the watch must not have swallowed the boost", got.Importance)
+	}
+}

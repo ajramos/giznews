@@ -38,6 +38,9 @@ type API interface {
 	Digest(ctx context.Context) (*DigestDTO, error)
 	ListDigests(ctx context.Context) ([]*DigestMeta, error)
 	GetDigest(ctx context.Context, date string) (*DigestDTO, error)
+	ExportDigest(ctx context.Context, date, format string) (string, error)
+	ListWatchHits(ctx context.Context, onlyUnseen bool) ([]*WatchHitDTO, error)
+	MarkWatchHitsSeen(ctx context.Context, ids []int64) error
 	Flow(ctx context.Context) (*FlowStatus, error)
 
 	// Knowledge graph
@@ -53,6 +56,7 @@ type API interface {
 	// Search
 	SearchIndex(ctx context.Context) (*IndexResultDTO, error)
 	Search(ctx context.Context, query string, limit int) ([]*SearchResultDTO, error)
+	Ask(ctx context.Context, question string) (*AnswerDTO, error)
 
 	// Jobs (background operations)
 	ListJobs(ctx context.Context) ([]*JobDTO, error)

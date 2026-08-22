@@ -54,6 +54,53 @@ Everything must be green before committing.
 - Article states: `unread | read | archived | starred` — all logical, nothing
   is physically deleted. Archiving offers undo.
 
+## Asking the vault
+
+`search.Ask` answers from the notes only. Non-negotiables: every `[[slug]]` is
+checked against `kb_notes` before the answer is shown (invented ones lose their
+brackets and land in `Dropped`); articles are context but never citable; and
+with nothing retrieved or no model the answer comes back `Grounded: false` with
+the ranked sources — never filled in from the model's own knowledge.
+
+Questions retrieve differently from the search box: `questionQuery` strips
+question words and matches the rest as alternatives, because a phrase match on
+a natural question finds nothing. Both go through `retrieve`.
+
+## Watches
+
+A watch is a rule with a `notify` action — written, tested and imported like any
+other. Like `boost` it annotates rather than claims, so the chain carries on and
+a watch composes with a boost on the same article. Hits are recorded during
+`classify` in `watch_hits`, keyed by article: **announced once, ever**.
+
+Delivery is threefold so it never depends on the app being open: OS notification
+(macOS, `osascript`; a no-op elsewhere), a `## Watchlist` block at the top of the
+vault's daily note, and a section in the digest. Seeing them in `:watch` marks
+them seen.
+
+## Digest export
+
+`digest.Markdown` / `digest.HTML` are pure functions of the digest — nothing
+reads the clock, because exporting twice must produce identical bytes. The HTML
+is self-contained (inline CSS, no `<link>`, no `src=`, no script) and every
+string goes through `html.EscapeString`.
+
+`digest.Save` / `digest.Load` are the shared persistence path; `Load` accepts
+both the `name` and the desktop app's older `theme` key. Exporting a date with
+no stored digest is an error, never an empty file. `digest.Send` (SMTP) is the
+only thing in the repo that leaves the machine: it refuses unless
+`digest.smtp.host` and `to` are configured, and only ever runs when asked.
+
+## Retention
+
+`internal/prune` is the only thing in the repo that deletes articles, and it is
+staged: bodies at `prune.body_days`, whole rows at `prune.row_days`, then
+VACUUM. Never prunable at any age: starred, still unread, or with a note in the
+vault — and a story is pruned as a unit, since deleting its anchor would strand
+the copies. Dropping a body sets `extracted = 1` so the extractor does not
+re-download it, and `articles_fts` rows are deleted explicitly because the index
+keeps its own copy of the text.
+
 ## Unattended runs
 
 Stages live in `internal/pipeline` (`Runner`), so `serve` and the CLI run the

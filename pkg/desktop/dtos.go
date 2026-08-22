@@ -89,10 +89,23 @@ type MergeDTO struct {
 type SearchResultDTO struct {
 	Kind    string  `json:"kind"` // article | note
 	ID      int64   `json:"id"`
+	Slug    string  `json:"slug,omitempty"` // notes only: what a citation points at
 	Title   string  `json:"title"`
 	Source  string  `json:"source,omitempty"`
 	Snippet string  `json:"snippet"`
 	Score   float64 `json:"score"`
+}
+
+// AnswerDTO is what the knowledge base has to say about a question.
+type AnswerDTO struct {
+	Question string             `json:"question"`
+	Text     string             `json:"text"`
+	Sources  []*SearchResultDTO `json:"sources"`
+	// Grounded is false when nothing was retrieved or no model was available.
+	// The sources still come back: a ranking beats an apology.
+	Grounded bool `json:"grounded"`
+	// Dropped names citations the model invented, already stripped from Text.
+	Dropped []string `json:"dropped,omitempty"`
 }
 
 // DigestThemeDTO is a theme group inside a digest.
@@ -111,14 +124,17 @@ type DigestDTO struct {
 
 // ClassifyResult reports what a classification run did.
 type ClassifyResult struct {
-	Classified   int      `json:"classified"`
-	ByRules      int      `json:"by_rules"`
-	Archived     int      `json:"archived"`
-	ByLLM        int      `json:"by_llm"`
-	SkippedNoLLM int      `json:"skipped_no_llm"`
-	Batches      int      `json:"batches"`
-	Pending      int      `json:"pending"`
-	Errors       []string `json:"errors,omitempty"`
+	Classified   int `json:"classified"`
+	ByRules      int `json:"by_rules"`
+	Archived     int `json:"archived"`
+	ByLLM        int `json:"by_llm"`
+	SkippedNoLLM int `json:"skipped_no_llm"`
+	Batches      int `json:"batches"`
+	Pending      int `json:"pending"`
+	// Watched counts articles a watch rule caught for the first time, so the
+	// app can tell the reader about them instead of waiting to be asked.
+	Watched int      `json:"watched"`
+	Errors  []string `json:"errors,omitempty"`
 }
 
 // ListArticlesOptions mirrors db.ListOptions in JSON-friendly form.

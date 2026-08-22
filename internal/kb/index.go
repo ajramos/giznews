@@ -167,13 +167,32 @@ func (s *Service) renderDaily(ctx context.Context, repo *db.KBRepo, day string) 
 	if err != nil && !errors.Is(err, db.ErrNotFound) {
 		return "", false, err
 	}
-	if len(notes) == 0 && (digest == nil || digest.Overview == "") {
+	// What a watch caught goes in the day's note whether or not the app was
+	// running when it arrived: the vault is the delivery that never misses.
+	watched, err := db.NewWatchRepo(s.db).Since(ctx, day, 20)
+	if err != nil {
+		return "", false, err
+	}
+	if len(notes) == 0 && len(watched) == 0 && (digest == nil || digest.Overview == "") {
 		return "", false, nil
 	}
 
 	var b strings.Builder
 	b.WriteString(mapFrontmatter("daily"))
 	b.WriteString("\n# " + day + "\n\n")
+
+	// Above the digest on purpose: it is the part that was asked for.
+	if len(watched) > 0 {
+		b.WriteString("## Watchlist\n")
+		for _, hit := range watched {
+			b.WriteString("- [" + hit.Article.Title + "](" + hit.Article.URL + ")")
+			if hit.Article.SourceName != "" {
+				b.WriteString(" — " + hit.Article.SourceName)
+			}
+			b.WriteString(" · *" + hit.Rule + "*\n")
+		}
+		b.WriteString("\n")
+	}
 	if digest != nil && digest.Overview != "" {
 		b.WriteString("## Digest\n" + digest.Overview + "\n\n")
 	}

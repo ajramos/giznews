@@ -7,6 +7,7 @@
 
 import { mockBackend } from "./apiMock";
 import type {
+  AnswerDTO,
   ArticleDTO,
   BulkResult,
   ClassifyResult,
@@ -26,6 +27,7 @@ import type {
   SearchResultDTO,
   SourceDTO,
   StatusDTO,
+  WatchHitDTO,
 } from "./types";
 
 declare global {
@@ -120,6 +122,10 @@ export interface APIShape {
   classifyRules: (limit: number) => Promise<ClassifyResult>;
   summarizeArticle: (id: number) => Promise<ArticleDTO>;
   digest: () => Promise<DigestDTO>;
+  exportDigest: (date: string, format: string) => Promise<string>;
+  listWatchHits: (onlyUnseen: boolean) => Promise<WatchHitDTO[]>;
+  markWatchHitsSeen: (ids: number[]) => Promise<void>;
+  notifyOS: (title: string, body: string) => Promise<void>;
   listDigests: () => Promise<DigestMeta[]>;
   getDigest: (date: string) => Promise<DigestDTO | null>;
   flow: () => Promise<FlowStatus>;
@@ -139,6 +145,7 @@ export interface APIShape {
   promoteConcept: (slug: string) => Promise<NoteDTO>;
   mergeConcepts: (from: string, to: string) => Promise<MergeDTO>;
   getNote: (id: number) => Promise<NoteDTO>;
+  ask: (question: string) => Promise<AnswerDTO>;
   graphNeighbors: (id: number) => Promise<NoteDTO[]>;
   searchIndex: () => Promise<IndexResult>;
   search: (query: string, limit: number) => Promise<SearchResultDTO[]>;
@@ -185,6 +192,10 @@ const realApi: APIShape = {
   summarizeArticle: (id: number) =>
     call("SummarizeArticle", id).then((v) => normalize<ArticleDTO>(v)),
   digest: () => call("Digest").then((v) => normalize<DigestDTO>(v)),
+  exportDigest: (date: string, format: string) => call("ExportDigest", date, format).then((v) => String(v ?? "")),
+  listWatchHits: (onlyUnseen: boolean) => call("ListWatchHits", onlyUnseen).then((v) => arr<WatchHitDTO>(v)),
+  markWatchHitsSeen: (ids: number[]) => call("MarkWatchHitsSeen", ids).then(() => undefined),
+  notifyOS: (title: string, body: string) => call("NotifyOS", title, body).then(() => undefined),
   listDigests: () => call("ListDigests").then((v) => arr<DigestMeta>(v)),
   getDigest: (date: string) =>
     call("GetDigest", date).then((v) => (v ? normalize<DigestDTO>(v) : null)),
@@ -214,6 +225,7 @@ const realApi: APIShape = {
   mergeConcepts: (from: string, to: string) =>
     call("MergeConcepts", from, to).then((v) => normalize<MergeDTO>(v)),
   getNote: (id: number) => call("GetNote", id).then((v) => normalize<NoteDTO>(v)),
+  ask: (question: string) => call("Ask", question).then((v) => normalize<AnswerDTO>(v)),
   graphNeighbors: (id: number) => call("GraphNeighbors", id).then((v) => arr<NoteDTO>(v)),
 
   searchIndex: () => call("SearchIndex").then((v) => normalize<IndexResult>(v)),

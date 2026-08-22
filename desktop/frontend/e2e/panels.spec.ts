@@ -291,3 +291,75 @@ test.describe("workflows", () => {
     await expect(page.locator(".toast")).toBeVisible({ timeout: 6000 });
   });
 });
+
+test.describe("watchlist", () => {
+  test(":watch lists the watches and what they caught", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("watch");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toBeVisible();
+
+    // The watches themselves: ordinary rules carrying a notify action.
+    await expect(page.locator('[data-testid="watch-rules"]')).toContainText("watch: gpt-5 ships");
+    // And what they caught, unseen ones marked.
+    const hits = page.locator('[data-testid="watch-hit"]');
+    await expect(hits).toHaveCount(2);
+    await expect(hits.first().locator(".sp-dot")).toHaveAttribute("data-on", "true");
+    await expect(hits.nth(1).locator(".sp-dot")).toHaveAttribute("data-on", "false");
+    await shot(page, "22-watchlist");
+
+    // Enter opens the article it caught.
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toHaveCount(0);
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
+  });
+});
+
+test.describe("digest export", () => {
+  test(":digest export writes a file and says where", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("digest export");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".toast")).toContainText("Digest written to", { timeout: 6000 });
+    await expect(page.locator(".toast")).toContainText(".html");
+  });
+});
+
+test.describe("ask", () => {
+  test(":ask answers from the notes, and every citation opens one", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("ask");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".ask-panel")).toBeVisible();
+
+    await page.locator(".ask-panel input").fill("what do I know about sparse attention?");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('[data-testid="ask-answer"]')).toBeVisible({ timeout: 6000 });
+
+    // Citations are buttons, not decoration.
+    const citations = page.locator(".ask-answer .citation");
+    await expect(citations.first()).toHaveText("ai-agents");
+    await shot(page, "21-ask");
+
+    // An invented citation is reported rather than hidden.
+    await expect(page.locator('[data-testid="ask-dropped"]')).toContainText("imaginary-note");
+
+    // Clicking one opens that note in the reader.
+    await citations.first().click();
+    await expect(page.locator(".ask-panel")).toHaveCount(0);
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
+  });
+
+  test("a question the vault knows nothing about is not answered", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("ask");
+    await page.keyboard.press("Enter");
+    await page.locator(".ask-panel input").fill("zzz nothing at all");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('[data-testid="ask-ungrounded"]')).toContainText("Nothing in your vault");
+  });
+});

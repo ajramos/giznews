@@ -109,6 +109,17 @@ func (s *Service) classify(ctx context.Context, articles []*db.Article) (*Result
 	floors := map[int64]int{} // article -> importance floor a boost rule gave it
 	for _, a := range articles {
 		d := Decide(rules, a)
+		if d.WatchedBy != "" {
+			// Recorded before anything else decides the article's fate: being
+			// told about something you asked to be told about does not depend
+			// on what the rest of the chain does with it.
+			first, err := db.NewWatchRepo(s.db).Record(ctx, a.ID, d.WatchedBy)
+			if err != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("#%d: watch: %v", a.ID, err))
+			} else if first {
+				res.Watched++
+			}
+		}
 		floor := d.Floor
 		if c := s.coverageFloor(a); c > floor {
 			floor = c

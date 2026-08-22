@@ -51,6 +51,96 @@ digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digest
 search ──► FTS5 (keyword) ⊕ embeddings (Ollama, coseno) con RRF
 ```
 
+## Preguntarle al vault
+
+La mitad de recuperación ya estaba —FTS5, embeddings, RRF— y devolvía una lista
+ordenada de filas, que es un buscador, no una respuesta. `Ask` añade el último
+paso: leer las notas y decir lo que dicen.
+
+Tres decisiones:
+
+- **Una pregunta no es una frase.** La caja de búsqueda manda un *phrase match*,
+  que allí está bien: si escribes tres palabras esperas esas tres juntas. Una
+  pregunta es lo contrario — `"what is sparse attention?"` como frase solo casa
+  con una nota que literalmente lo pregunte. `questionQuery` quita las palabras
+  de pregunta y casa el resto como alternativas, dejando que bm25 ordene. Los
+  dos caminos comparten `retrieve`, que recibe la expresión ya construida.
+- **Las notas van primero y son lo único citable.** Un artículo puede sostener
+  una respuesta pero no tiene slug al que volver; el prompt se lo dice.
+- **Toda cita se valida contra `kb_notes`** (`checkCitations`). Una cita
+  inventada se parece exactamente a una real, así que pierde los corchetes y se
+  reporta en `Dropped`. Y si no se recuperó nada, o no hay modelo, la respuesta
+  vuelve con `Grounded: false` y las fuentes: un ranking vale más que una
+  disculpa, y desde luego más que una respuesta sacada de la memoria del modelo.
+
+Además, la primera pregunta construye el índice si estaba vacío: "no hay nada
+sobre eso" tiene que significar eso y no "nadie ha indexado todavía".
+
+## Vigilancias
+
+Una vigilancia no es un concepto nuevo: es una regla con la acción `notify`. Se
+escribe, se prueba con `rules test` y se importa igual que las demás, y —como
+`boost`— **anota** el artículo en vez de reclamarlo, así que la cadena sigue y un
+artículo puede estar vigilado y subido a la vez.
+
+Los avisos se registran durante `classify`, que es donde corren las reglas, y
+`watch_hits` tiene el artículo como clave primaria: **una vez y ya**. Ser avisado
+dos veces del mismo artículo es peor que no serlo, porque enseña a ignorar el
+aviso.
+
+La entrega va por tres caminos para no depender de que la app esté abierta:
+notificación del sistema (macOS, vía `osascript`; en otros sistemas no hace nada
+en vez de fallar), el bloque `## Watchlist` **arriba** de la nota del día —el
+vault es la entrega que nunca falla— y una sección en el digest, que es la copia
+que sale de la máquina. `:watch` lista las vigilancias y lo cazado, y verlas
+cuenta como que te lo han dicho.
+
+## El digest, fuera de la base de datos
+
+`internal/digest` renderiza a markdown y a HTML. Las dos son funciones puras del
+digest: **nada lee el reloj**, porque exportar dos veces tiene que dar los mismos
+bytes o no se distingue un re-export de un cambio.
+
+El HTML es autocontenido a propósito —estilos en línea, sin `<link>`, sin `src=`,
+sin script— porque tiene que renderizar igual en un móvil sin red que en la
+máquina que lo escribió, y un cliente de correo tampoco va a ir a buscar una
+hoja de estilos. Todo el texto pasa por `html.EscapeString`: un titular es
+texto, nunca marcado.
+
+`Save`/`Load` son ahora el camino compartido: antes solo la app de escritorio
+persistía digests, y lo hacía con las claves de su propio DTO (`theme` en vez de
+`name`). `Load` acepta las dos formas, así que un digest exportado hoy puede ser
+uno que escribió la app hace meses; y el CLI también guarda lo que genera, que
+es lo que hace que `--date` signifique algo.
+
+El envío por SMTP vive en `mail.go` y es lo único del repo que sale de la
+máquina: sin `host` y `to` configurados se niega, y nunca ocurre sin que alguien
+lo pida explícitamente. El digest se guarda antes de intentar enviarlo, así que
+un fallo de entrega no cuesta nada más.
+
+## Retención
+
+No había un solo `DELETE FROM articles` en el repo. Archivar es lógico, que es
+el comportamiento correcto, y exactamente por eso el fichero solo crecía.
+
+`internal/prune` va en etapas, de lo barato a lo destructivo:
+
+1. **El cuerpo** (`body_days`, 180): un artículo leído pierde `content_md` y
+   `content_html` y conserva fila, título y clasificación. Se le deja
+   `extracted = 1` a propósito: sin eso el extractor vería un cuerpo corto y
+   volvería a descargar el artículo, deshaciendo la poda y bajándose un año de
+   noticias para hacerlo.
+2. **La fila** (`row_days`, 365): se borra entera. `article_events` cae por
+   cascada; las filas de `articles_fts` se borran a mano, porque el índice
+   guarda su **propia copia del texto** y si no se quedaría con todos los bytes
+   que la poda venía a liberar.
+3. **`VACUUM`**, y se informa del tamaño antes y después.
+
+Intocable a cualquier edad: marcado, sin leer, o con una nota en el vault
+(`ingests`). Y una historia se poda como unidad: borrar el ancla dejando sus
+copias las dejaría apuntando a una fila que ya no existe, y `storyAnchor` no
+volvería a mostrarlas nunca.
+
 ## Desatendido
 
 `giznews serve` es el bucle: cada etapa lleva su cadencia (`serve.*_every`) y el

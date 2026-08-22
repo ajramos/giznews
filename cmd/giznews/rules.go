@@ -178,6 +178,7 @@ func runRules(args []string, logger *log.Logger) {
 		archive := fs.Bool("archive", false, "archive what matches")
 		keep := fs.Bool("keep", false, "protect what matches from later rules")
 		boost := fs.Int("boost", 0, "importance floor applied after the model (1-3)")
+		notify := fs.Bool("notify", false, "be told when something matches, instead of coming across it")
 		disabled := fs.Bool("disabled", false, "create it switched off")
 		mustParse(fs, args[1:], logger)
 		if *name == "" || *query == "" {
@@ -203,6 +204,9 @@ func runRules(args []string, logger *log.Logger) {
 		}
 		if *boost > 0 {
 			actions = append(actions, db.RuleAction{Type: "boost", Value: strconv.Itoa(*boost)})
+		}
+		if *notify {
+			actions = append(actions, db.RuleAction{Type: "notify"})
 		}
 		nr := db.NewRule{Name: *name, Query: *query, Actions: actions, Enabled: !*disabled}
 		if err := validateRule(nr); err != nil {
@@ -323,6 +327,8 @@ func ruleEffect(r *db.Rule) string {
 		return "broken"
 	}
 	switch {
+	case actions.Notify && actions.Boost == 0 && !actions.Archive && !actions.Keep:
+		return "watch"
 	case actions.Boost > 0:
 		return fmt.Sprintf("boost ★%d", actions.Boost)
 	case actions.Keep:
@@ -440,7 +446,7 @@ func takesValue(arg string) bool {
 		return false
 	}
 	switch strings.TrimLeft(arg, "-") {
-	case "dry-run", "archive", "keep", "disabled":
+	case "dry-run", "archive", "keep", "notify", "disabled":
 		return false
 	}
 	return true

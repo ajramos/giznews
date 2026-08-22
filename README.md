@@ -58,6 +58,7 @@ go run ./cmd/giznews classify   # reglas ⚡ + LLM
 go run ./cmd/giznews learn --dry-run     # qué dice tu forma de leer, sin guardar nada
 go run ./cmd/giznews learn               # lo guarda: ajusta importancia de ahí en adelante
 go run ./cmd/giznews rules suggest       # reglas propuestas desde tu historial (llegan apagadas)
+go run ./cmd/giznews rules add --name "watch: gpt-5" --query "gpt-?5" --notify  # avísame cuando salga
 go run ./cmd/giznews kb build --dry-run  # qué haría, sin tocar el vault
 go run ./cmd/giznews kb build   # genera atoms/electrons/molecules + Index.md en el vault
 go run ./cmd/giznews kb themes          # reagrupa los temas (lo hace también el build)
@@ -65,20 +66,85 @@ go run ./cmd/giznews kb sync            # importa al grafo tus notas del vault
 go run ./cmd/giznews kb concepts        # conceptos por menciones (electron | pending)
 go run ./cmd/giznews kb merge gpt4 gpt-5  # funde dos conceptos y reescribe los enlaces
 go run ./cmd/giznews digest     # digest diario
+go run ./cmd/giznews digest --out ~/digest.html          # y sácalo a un fichero
+go run ./cmd/giznews digest --date 2026-08-20 --out d.md # o exporta uno guardado
 
-# 4. Desatendido
+# 4. Mantenimiento
+go run ./cmd/giznews prune --dry-run   # qué se liberaría, sin borrar nada
+go run ./cmd/giznews prune             # libera el espacio y compacta el fichero
+
+# 5. Desatendido
 go run ./cmd/giznews serve          # bucle: fetch → classify → kb → index → digest
 go run ./cmd/giznews serve --once   # una pasada y sale (para cron)
 
-# 5. Búsqueda semántica
+# 6. Búsqueda semántica y preguntas
 go run ./cmd/giznews search "watermarking"
+go run ./cmd/giznews ask "¿qué sé de sparse attention?"   # responde citando tus notas
 
-# 6. App desktop
+# 7. App desktop
 cd desktop && wails build && open build/bin/giznews.app
 ```
 
 El vault se abre con Obsidian en `~/Documents/obsidian/chronicles-ai`
 (configurable en `~/.config/giznews/config.json`).
+
+## Que te avise
+
+Todo lo demás aquí es *pull*: la noticia está ahí cuando abres, llegara hace un
+minuto o hace tres días. Para las cuatro cosas que de verdad estás esperando,
+esa es la forma equivocada.
+
+Una vigilancia **es una regla** con la acción `notify`, así que se escribe, se
+prueba (`rules test`) y se versiona como cualquier otra. No reclama el artículo
+ni le toca la importancia: solo pide que te lo cuenten, y compone con un `boost`
+sobre el mismo artículo.
+
+```sh
+giznews rules add --name "watch: gpt-5 ships" --query "gpt-?5" --notify
+giznews rules test --rule "watch: gpt-5 ships"   # qué habría cazado hasta hoy
+```
+
+Se avisa **una vez por artículo, para siempre**: un re-fetch o un segundo
+classify no vuelven a anunciarlo. Y llega por tres caminos, así que no depende
+de tener la app abierta: notificación del sistema si está corriendo, un bloque
+`## Watchlist` arriba de la nota del día en el vault, y una sección en el digest.
+`:watch` lista tus vigilancias y lo que han cazado.
+
+## Sacar el digest de la app
+
+Un digest se lee en el móvil, con el café, lejos de la máquina que lo generó.
+`giznews digest --out fichero` lo escribe en markdown o en **HTML
+autocontenido** —estilos en línea, cero peticiones a la red, legible a ancho de
+móvil—, y `--date` exporta uno ya guardado en vez de generar otro. En la app,
+`:digest export` lo escribe y lo abre.
+
+Exportar dos veces el mismo digest da **los mismos bytes**: así un re-export se
+distingue de un cambio. Y exportar un día para el que no hay digest falla en
+alto, no escribe un fichero vacío.
+
+Enviarlo por correo (`--send`) existe pero está **apagado** salvo que configures
+`digest.smtp`: es lo único aquí que sale de tu máquina, y nunca ocurre solo.
+
+## Recuperar espacio
+
+Archivar es lógico —siempre puedes volver— y por eso el fichero solo crecía:
+cada artículo guardaba su cuerpo extraído, su embedding y su fila en el índice
+de búsqueda, para siempre.
+
+`giznews prune` va de lo barato a lo destructivo: a los 180 días un artículo
+leído pierde el **cuerpo** (casi todo el espacio, casi nada del significado) y
+conserva su fila, su título y su clasificación; a los 365 se va entero. Luego
+`VACUUM`.
+
+Nunca se toca, tenga la edad que tenga: lo **marcado**, lo que sigue **sin
+leer** y lo que tiene una **nota en el vault**. Y las copias de una misma
+historia se podan juntas: borrar la copia bajo la que está archivada dejaría
+huérfanas a las demás.
+
+```sh
+giznews prune --dry-run                      # cuántas y cuántos bytes, sin tocar nada
+giznews prune --older-than 6m --delete-after 2y
+```
 
 ## Dejarlo funcionando solo
 
@@ -117,6 +183,22 @@ Si prefieres cron o launchd, `--once` hace una pasada y sale:
   <key>StartInterval</key><integer>1800</integer>
 </dict>
 ```
+
+## Preguntarle a tus notas
+
+`giznews ask "…"` (y `:ask` en la app) responde con la prosa del modelo pero
+**solo con lo que dicen tus notas**, citando cada afirmación con `[[slug]]`. En
+la app cada cita es un botón que abre esa nota.
+
+Dos reglas que son la razón de que se pueda confiar en la respuesta:
+
+- **Toda cita se comprueba contra la base de datos.** Una cita inventada se
+  parece exactamente a una real, así que se le quitan los corchetes antes de que
+  llegue a nadie y se informa de cuáles fueron. La promesa entera es poder
+  seguir una afirmación hasta la nota de la que salió.
+- **Si no hay nada, no responde.** Sin notas relevantes, o sin modelo, devuelve
+  el ranking y lo dice — nunca rellena el hueco con lo que el modelo sabe por su
+  cuenta.
 
 ## Arquitectura
 

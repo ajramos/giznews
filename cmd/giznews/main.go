@@ -44,6 +44,8 @@ func main() {
 		runKB(args, logger)
 	case "search":
 		runSearch(args, logger)
+	case "ask":
+		runAsk(args, logger)
 	case "serve":
 		runServe(args, logger)
 	case "sources":
@@ -52,6 +54,8 @@ func main() {
 		runRules(args, logger)
 	case "learn":
 		runLearn(args, logger)
+	case "prune":
+		runPrune(args, logger)
 	case "gmail-auth":
 		runGmailAuth(args, logger)
 	case "help", "--help", "-h":
@@ -73,12 +77,14 @@ Commands:
   init      Create default config, database and knowledge vault skeleton
   fetch     Fetch new articles from all enabled sources
   classify  Classify unread articles (rules ⚡ + LLM; --dry-run to plan it)
-  digest    Generate the daily digest (grouped by theme)
+  digest    Daily digest (--out FILE, --format md|html, --date D, --send)
   kb        Knowledge-graph operations (build, list, sync)
   search    Semantic + keyword search over notes and articles
+  ask       Answer a question from your own notes, with citations
   sources   Manage news sources (list, add, enable, disable)
   rules     Manage the ⚡ prefilter (list, test, import, export, suggest, add, rm)
   learn     Report what your reading says, and store it as an adjustment
+  prune     Reclaim space from old articles (--dry-run to see what would go)
   gmail-auth  Run the Gmail OAuth flow (newsletters)
   serve     Run the pipeline unattended (--once for cron)
   version   Show version

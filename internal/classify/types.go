@@ -38,6 +38,7 @@ type Result struct {
 	Boosted      int `json:"boosted"`
 	ByCoverage   int `json:"by_coverage"`
 	Adjusted     int `json:"adjusted"`
+	Watched      int `json:"watched"`
 	ByLLM        int `json:"by_llm"`
 	SkippedNoLLM int `json:"skipped_no_llm"`
 	Batches      int `json:"batches"`

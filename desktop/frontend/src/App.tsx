@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { applyTheme, currentTheme } from "./theme";
 import type {
+  AnswerDTO,
   ArticleDTO,
   DigestDTO,
   DigestMeta,
@@ -18,6 +19,8 @@ import { ArticleList } from "./components/ArticleList";
 import { Reader } from "./components/Reader";
 import { DigestView } from "./components/DigestView";
 import { SearchPanel } from "./components/SearchPanel";
+import { AskPanel } from "./components/AskPanel";
+import { WatchPanel } from "./components/WatchPanel";
 import { GraphPanel } from "./components/GraphPanel";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
 import { HelpOverlay } from "./components/HelpOverlay";
@@ -43,7 +46,7 @@ import { LinksPicker, type LinkItem } from "./components/LinksPicker";
 import { buildNoteLinks, buildArticleLinks } from "./noteLinks";
 import { CircleHelp, Command, RefreshCw, Loader2 } from "lucide-react";
 
-type Panel = "none" | "search" | "graph";
+type Panel = "none" | "search" | "ask" | "graph";
 
 interface Toast {
   msg: string;
@@ -70,6 +73,7 @@ export default function App() {
   const [logsOpen, setLogsOpen] = useState(false);
   const [rulesPickerOpen, setRulesPickerOpen] = useState(false);
   const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
+  const [watchPanelOpen, setWatchPanelOpen] = useState(false);
   const [ruleForm, setRuleForm] = useState<{ initial: RuleDTO | null } | null>(null);
   const [status, setStatus] = useState<StatusDTO | null>(null);
 
@@ -116,6 +120,9 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchFocus, setSearchFocus] = useState(0);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [answer, setAnswer] = useState<AnswerDTO | null>(null);
   const [graphFocusId, setGraphFocusId] = useState<number | null>(null);
   const [graphRefresh, setGraphRefresh] = useState(0);
 
@@ -715,6 +722,37 @@ export default function App() {
     setGraphFocusId(noteId);
     setPanel("graph");
   }, []);
+  // Asking is not searching: it waits for a written answer, and an answer that
+  // is not grounded says so rather than filling the gap.
+  // announceWatchHits tells the reader once, and marks the hits so nothing
+  // announces them again — from here, from the vault, or from the digest.
+  const announceWatchHits = useCallback(async () => {
+    try {
+      const hits = await api.listWatchHits(true);
+      if (hits.length === 0) return;
+      const first = hits[0].article.title;
+      const rest = hits.length > 1 ? ` (+${hits.length - 1} more)` : "";
+      notify(`Watchlist: ${first}${rest}`);
+      void api.notifyOS("giznews watchlist", `${first}${rest}`);
+      await api.markWatchHitsSeen(hits.map((h) => h.article.id));
+    } catch (e) {
+      notify(String(e));
+    }
+  }, [notify]);
+
+  const runAsk = useCallback(async () => {
+    const q = question.trim();
+    if (!q) return;
+    setAsking(true);
+    try {
+      setAnswer(await api.ask(q));
+    } catch (e) {
+      notify(String(e));
+    } finally {
+      setAsking(false);
+    }
+  }, [question, notify]);
+
 
   const runSearch = useCallback(async (q: string) => {
     setSearching(true);
@@ -773,6 +811,9 @@ export default function App() {
         await loadArticles();
         void refreshReader();
         notify(`${c.classified} classified (${c.byRules} rules · ${c.byLLM} LLM)`);
+        // Something you asked to be told about arrived: say so now rather than
+        // waiting for you to come across it.
+        if ((c.watched ?? 0) > 0) void announceWatchHits();
       });
     } },
     { name: "classify rules-only", hint: "Apply deterministic rules only (leave the rest for the LLM)", run: () => {
@@ -801,6 +842,13 @@ export default function App() {
       });
     } },
     { name: "kb synth <category>", hint: "Synthesize a category into a molecule", run: () => setSynthPrompt(true) },
+    { name: "digest export", hint: "Write the digest to a file you can read anywhere", run: () => void runCmd(async () => {
+      const date = digestDate ?? new Date().toISOString().slice(0, 10);
+      const path = await api.exportDigest(date, "html");
+      notify(`Digest written to ${path}`);
+      void api.openURL(path);
+    }) },
+    { name: "ask", hint: "Ask your notes a question, answered with citations", run: () => { setPanel("ask"); setAnswer(null); } },
     { name: "search index", hint: "Rebuild search index + embeddings", run: () => {
       setJobsOpen(true);
       void runCmd(async () => { await api.searchIndex(); notify("Search index updated"); });
@@ -811,6 +859,7 @@ export default function App() {
     { name: "flow", hint: "Pipeline flow (live counts)", run: () => setFlowOpen(true) },
     { name: "logs", hint: "Pipeline log (what the app decided)", run: () => setLogsOpen(true) },
     { name: "rules", hint: "Deterministic classification rules", run: () => setRulesPickerOpen(true) },
+    { name: "watch", hint: "What you asked to be told about, and what it caught", run: () => setWatchPanelOpen(true) },
     { name: "concepts", hint: "Concepts by mentions (promote, merge)", run: () => setConceptPickerOpen(true) },
     { name: "auto-refresh", hint: autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh (15 min)", run: () => setAutoRefresh((v) => !v) },
     { name: "sources", hint: "Manage sources", run: () => setSourcePickerOpen(true) },
@@ -1083,6 +1132,7 @@ export default function App() {
   const uiCtx: "list" | "reader" | "search" | "graph" | "digest" | "vault" =
     mode === "vault" ? "vault"
     : panel === "search" ? "search"
+    : panel === "ask" ? "search"
     : panel === "graph" ? "graph"
     : digestOpen ? "digest"
     : reader ? "reader"
@@ -1090,6 +1140,7 @@ export default function App() {
 
   const modeLabel = mode === "vault" ? "VAULT"
     : panel === "search" ? "SEARCH"
+    : panel === "ask" ? "ASK"
     : panel === "graph" ? "GRAPH"
     : digestOpen ? "DIGEST"
     : reader ? "READER"
@@ -1217,7 +1268,21 @@ export default function App() {
         <div className="splitter" onMouseDown={onSplitterDown} title="Drag to resize" />
 
         <section className="col reader-col">
-          {panel === "search" ? (
+          {panel === "ask" ? (
+            <AskPanel
+              question={question}
+              onQuestion={setQuestion}
+              asking={asking}
+              answer={answer}
+              onAsk={() => void runAsk()}
+              onClose={() => setPanel("none")}
+              onOpen={(r) => {
+                setPanel("none");
+                if (r.kind === "article") void openArticle(r.id);
+                else void openNote(r.id);
+              }}
+            />
+          ) : panel === "search" ? (
             <SearchPanel
               query={searchQuery}
               onQuery={(q) => { setSearchQuery(q); void runSearch(q); }}
@@ -1342,6 +1407,13 @@ export default function App() {
           onDelete={(s) => { setSourcePickerOpen(false); setDeleteSource(s); }}
           onFilter={(s) => { setSourcePickerOpen(false); void selectSource(s.id); }}
           onClose={() => setSourcePickerOpen(false)}
+        />
+      )}
+      {watchPanelOpen && (
+        <WatchPanel
+          onOpen={(id) => { setWatchPanelOpen(false); void openArticle(id); }}
+          onClose={() => setWatchPanelOpen(false)}
+          notify={notify}
         />
       )}
       {conceptPickerOpen && (

@@ -20,6 +20,7 @@ type Plan struct {
 	Kept      int        `json:"kept"`
 	Boosted   int        `json:"boosted"`
 	Covered   int        `json:"covered"` // raised by how many outlets ran the story
+	Watched   int        `json:"watched"` // an article a watch would announce
 	Learned   int        `json:"learned"` // moved by what the reader taught the app
 	LearnedUp int        `json:"learned_up"`
 	ToLLM     int        `json:"to_llm"`
@@ -76,6 +77,10 @@ func (s *Service) Preview(ctx context.Context) (*Plan, error) {
 
 	for _, a := range articles {
 		d := Decide(rules, a)
+		if d.WatchedBy != "" {
+			plan.Watched++
+			count(d.WatchedBy, a.Title)
+		}
 		covered := s.coverageFloor(a) > 0
 		if covered {
 			plan.Covered++
@@ -139,6 +144,8 @@ func (s *Service) Preview(ctx context.Context) (*Plan, error) {
 // effectOf names what a rule does, for a reader scanning a list of them.
 func effectOf(a *RuleActions) string {
 	switch {
+	case a.Notify && a.Boost == 0 && !a.Archive && !a.Keep:
+		return "watch"
 	case a.Boost > 0:
 		return fmt.Sprintf("boost ★%d", a.Boost)
 	case a.Keep:

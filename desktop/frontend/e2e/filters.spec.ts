@@ -106,12 +106,14 @@ test.describe("classification filters", () => {
     await page.locator(".palette input").fill("rules");
     await page.keyboard.press("Enter");
     await expect(page.locator(".source-picker")).toBeVisible();
-    await expect(page.locator(".source-picker .source-picker-item")).toHaveCount(4);
+    await expect(page.locator(".source-picker .source-picker-item")).toHaveCount(5);
     await expect(page.locator(".source-picker .source-picker-item", { hasText: "openai" }).first()).toBeVisible();
     // The list says what each rule does with what it matches: first match wins,
     // so a keep and an archive rule mean opposite things in the same position.
     await expect(page.locator(".source-picker-item", { hasText: "keep: labs and models" })).toContainText("keep");
     await expect(page.locator(".source-picker-item", { hasText: "noise: crypto" })).toContainText("archive");
+    // A watch reads as what it is, not as a classification rule.
+    await expect(page.locator(".source-picker-item", { hasText: "watch: gpt-5 ships" })).toContainText("watch");
     // Enter toggles the first rule off
     await press(page, "Enter");
     await expect(page.locator(".source-picker .source-picker-item").first().locator(".sp-dot")).toHaveAttribute("data-on", "false");

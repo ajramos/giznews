@@ -91,6 +91,9 @@ type Config struct {
 	// Serve configures the unattended loop (`giznews serve`).
 	Serve ServeConfig `json:"serve"`
 
+	// Prune configures how long articles are kept (`giznews prune`).
+	Prune PruneConfig `json:"prune"`
+
 	// Extract configures full-article content extraction (readability) during
 	// fetch, so bodies are ready before you open them.
 	Extract ExtractConfig `json:"extract"`
@@ -144,6 +147,23 @@ type DigestConfig struct {
 	Schedule string `json:"schedule"`
 	// MaxArticlesPerTheme caps how many articles are shown per theme group.
 	MaxArticlesPerTheme int `json:"max_articles_per_theme"`
+	// SMTP is where `giznews digest --send` mails the digest. Empty host or
+	// recipient means not configured, which is the default: sending is the one
+	// thing here that leaves the machine, and it never happens by itself.
+	SMTP SMTPConfig `json:"smtp"`
+}
+
+// SMTPConfig is where a digest is mailed. Declared here rather than reused
+// from internal/digest so config stays a description of the file and nothing
+// else.
+type SMTPConfig struct {
+	Host     string   `json:"host"`
+	Port     int      `json:"port"`
+	From     string   `json:"from"`
+	To       []string `json:"to"`
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	StartTLS bool     `json:"starttls"`
 }
 
 // ClassifyConfig configures classification.
@@ -197,6 +217,16 @@ type LearnConfig struct {
 	MinSamples int `json:"min_samples"`
 	// MaxDelta bounds the move, in either direction.
 	MaxDelta int `json:"max_delta"`
+}
+
+// PruneConfig configures what `giznews prune` reclaims. Both windows are
+// deliberately long: nothing here is reversible.
+type PruneConfig struct {
+	// BodyDays is when a read article loses its extracted body — most of the
+	// space, almost none of the meaning.
+	BodyDays int `json:"body_days"`
+	// RowDays is when it goes entirely.
+	RowDays int `json:"row_days"`
 }
 
 // ServeConfig configures the unattended loop. Every interval is a duration
@@ -305,6 +335,10 @@ func DefaultConfig() *Config {
 		Fetch: FetchConfig{
 			MaxAgeDays:      30,
 			SourceWarnAfter: 3,
+		},
+		Prune: PruneConfig{
+			BodyDays: 180,
+			RowDays:  365,
 		},
 		Serve: ServeConfig{
 			FetchEvery:    "30m",

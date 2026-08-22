@@ -34,6 +34,7 @@ type Options struct {
 type Result struct {
 	Kind    string  `json:"kind"` // article | note
 	ID      int64   `json:"id"`
+	Slug    string  `json:"slug,omitempty"` // notes only: what a citation points at
 	Title   string  `json:"title"`
 	Source  string  `json:"source,omitempty"`
 	Snippet string  `json:"snippet"`
@@ -266,6 +267,13 @@ func (s *Service) countFTS() (notes, articles int) {
 // Search runs hybrid retrieval. Without an embedding provider it degrades to
 // keyword-only FTS5.
 func (s *Service) Search(ctx context.Context, query string, limit int) ([]*Result, error) {
+	return s.retrieve(ctx, query, ftsQuery(query), limit)
+}
+
+// retrieve is the shared machinery. The keyword expression is handed in because
+// what counts as a good one depends on what was typed: a search box gets a
+// phrase, a question gets its nouns (see questionQuery).
+func (s *Service) retrieve(ctx context.Context, query, expr string, limit int) ([]*Result, error) {
 	if limit <= 0 {
 		limit = 20
 	}
@@ -275,7 +283,7 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]*Resul
 	}
 
 	// 1. Keyword ranking.
-	ftsRanks := s.ftsRanked(ctx, q)
+	ftsRanks := s.ftsRanked(ctx, expr)
 
 	// 2. Semantic ranking.
 	var vecRanks []*scored
@@ -305,10 +313,10 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]*Resul
 	return out, nil
 }
 
-func (s *Service) ftsRanked(ctx context.Context, q string) []*ranked {
+func (s *Service) ftsRanked(ctx context.Context, expr string) []*ranked {
 	var out []*ranked
 	rows, err := s.db.SQL().Query(
-		`SELECT note_id, title, bm25(notes_fts) AS rank FROM notes_fts WHERE notes_fts MATCH ? ORDER BY rank LIMIT 200`, ftsQuery(q))
+		`SELECT note_id, title, bm25(notes_fts) AS rank FROM notes_fts WHERE notes_fts MATCH ? ORDER BY rank LIMIT 200`, expr)
 	if err == nil {
 		for rows.Next() {
 			var id int64
@@ -321,7 +329,7 @@ func (s *Service) ftsRanked(ctx context.Context, q string) []*ranked {
 		rows.Close()
 	}
 	arows, err := s.db.SQL().Query(
-		`SELECT article_id, title, bm25(articles_fts) AS rank FROM articles_fts WHERE articles_fts MATCH ? ORDER BY rank LIMIT 200`, ftsQuery(q))
+		`SELECT article_id, title, bm25(articles_fts) AS rank FROM articles_fts WHERE articles_fts MATCH ? ORDER BY rank LIMIT 200`, expr)
 	if err == nil {
 		for arows.Next() {
 			var id int64
@@ -404,7 +412,8 @@ func (s *Service) hydrate(ctx context.Context, kind string, id int64) (*Result, 
 		if err != nil {
 			return nil, err
 		}
-		return &Result{Kind: "note", ID: n.ID, Title: n.Title, Source: string(n.Type), Snippet: snippet(stripFrontmatter(n.Content))}, nil
+		return &Result{Kind: "note", ID: n.ID, Slug: n.Slug, Title: n.Title,
+			Source: string(n.Type), Snippet: snippet(stripFrontmatter(n.Content))}, nil
 	}
 	a, err := db.NewArticleRepo(s.db).Get(ctx, id)
 	if err != nil {

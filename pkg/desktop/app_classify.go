@@ -2,9 +2,12 @@ package desktop
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/ajramos/giznews/internal/classify"
 	"github.com/ajramos/giznews/internal/db"
@@ -49,6 +52,7 @@ func (a *App) Classify(ctx context.Context, limit int) (*ClassifyResult, error) 
 			ByRules:      res.ByRules,
 			ByLLM:        res.ByLLM,
 			SkippedNoLLM: res.SkippedNoLLM,
+			Watched:      res.Watched,
 			Batches:      res.Batches,
 			Errors:       res.Errors,
 		}
@@ -99,6 +103,7 @@ func (a *App) ClassifyArticles(ctx context.Context, ids []int64) (*ClassifyResul
 			ByRules:      res.ByRules,
 			ByLLM:        res.ByLLM,
 			SkippedNoLLM: res.SkippedNoLLM,
+			Watched:      res.Watched,
 			Batches:      res.Batches,
 			Errors:       res.Errors,
 		}
@@ -138,6 +143,7 @@ func (a *App) ClassifyRules(ctx context.Context, limit int) (*ClassifyResult, er
 			ByRules:    res.ByRules,
 			Archived:   res.Archived,
 			Pending:    res.Pending,
+			Watched:    res.Watched,
 			Errors:     res.Errors,
 		}
 		p.Message(fmt.Sprintf("%d resolved by rules (%d archived) · %d left for LLM", res.ByRules, res.Archived, res.Pending))
@@ -234,10 +240,8 @@ func (a *App) Digest(ctx context.Context) (*DigestDTO, error) {
 			}
 			out.Themes = append(out.Themes, dt)
 		}
-		if themesJSON, err := json.Marshal(out.Themes); err == nil {
-			if err := db.NewDigestRepo(a.db).Save(jctx, out.Date, out.Overview, string(themesJSON)); err != nil {
-				a.logger().Printf("save digest: %v", err)
-			}
+		if err := digest.Save(jctx, a.db, d); err != nil {
+			a.logger().Printf("save digest: %v", err)
 		}
 		p.Message(fmt.Sprintf("%d themes", len(out.Themes)))
 		return nil
@@ -246,4 +250,62 @@ func (a *App) Digest(ctx context.Context) (*DigestDTO, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// ExportDigest writes a stored digest to a file next to the database and
+// returns its path, so the app can hand it to the reader (or to whatever opens
+// .html) without inventing a file dialog.
+//
+// date is empty for today's. format is "md" or "html".
+func (a *App) ExportDigest(ctx context.Context, date, format string) (string, error) {
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02")
+	}
+	d, err := digest.Load(ctx, a.db, date)
+	if err != nil {
+		return "", fmt.Errorf("no digest stored for %s", date)
+	}
+
+	body, ext := digest.Markdown(d), "md"
+	if strings.EqualFold(format, "html") {
+		body, ext = digest.HTML(d), "html"
+	}
+	dir := filepath.Join(filepath.Dir(a.cfg.ResolveDBPath()), "digests")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, date+"."+ext)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// WatchHitDTO is an article a watch caught.
+type WatchHitDTO struct {
+	Rule      string      `json:"rule"`
+	Seen      bool        `json:"seen"`
+	CreatedAt string      `json:"created_at"`
+	Article   *ArticleDTO `json:"article"`
+}
+
+// ListWatchHits returns what the watches have caught, newest first.
+func (a *App) ListWatchHits(ctx context.Context, onlyUnseen bool) ([]*WatchHitDTO, error) {
+	hits, err := db.NewWatchRepo(a.db).List(ctx, onlyUnseen, 50)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*WatchHitDTO, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, &WatchHitDTO{
+			Rule: h.Rule, Seen: h.Seen, CreatedAt: h.CreatedAt, Article: toArticleDTO(h.Article),
+		})
+	}
+	return out, nil
+}
+
+// MarkWatchHitsSeen records that the reader has been shown these, so nothing
+// announces them a second time.
+func (a *App) MarkWatchHitsSeen(ctx context.Context, ids []int64) error {
+	return db.NewWatchRepo(a.db).MarkSeen(ctx, ids)
 }
