@@ -7,6 +7,7 @@
 
 import { mockBackend } from "./apiMock";
 import type {
+  AnswerDTO,
   ArticleDTO,
   BulkResult,
   ClassifyResult,
@@ -139,6 +140,7 @@ export interface APIShape {
   promoteConcept: (slug: string) => Promise<NoteDTO>;
   mergeConcepts: (from: string, to: string) => Promise<MergeDTO>;
   getNote: (id: number) => Promise<NoteDTO>;
+  ask: (question: string) => Promise<AnswerDTO>;
   graphNeighbors: (id: number) => Promise<NoteDTO[]>;
   searchIndex: () => Promise<IndexResult>;
   search: (query: string, limit: number) => Promise<SearchResultDTO[]>;
@@ -214,6 +216,7 @@ const realApi: APIShape = {
   mergeConcepts: (from: string, to: string) =>
     call("MergeConcepts", from, to).then((v) => normalize<MergeDTO>(v)),
   getNote: (id: number) => call("GetNote", id).then((v) => normalize<NoteDTO>(v)),
+  ask: (question: string) => call("Ask", question).then((v) => normalize<AnswerDTO>(v)),
   graphNeighbors: (id: number) => call("GraphNeighbors", id).then((v) => arr<NoteDTO>(v)),
 
   searchIndex: () => call("SearchIndex").then((v) => normalize<IndexResult>(v)),

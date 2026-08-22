@@ -291,3 +291,40 @@ test.describe("workflows", () => {
     await expect(page.locator(".toast")).toBeVisible({ timeout: 6000 });
   });
 });
+
+test.describe("ask", () => {
+  test(":ask answers from the notes, and every citation opens one", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("ask");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".ask-panel")).toBeVisible();
+
+    await page.locator(".ask-panel input").fill("what do I know about sparse attention?");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('[data-testid="ask-answer"]')).toBeVisible({ timeout: 6000 });
+
+    // Citations are buttons, not decoration.
+    const citations = page.locator(".ask-answer .citation");
+    await expect(citations.first()).toHaveText("ai-agents");
+    await shot(page, "21-ask");
+
+    // An invented citation is reported rather than hidden.
+    await expect(page.locator('[data-testid="ask-dropped"]')).toContainText("imaginary-note");
+
+    // Clicking one opens that note in the reader.
+    await citations.first().click();
+    await expect(page.locator(".ask-panel")).toHaveCount(0);
+    await expect(page.locator(".reader-head h1")).toBeVisible({ timeout: 6000 });
+  });
+
+  test("a question the vault knows nothing about is not answered", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("ask");
+    await page.keyboard.press("Enter");
+    await page.locator(".ask-panel input").fill("zzz nothing at all");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('[data-testid="ask-ungrounded"]')).toContainText("Nothing in your vault");
+  });
+});

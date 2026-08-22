@@ -44,6 +44,8 @@ func main() {
 		runKB(args, logger)
 	case "search":
 		runSearch(args, logger)
+	case "ask":
+		runAsk(args, logger)
 	case "serve":
 		runServe(args, logger)
 	case "sources":
@@ -76,6 +78,7 @@ Commands:
   digest    Generate the daily digest (grouped by theme)
   kb        Knowledge-graph operations (build, list, sync)
   search    Semantic + keyword search over notes and articles
+  ask       Answer a question from your own notes, with citations
   sources   Manage news sources (list, add, enable, disable)
   rules     Manage the ⚡ prefilter (list, test, import, export, suggest, add, rm)
   learn     Report what your reading says, and store it as an adjustment

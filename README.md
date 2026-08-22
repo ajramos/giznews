@@ -70,8 +70,9 @@ go run ./cmd/giznews digest     # digest diario
 go run ./cmd/giznews serve          # bucle: fetch → classify → kb → index → digest
 go run ./cmd/giznews serve --once   # una pasada y sale (para cron)
 
-# 5. Búsqueda semántica
+# 5. Búsqueda semántica y preguntas
 go run ./cmd/giznews search "watermarking"
+go run ./cmd/giznews ask "¿qué sé de sparse attention?"   # responde citando tus notas
 
 # 6. App desktop
 cd desktop && wails build && open build/bin/giznews.app
@@ -117,6 +118,22 @@ Si prefieres cron o launchd, `--once` hace una pasada y sale:
   <key>StartInterval</key><integer>1800</integer>
 </dict>
 ```
+
+## Preguntarle a tus notas
+
+`giznews ask "…"` (y `:ask` en la app) responde con la prosa del modelo pero
+**solo con lo que dicen tus notas**, citando cada afirmación con `[[slug]]`. En
+la app cada cita es un botón que abre esa nota.
+
+Dos reglas que son la razón de que se pueda confiar en la respuesta:
+
+- **Toda cita se comprueba contra la base de datos.** Una cita inventada se
+  parece exactamente a una real, así que se le quitan los corchetes antes de que
+  llegue a nadie y se informa de cuáles fueron. La promesa entera es poder
+  seguir una afirmación hasta la nota de la que salió.
+- **Si no hay nada, no responde.** Sin notas relevantes, o sin modelo, devuelve
+  el ranking y lo dice — nunca rellena el hueco con lo que el modelo sabe por su
+  cuenta.
 
 ## Arquitectura
 

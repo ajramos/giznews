@@ -66,6 +66,7 @@ export interface DigestDTO {
 export interface SearchResultDTO {
   kind: string;
   id: number;
+  slug?: string;
   title: string;
   source: string;
   snippet: string;
@@ -215,3 +216,14 @@ export interface MergeDTO {
 
 export type ViewMode = "articles" | "digest";
 export type PanelMode = "none" | "search" | "graph" | "palette";
+
+// What the knowledge base has to say about a question. `grounded` is false when
+// nothing was retrieved or no model was available — the sources still come
+// back, because a ranking beats an apology.
+export interface AnswerDTO {
+  question: string;
+  text: string;
+  sources: SearchResultDTO[];
+  grounded: boolean;
+  dropped?: string[];
+}

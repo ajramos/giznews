@@ -53,6 +53,7 @@ type API interface {
 	// Search
 	SearchIndex(ctx context.Context) (*IndexResultDTO, error)
 	Search(ctx context.Context, query string, limit int) ([]*SearchResultDTO, error)
+	Ask(ctx context.Context, question string) (*AnswerDTO, error)
 
 	// Jobs (background operations)
 	ListJobs(ctx context.Context) ([]*JobDTO, error)

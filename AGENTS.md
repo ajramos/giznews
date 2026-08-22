@@ -54,6 +54,18 @@ Everything must be green before committing.
 - Article states: `unread | read | archived | starred` — all logical, nothing
   is physically deleted. Archiving offers undo.
 
+## Asking the vault
+
+`search.Ask` answers from the notes only. Non-negotiables: every `[[slug]]` is
+checked against `kb_notes` before the answer is shown (invented ones lose their
+brackets and land in `Dropped`); articles are context but never citable; and
+with nothing retrieved or no model the answer comes back `Grounded: false` with
+the ranked sources — never filled in from the model's own knowledge.
+
+Questions retrieve differently from the search box: `questionQuery` strips
+question words and matches the rest as alternatives, because a phrase match on
+a natural question finds nothing. Both go through `retrieve`.
+
 ## Unattended runs
 
 Stages live in `internal/pipeline` (`Runner`), so `serve` and the CLI run the

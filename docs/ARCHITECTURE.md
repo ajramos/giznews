@@ -51,6 +51,31 @@ digest ──► agrupado por tema + overview LLM (se guarda en la tabla `digest
 search ──► FTS5 (keyword) ⊕ embeddings (Ollama, coseno) con RRF
 ```
 
+## Preguntarle al vault
+
+La mitad de recuperación ya estaba —FTS5, embeddings, RRF— y devolvía una lista
+ordenada de filas, que es un buscador, no una respuesta. `Ask` añade el último
+paso: leer las notas y decir lo que dicen.
+
+Tres decisiones:
+
+- **Una pregunta no es una frase.** La caja de búsqueda manda un *phrase match*,
+  que allí está bien: si escribes tres palabras esperas esas tres juntas. Una
+  pregunta es lo contrario — `"what is sparse attention?"` como frase solo casa
+  con una nota que literalmente lo pregunte. `questionQuery` quita las palabras
+  de pregunta y casa el resto como alternativas, dejando que bm25 ordene. Los
+  dos caminos comparten `retrieve`, que recibe la expresión ya construida.
+- **Las notas van primero y son lo único citable.** Un artículo puede sostener
+  una respuesta pero no tiene slug al que volver; el prompt se lo dice.
+- **Toda cita se valida contra `kb_notes`** (`checkCitations`). Una cita
+  inventada se parece exactamente a una real, así que pierde los corchetes y se
+  reporta en `Dropped`. Y si no se recuperó nada, o no hay modelo, la respuesta
+  vuelve con `Grounded: false` y las fuentes: un ranking vale más que una
+  disculpa, y desde luego más que una respuesta sacada de la memoria del modelo.
+
+Además, la primera pregunta construye el índice si estaba vacío: "no hay nada
+sobre eso" tiene que significar eso y no "nadie ha indexado todavía".
+
 ## Desatendido
 
 `giznews serve` es el bucle: cada etapa lleva su cadencia (`serve.*_every`) y el

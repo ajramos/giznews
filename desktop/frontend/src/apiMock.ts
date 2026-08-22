@@ -3,6 +3,7 @@
 // manual checks. Mirrors the shape of the real Wails-bound backend.
 
 import type {
+  AnswerDTO,
   ArticleDTO,
   BulkResult,
   ClassifyResult,
@@ -411,6 +412,26 @@ export const mockBackend: APIShape = {
     await delay(60);
     finishJob(id);
     return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, moleculesUpdated: 0, articlesSkipped: 0, conceptsTracked: 0, atomsRefreshed: 0, editedNotesKept: 0, notesImported: 0 };
+  },
+  ask: async (question: string): Promise<AnswerDTO> => {
+    await delay(120);
+    if (/nothing|zzz/i.test(question)) {
+      return { question, text: "", sources: [], grounded: false };
+    }
+    return {
+      question,
+      text:
+        "Agents are the recurring shape in your notes: tool access is being standardised [[ai-agents]], " +
+        "and world models are the substrate people reach for when planning gets longer [[world-models]]. " +
+        "A claim with no note behind it cites nothing.",
+      grounded: true,
+      dropped: ["imaginary-note"],
+      sources: [
+        { kind: "note", id: 101, slug: "ai-agents", title: "ai agents", source: "electron", snippet: "Recurring concept — referenced in 3 notes.", score: 0.9 },
+        { kind: "note", id: 106, slug: "world-models", title: "world models", source: "electron", snippet: "A substrate for longer-horizon agent planning.", score: 0.7 },
+        { kind: "article", id: 1, title: "DeepSeek Harness developer preview", source: "HN RSS", snippet: "A developer preview of the harness toolchain.", score: 0.4 },
+      ],
+    };
   },
   ensureArticleNote: async (articleID: number): Promise<NoteDTO> => {
     await delay(60);

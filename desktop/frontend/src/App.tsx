@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { applyTheme, currentTheme } from "./theme";
 import type {
+  AnswerDTO,
   ArticleDTO,
   DigestDTO,
   DigestMeta,
@@ -18,6 +19,7 @@ import { ArticleList } from "./components/ArticleList";
 import { Reader } from "./components/Reader";
 import { DigestView } from "./components/DigestView";
 import { SearchPanel } from "./components/SearchPanel";
+import { AskPanel } from "./components/AskPanel";
 import { GraphPanel } from "./components/GraphPanel";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
 import { HelpOverlay } from "./components/HelpOverlay";
@@ -43,7 +45,7 @@ import { LinksPicker, type LinkItem } from "./components/LinksPicker";
 import { buildNoteLinks, buildArticleLinks } from "./noteLinks";
 import { CircleHelp, Command, RefreshCw, Loader2 } from "lucide-react";
 
-type Panel = "none" | "search" | "graph";
+type Panel = "none" | "search" | "ask" | "graph";
 
 interface Toast {
   msg: string;
@@ -116,6 +118,9 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<SearchResultDTO[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchFocus, setSearchFocus] = useState(0);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [answer, setAnswer] = useState<AnswerDTO | null>(null);
   const [graphFocusId, setGraphFocusId] = useState<number | null>(null);
   const [graphRefresh, setGraphRefresh] = useState(0);
 
@@ -715,6 +720,21 @@ export default function App() {
     setGraphFocusId(noteId);
     setPanel("graph");
   }, []);
+  // Asking is not searching: it waits for a written answer, and an answer that
+  // is not grounded says so rather than filling the gap.
+  const runAsk = useCallback(async () => {
+    const q = question.trim();
+    if (!q) return;
+    setAsking(true);
+    try {
+      setAnswer(await api.ask(q));
+    } catch (e) {
+      notify(String(e));
+    } finally {
+      setAsking(false);
+    }
+  }, [question, notify]);
+
 
   const runSearch = useCallback(async (q: string) => {
     setSearching(true);
@@ -801,6 +821,7 @@ export default function App() {
       });
     } },
     { name: "kb synth <category>", hint: "Synthesize a category into a molecule", run: () => setSynthPrompt(true) },
+    { name: "ask", hint: "Ask your notes a question, answered with citations", run: () => { setPanel("ask"); setAnswer(null); } },
     { name: "search index", hint: "Rebuild search index + embeddings", run: () => {
       setJobsOpen(true);
       void runCmd(async () => { await api.searchIndex(); notify("Search index updated"); });
@@ -1083,6 +1104,7 @@ export default function App() {
   const uiCtx: "list" | "reader" | "search" | "graph" | "digest" | "vault" =
     mode === "vault" ? "vault"
     : panel === "search" ? "search"
+    : panel === "ask" ? "search"
     : panel === "graph" ? "graph"
     : digestOpen ? "digest"
     : reader ? "reader"
@@ -1090,6 +1112,7 @@ export default function App() {
 
   const modeLabel = mode === "vault" ? "VAULT"
     : panel === "search" ? "SEARCH"
+    : panel === "ask" ? "ASK"
     : panel === "graph" ? "GRAPH"
     : digestOpen ? "DIGEST"
     : reader ? "READER"
@@ -1217,7 +1240,21 @@ export default function App() {
         <div className="splitter" onMouseDown={onSplitterDown} title="Drag to resize" />
 
         <section className="col reader-col">
-          {panel === "search" ? (
+          {panel === "ask" ? (
+            <AskPanel
+              question={question}
+              onQuestion={setQuestion}
+              asking={asking}
+              answer={answer}
+              onAsk={() => void runAsk()}
+              onClose={() => setPanel("none")}
+              onOpen={(r) => {
+                setPanel("none");
+                if (r.kind === "article") void openArticle(r.id);
+                else void openNote(r.id);
+              }}
+            />
+          ) : panel === "search" ? (
             <SearchPanel
               query={searchQuery}
               onQuery={(q) => { setSearchQuery(q); void runSearch(q); }}

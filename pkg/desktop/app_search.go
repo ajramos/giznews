@@ -69,7 +69,35 @@ func (a *App) Search(ctx context.Context, query string, limit int) ([]*SearchRes
 	out := make([]*SearchResultDTO, 0, len(results))
 	for _, r := range results {
 		out = append(out, &SearchResultDTO{
-			Kind: r.Kind, ID: r.ID, Title: r.Title, Source: r.Source, Snippet: r.Snippet, Score: r.Score,
+			Kind: r.Kind, ID: r.ID, Slug: r.Slug, Title: r.Title,
+			Source: r.Source, Snippet: r.Snippet, Score: r.Score,
+		})
+	}
+	return out, nil
+}
+
+// Ask answers a question from the notes, citing them. It is deliberately not a
+// background job: a question is asked and waited for.
+func (a *App) Ask(ctx context.Context, question string) (*AnswerDTO, error) {
+	svc, err := a.searchService()
+	if err != nil {
+		return nil, err
+	}
+	answer, err := svc.Ask(ctx, question, search.AskOptions{
+		Model:    a.cfg.LLM.Model,
+		Language: a.cfg.LLM.Language,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := &AnswerDTO{
+		Question: answer.Question, Text: answer.Text,
+		Grounded: answer.Grounded, Dropped: answer.Dropped,
+	}
+	for _, r := range answer.Sources {
+		out.Sources = append(out.Sources, &SearchResultDTO{
+			Kind: r.Kind, ID: r.ID, Slug: r.Slug, Title: r.Title,
+			Source: r.Source, Snippet: r.Snippet, Score: r.Score,
 		})
 	}
 	return out, nil

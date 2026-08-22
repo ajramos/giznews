@@ -89,10 +89,23 @@ type MergeDTO struct {
 type SearchResultDTO struct {
 	Kind    string  `json:"kind"` // article | note
 	ID      int64   `json:"id"`
+	Slug    string  `json:"slug,omitempty"` // notes only: what a citation points at
 	Title   string  `json:"title"`
 	Source  string  `json:"source,omitempty"`
 	Snippet string  `json:"snippet"`
 	Score   float64 `json:"score"`
+}
+
+// AnswerDTO is what the knowledge base has to say about a question.
+type AnswerDTO struct {
+	Question string             `json:"question"`
+	Text     string             `json:"text"`
+	Sources  []*SearchResultDTO `json:"sources"`
+	// Grounded is false when nothing was retrieved or no model was available.
+	// The sources still come back: a ranking beats an apology.
+	Grounded bool `json:"grounded"`
+	// Dropped names citations the model invented, already stripped from Text.
+	Dropped []string `json:"dropped,omitempty"`
 }
 
 // DigestThemeDTO is a theme group inside a digest.
