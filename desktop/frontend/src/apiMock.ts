@@ -27,7 +27,7 @@ import type { APIShape } from "./api";
 
 const sampleSources: SourceDTO[] = [
   { id: 1, name: "HN RSS", type: "rss", url: "https://news.ycombinator.com/rss", group: "community", enabled: true, lastFetch: "2026-08-14T09:00:00Z" },
-  { id: 2, name: "HN Algolia", type: "hackernews", url: "https://hn.algolia.com", group: "community", enabled: true, lastFetch: "2026-08-14T09:00:00Z" },
+  { id: 2, name: "HN Algolia", type: "hackernews", url: "https://hn.algolia.com", group: "community", enabled: true, lastFetch: "2026-08-14T09:00:00Z", lastError: "timeout after 15s", lastOk: "2026-08-10T09:00:00Z", consecutiveFailures: 3 },
   { id: 3, name: "DeepMind Blog", type: "rss", url: "https://deepmind.google/blog/rss.xml", group: "labs", enabled: true },
   { id: 4, name: "arXiv cs.AI", type: "arxiv", url: "http://export.arxiv.org/rss/cs.AI", group: "research", enabled: false },
 ];
@@ -505,7 +505,7 @@ export const mockBackend: APIShape = {
 
   status: async (): Promise<StatusDTO> => {
     await delay();
-    return { dbPath: "/mock/db", vaultPath: "/mock/vault", llmProvider: "ollama", llmEnabled: true, llmReachable: true, embeddingsModel: "nomic-embed-text", unreadArticles: ARTICLES.filter((a) => a.status === "unread").length, totalArticles: ARTICLES.length, totalNotes: NOTES.length, pendingClassify: 12 };
+    return { dbPath: "/mock/db", vaultPath: "/mock/vault", llmProvider: "ollama", llmEnabled: true, llmReachable: true, embeddingsModel: "nomic-embed-text", unreadArticles: ARTICLES.filter((a) => a.status === "unread").length, totalArticles: ARTICLES.length, totalNotes: NOTES.length, pendingClassify: 12, unhealthySources: 1 };
   },
 
   openURL: async (_url: string): Promise<void> => { await delay(); },

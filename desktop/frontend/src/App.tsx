@@ -1320,6 +1320,7 @@ export default function App() {
         llmOn={!!status?.llmEnabled}
         llmReachable={!!status?.llmReachable}
         llmProvider={status?.llmProvider ?? "llm"}
+        unhealthySources={status?.unhealthySources}
         onToggleAuto={() => setAutoRefresh((v) => !v)}
       />
 

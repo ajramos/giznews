@@ -19,6 +19,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ajramos/giznews/internal/db"
 	"github.com/ajramos/giznews/internal/llm"
@@ -99,40 +100,33 @@ func (s *Service) Index(ctx context.Context) (*IndexResult, error) {
 		if err != nil {
 			return nil, err
 		}
+		var noteTargets []embedTarget
 		for _, n := range notes {
-			emb, _ := kbRepo.GetEmbedding(ctx, n.ID)
-			if len(emb) > 0 {
-				continue
-			}
-			vec, err := s.embed(ctx, embedText(n.Title, n.Content))
-			if err != nil {
-				res.EmbeddingsFailed++
-				continue
-			}
-			if err := kbRepo.SetEmbedding(ctx, n.ID, vec); err != nil {
-				return nil, err
-			}
-			res.NotesEmbedded++
+			noteTargets = append(noteTargets, embedTarget{
+				id: n.ID, text: embedText(n.Title, n.Content),
+				get: func(id int64) ([]float32, error) { return kbRepo.GetEmbedding(ctx, id) },
+				set: func(id int64, v []float32) error { return kbRepo.SetEmbedding(ctx, id, v) },
+			})
+		}
+		if err := s.embedAll(ctx, noteTargets, &res.NotesEmbedded, &res.EmbeddingsFailed, "notes"); err != nil {
+			return nil, err
 		}
 
 		arts, err := db.NewArticleRepo(s.db).ListRecent(ctx, 365, 100000)
 		if err != nil {
 			return nil, err
 		}
+		artRepo := db.NewArticleRepo(s.db)
+		var artTargets []embedTarget
 		for _, a := range arts {
-			emb, _ := db.NewArticleRepo(s.db).GetArticleEmbedding(ctx, a.ID)
-			if len(emb) > 0 {
-				continue
-			}
-			vec, err := s.embed(ctx, embedText(a.Title, a.ContentMD))
-			if err != nil {
-				res.EmbeddingsFailed++
-				continue
-			}
-			if err := db.NewArticleRepo(s.db).SetArticleEmbedding(ctx, a.ID, vec); err != nil {
-				return nil, err
-			}
-			res.ArticlesEmbedded++
+			artTargets = append(artTargets, embedTarget{
+				id: a.ID, text: embedText(a.Title, a.ContentMD),
+				get: func(id int64) ([]float32, error) { return artRepo.GetArticleEmbedding(ctx, id) },
+				set: func(id int64, v []float32) error { return artRepo.SetArticleEmbedding(ctx, id, v) },
+			})
+		}
+		if err := s.embedAll(ctx, artTargets, &res.ArticlesEmbedded, &res.EmbeddingsFailed, "articles"); err != nil {
+			return nil, err
 		}
 	}
 
@@ -140,6 +134,51 @@ func (s *Service) Index(ctx context.Context) (*IndexResult, error) {
 		s.logger.Printf("search index: %d notes, %d articles embedded", res.NotesEmbedded, res.ArticlesEmbedded)
 	}
 	return res, nil
+}
+
+// embedTarget is one item the embedding phase may need to embed.
+type embedTarget struct {
+	id   int64
+	text string
+	get  func(int64) ([]float32, error)
+	set  func(int64, []float32) error
+}
+
+// embedAll embeds every target that does not have a vector yet, logging every
+// 25 so an unattended run shows it is alive, and giving up once a provider has
+// failed many calls in a row instead of burning one timeout per item forever.
+func (s *Service) embedAll(ctx context.Context, targets []embedTarget, embedded, failed *int, label string) error {
+	failStreak := 0
+	for _, t := range targets {
+		emb, err := t.get(t.id)
+		if err != nil {
+			return err
+		}
+		if len(emb) > 0 {
+			continue // already embedded on an earlier run
+		}
+		vec, err := s.embed(ctx, t.text)
+		if err != nil {
+			*failed++
+			failStreak++
+			if s.logger != nil && failStreak == 1 {
+				s.logger.Printf("search index: embedding %s failed: %v (giving up after %d in a row)", label, err, consecutiveEmbedFailures)
+			}
+			if failStreak >= consecutiveEmbedFailures {
+				return fmt.Errorf("search index: %s embedding provider unreachable (%d consecutive failures)", label, failStreak)
+			}
+			continue
+		}
+		failStreak = 0
+		if err := t.set(t.id, vec); err != nil {
+			return err
+		}
+		*embedded++
+		if s.logger != nil && *embedded%25 == 0 {
+			s.logger.Printf("search index: %d %s embedded", *embedded, label)
+		}
+	}
+	return nil
 }
 
 func (s *Service) rebuildFTS(ctx context.Context) error {
@@ -379,12 +418,25 @@ func (s *Service) hydrate(ctx context.Context, kind string, id int64) (*Result, 
 }
 
 func (s *Service) embed(ctx context.Context, text string) ([]float32, error) {
+	// A provider that hangs must not block the whole pipeline: bound every call
+	// so a dead endpoint fails per item instead of holding `serve` forever.
+	ctx, cancel := context.WithTimeout(ctx, embedTimeout)
+	defer cancel()
 	resp, err := s.prov.Embed(ctx, llm.EmbeddingRequest{Model: s.model, Input: text})
 	if err != nil {
 		return nil, fmt.Errorf("search: embed: %w", err)
 	}
 	return resp.Embedding, nil
 }
+
+// embedTimeout bounds one embedding call. Embeddings are short — a call that
+// takes this long is a provider that is not coming back.
+const embedTimeout = 120 * time.Second
+
+// consecutiveEmbedFailures before the embedding phase gives up and leaves the
+// rest for the next run. Without this a dead provider would burn one timeout
+// per article and look, for hours, like it was making progress.
+const consecutiveEmbedFailures = 10
 
 // --- scoring helpers ---
 

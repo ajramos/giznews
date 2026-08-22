@@ -98,6 +98,9 @@ type StatusDTO struct {
 	TotalArticles   int    `json:"total_articles"`
 	TotalNotes      int    `json:"total_notes"`
 	PendingClassify int    `json:"pending_classify"`
+	// UnhealthySources counts sources that have failed or come up empty enough
+	// times to be flagged, so the status bar can say a feed is dying.
+	UnhealthySources int `json:"unhealthy_sources"`
 }
 
 // App implements API over the internal services and DB. The Wails layer holds

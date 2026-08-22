@@ -530,3 +530,45 @@ func TestARuleOutranksWhatWasLearned(t *testing.T) {
 		t.Fatalf("boosted article = %d, want 3 — a rule outranks a habit", claimed.Importance)
 	}
 }
+
+// A rules-only pass is a deterministic sweep: it must take the whole pending
+// queue, not stop at the per-run cap that bounds the LLM's work.
+func TestRulesOnlySweepsMoreThanTheRunCap(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	ctx := context.Background()
+
+	src, _ := db.NewSourceRepo(d).Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: "u"})
+	artRepo := db.NewArticleRepo(d)
+	const n = 250 // more than the 200 default cap
+	for i := 0; i < n; i++ {
+		_, _, err := artRepo.Upsert(ctx, db.NewArticle{
+			SourceID: src.ID, GUID: fmt.Sprintf("g%d", i), URL: fmt.Sprintf("https://x.com/%d", i),
+			Title: fmt.Sprintf("Bitcoin item %d", i),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.NewRuleRepo(d).Create(ctx, db.NewRule{
+		Name: "noise: crypto", Query: `\bbitcoin\b`,
+		Actions: []db.RuleAction{{Type: "archive"}}, Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(d, Options{RulesOnly: true, Limit: 200, AgeDays: 30}, nil, nil)
+	res, err := svc.ClassifyAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ByRules != n || res.Archived != n {
+		t.Fatalf("resolved %d, archived %d — want %d (the 200 cap was applied)", res.ByRules, res.Archived, n)
+	}
+	if res.Pending != 0 {
+		t.Fatalf("pending = %d, want 0 — the queue was not swept", res.Pending)
+	}
+}

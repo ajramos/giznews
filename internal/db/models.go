@@ -23,6 +23,13 @@ type Source struct {
 	LastFetch string     `json:"last_fetch,omitempty"` // RFC3339
 	CreatedAt string     `json:"created_at"`
 	UpdatedAt string     `json:"updated_at"`
+
+	// Health of the source's last few fetches. LastOK is when it last brought
+	// something in; the counters say how long a problem has been going on.
+	LastError           string `json:"last_error,omitempty"`
+	LastOK              string `json:"last_ok,omitempty"` // RFC3339
+	ConsecutiveFailures int    `json:"consecutive_failures,omitempty"`
+	EmptyCycles         int    `json:"empty_cycles,omitempty"`
 }
 
 // ArticleStatus is the triage state of an article.

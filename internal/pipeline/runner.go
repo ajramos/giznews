@@ -69,6 +69,7 @@ func (r *Runner) Fetch(ctx context.Context) (string, error) {
 	if r.cfg.Extract.OnFetch {
 		svc.SetExtraction(r.cfg.Extract.Limit, r.cfg.Extract.Concurrency)
 	}
+	svc.SetSourceWarnAfter(r.cfg.Fetch.SourceWarnAfter)
 	res, err := svc.FetchAll(ctx)
 	if err != nil {
 		return "", err
@@ -103,6 +104,7 @@ func (r *Runner) Classify(ctx context.Context) (string, error) {
 // KB builds the graph: the reader's own notes, then atoms and electrons, then
 // the themes, then the vault's entry points.
 func (r *Runner) KB(ctx context.Context) (string, error) {
+	r.logf("kb: building the graph…")
 	svc, err := r.kbService()
 	if err != nil {
 		return "", err
@@ -113,6 +115,7 @@ func (r *Runner) KB(ctx context.Context) (string, error) {
 	}
 	summary := fmt.Sprintf("%d atom(s), %d electron(s), %d theme(s)",
 		res.AtomsCreated, res.ElectronsCreated, res.MoleculesCreated+res.MoleculesUpdated)
+	r.logf("kb: %s — indexing search…", summary)
 	if _, err := svc.BuildIndex(ctx); err != nil {
 		return summary, fmt.Errorf("index: %w", err)
 	}

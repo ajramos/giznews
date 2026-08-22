@@ -279,6 +279,7 @@ select option { background: var(--bg-panel); color: var(--fg); }
 }
 .pill.llm.on { color: var(--good); border-color: var(--good); }
 .pill.llm.off { color: var(--bad); border-color: var(--bad); }
+.pill.unhealthy { color: var(--warn); border-color: var(--warn); }
 .pill.filter { color: var(--accent); border-color: var(--accent-dim); cursor: pointer; }
 .pill.filter:hover { background: var(--sel-bg); }
 
@@ -782,6 +783,8 @@ kbd {
 .sp-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .sp-dot[data-on="true"] { background: var(--good); }
 .sp-dot[data-on="false"] { background: var(--border); }
+.sp-dot[data-unhealthy="true"] { background: var(--warn); }
+.source-picker-item .sp-health { color: var(--warn); font-size: 11px; }
 .sp-type { color: var(--fg-dim); display: inline-flex; flex-shrink: 0; }
 .vb-meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .vb-rating { color: var(--warn); font-size: 11px; font-family: var(--font-mono); }.sp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

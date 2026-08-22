@@ -86,6 +86,26 @@ test.describe("sources", () => {
     await expect(page.locator(".source-picker")).toHaveCount(0);
   });
 
+  test("unhealthy source is flagged in the picker and the status bar", async ({ page }) => {
+    await gotoApp(page);
+    // The mock marks HN Algolia as failing (3 consecutive failures).
+    await expect(page.locator(".pill.unhealthy")).toContainText("1 source(s) failing");
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("sources");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".source-picker")).toBeVisible();
+    const rows = page.locator(".source-picker-item");
+    await expect(rows).toHaveCount(4);
+    // Healthy rows carry no unhealthy flag.
+    await expect(rows.first().locator(".sp-dot")).toHaveAttribute("data-unhealthy", "false");
+    // HN Algolia (row 2) is red and shows the error in its meta.
+    const bad = rows.nth(1);
+    await expect(bad.locator(".sp-dot")).toHaveAttribute("data-unhealthy", "true");
+    await expect(bad.locator(".sp-meta")).toContainText("timeout");
+    await expect(bad).toHaveAttribute("title", /Last error: timeout after 15s/);
+    await page.keyboard.press("Escape");
+  });
+
   test("add source via picker modal", async ({ page }) => {
     await gotoApp(page);
     await page.keyboard.press(":");

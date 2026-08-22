@@ -17,6 +17,13 @@ type SourceDTO struct {
 	Group     string `json:"group,omitempty"`
 	Enabled   bool   `json:"enabled"`
 	LastFetch string `json:"last_fetch,omitempty"`
+	// Source health: last error, last time it brought something in, and how
+	// long the current problem has run. EmptyCycles/Suspect flag a feed that
+	// keeps answering but brings in nothing.
+	LastError           string `json:"last_error,omitempty"`
+	LastOK              string `json:"last_ok,omitempty"`
+	ConsecutiveFailures int    `json:"consecutive_failures,omitempty"`
+	EmptyCycles         int    `json:"empty_cycles,omitempty"`
 }
 
 // ArticleDTO is a JSON-friendly view of a news article.
@@ -151,5 +158,7 @@ func toSourceDTO(s *db.Source) *SourceDTO {
 	return &SourceDTO{
 		ID: s.ID, Name: s.Name, Type: string(s.Type), URL: s.URL,
 		Group: s.Group, Enabled: s.Enabled, LastFetch: s.LastFetch,
+		LastError: s.LastError, LastOK: s.LastOK,
+		ConsecutiveFailures: s.ConsecutiveFailures, EmptyCycles: s.EmptyCycles,
 	}
 }

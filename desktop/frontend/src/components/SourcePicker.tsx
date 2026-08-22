@@ -53,17 +53,25 @@ export function SourcePicker({ sources, onToggle, onAdd, onEdit, onDelete, onFil
           {sources.length === 0 && <div className="palette-empty">No sources — press <kbd>a</kbd> to add.</div>}
           {sources.map((s, i) => {
             const Icon = TYPE_ICON[s.type] ?? Rss;
+            // A source is unhealthy exactly when the backend says so: last_error
+            // is set on the first failed fetch and once a feed has been empty
+            // past the configured threshold — no duplicated constant here.
+            const unhealthy = !!s.lastError;
+            const title = s.lastError
+              ? `Last error: ${s.lastError} · Last OK: ${s.lastOk ?? "never"}`
+              : undefined;
             return (
               <button
                 key={s.id}
                 className={`source-picker-item ${i === focus ? "selected" : ""}`}
                 onMouseEnter={() => setFocus(i)}
                 onClick={() => onToggle(s.id, !s.enabled)}
+                title={title}
               >
-                <span className="sp-dot" data-on={s.enabled} />
+                <span className="sp-dot" data-on={s.enabled} data-unhealthy={unhealthy} />
                 <span className="sp-type"><Icon size={13} /></span>
                 <span className="sp-name">{s.name}</span>
-                <span className="sp-meta">{s.type}</span>
+                <span className={`sp-meta ${unhealthy ? "sp-health" : ""}`}>{unhealthy ? s.lastError : s.type}</span>
                 <span className="sp-state">{s.enabled ? "on" : "off"}</span>
               </button>
             );

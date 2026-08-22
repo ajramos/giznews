@@ -22,8 +22,8 @@ func TestMigrateFresh(t *testing.T) {
 	if err := d.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 15 {
-		t.Fatalf("user_version = %d, want 15", version)
+	if version != 16 {
+		t.Fatalf("user_version = %d, want 16", version)
 	}
 }
 
@@ -86,6 +86,12 @@ func TestMigrateFromV1(t *testing.T) {
 	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN story_id;"); err != nil {
 		t.Fatal(err)
 	}
+	// v16 added the source-health columns; same treatment.
+	for _, col := range []string{"last_error", "last_ok", "consecutive_failures", "empty_cycles"} {
+		if _, err := d.sql.Exec("ALTER TABLE sources DROP COLUMN " + col + ";"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := d.sql.Exec("PRAGMA user_version = 1;"); err != nil {
 		t.Fatal(err)
 	}
@@ -100,8 +106,8 @@ func TestMigrateFromV1(t *testing.T) {
 	if err := d2.sql.QueryRow("PRAGMA user_version;").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 15 {
-		t.Fatalf("user_version after reopen = %d, want 15", version)
+	if version != 16 {
+		t.Fatalf("user_version after reopen = %d, want 16", version)
 	}
 	// Columns must exist now.
 	var n int
@@ -171,6 +177,12 @@ func TestMigrateV8BackfillsGraph(t *testing.T) {
 	}
 	if _, err := d.sql.Exec("ALTER TABLE articles DROP COLUMN story_id;"); err != nil {
 		t.Fatal(err)
+	}
+	// v16 added the source-health columns; strip them so the replay re-adds them.
+	for _, col := range []string{"last_error", "last_ok", "consecutive_failures", "empty_cycles"} {
+		if _, err := d.sql.Exec("ALTER TABLE sources DROP COLUMN " + col + ";"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	// Three atoms citing "rag" (never promoted) and an existing "mamba" electron
 	// cited by one of them, written the way pre-v8 builds did: JSON only.

@@ -296,3 +296,100 @@ func TestSameStory(t *testing.T) {
 		}
 	}
 }
+
+// A source that fails, recovers, and then goes empty is told about exactly
+// once at each threshold crossing, and a healthy run clears the counters.
+func TestSourceHealthWarnsOnceAtThreshold(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	ctx := context.Background()
+
+	var logBuf strings.Builder
+	man := sources.NewManager("", "", nil, "168h")
+	svc, err := NewService(d, man, log.New(&logBuf, "", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.SetSourceWarnAfter(3)
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls <= 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/rss+xml")
+		w.Write([]byte(feedA))
+	}))
+	defer srv.Close()
+
+	repo := db.NewSourceRepo(d)
+	if _, err := repo.Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: srv.URL, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Three failed fetches, then a successful one.
+	for i := 0; i < 4; i++ {
+		if _, err := svc.FetchAll(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n := strings.Count(logBuf.String(), "looks broken"); n != 1 {
+		t.Fatalf("warned %d time(s), want exactly 1 (once per threshold crossing):\n%s", n, logBuf.String())
+	}
+
+	src, _ := repo.Get(ctx, 1)
+	if src.ConsecutiveFailures != 0 || src.LastError != "" || src.LastOK == "" {
+		t.Fatalf("after recovery = %+v", src)
+	}
+}
+
+// A feed that answers but brings in nothing is flagged as suspect once it has
+// been empty for the threshold number of cycles.
+func TestSourceThatGoesEmptyIsFlagged(t *testing.T) {
+	d, err := db.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	ctx := context.Background()
+
+	var logBuf strings.Builder
+	man := sources.NewManager("", "", nil, "168h")
+	svc, err := NewService(d, man, log.New(&logBuf, "", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.SetSourceWarnAfter(3)
+
+	emptyFeed := `<?xml version="1.0"?><rss version="2.0"><channel><title>Nothing</title></channel></rss>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		w.Write([]byte(emptyFeed))
+	}))
+	defer srv.Close()
+
+	repo := db.NewSourceRepo(d)
+	if _, err := repo.Create(ctx, db.NewSource{Name: "S", Type: db.SourceRSS, URL: srv.URL, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 3; i++ {
+		if _, err := svc.FetchAll(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n := strings.Count(logBuf.String(), "returned nothing"); n != 1 {
+		t.Fatalf("warned %d time(s), want exactly 1:\n%s", n, logBuf.String())
+	}
+	src, _ := repo.Get(ctx, 1)
+	if src.EmptyCycles != 3 || src.LastError == "" {
+		t.Fatalf("source not flagged: %+v", src)
+	}
+}

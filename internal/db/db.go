@@ -74,7 +74,7 @@ func (d *DB) migrate(ctx context.Context) error {
 
 	// Each entry is a full DDL block; the migration runner executes all blocks
 	// with index > version inside a transaction.
-	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13, schemaV14, schemaV15}
+	migrations := []string{schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6, schemaV7, schemaV8, schemaV9, schemaV10, schemaV11, schemaV12, schemaV13, schemaV14, schemaV15, schemaV16}
 
 	for i := version; i < len(migrations); i++ {
 		tx, err := d.sql.BeginTx(ctx, nil)
@@ -439,4 +439,19 @@ CREATE TABLE IF NOT EXISTS locks (
 	acquired_at TEXT   NOT NULL,
 	expires_at TEXT    NOT NULL
 );
+`
+
+// schemaV16 remembers how each source's last few fetches went.
+//
+// Until now `last_fetch` recorded a completed fetch and nothing about whether it
+// worked. A feed that starts 404ing or quietly returns an empty document just
+// stops contributing, and nobody is told. `last_error` is the message of the
+// last failed fetch, `last_ok` when it last brought something in, and the two
+// counters say whether the streak is worth acting on: consecutive HTTP failures,
+// and cycles that succeeded but returned nothing.
+const schemaV16 = `
+ALTER TABLE sources ADD COLUMN last_error TEXT NOT NULL DEFAULT '';
+ALTER TABLE sources ADD COLUMN last_ok TEXT;
+ALTER TABLE sources ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sources ADD COLUMN empty_cycles INTEGER NOT NULL DEFAULT 0;
 `

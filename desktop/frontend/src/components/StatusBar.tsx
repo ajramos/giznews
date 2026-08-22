@@ -20,6 +20,7 @@ export function StatusBar({
   llmOn,
   llmReachable,
   llmProvider,
+  unhealthySources,
   onToggleAuto,
 }: {
   context: UIContext;
@@ -33,6 +34,7 @@ export function StatusBar({
   llmOn: boolean;
   llmReachable: boolean;
   llmProvider: string;
+  unhealthySources?: number;
   onToggleAuto: () => void;
 }) {
   const keys = CONTEXT_KEYS[context] ?? CONTEXT_KEYS.list;
@@ -70,6 +72,11 @@ export function StatusBar({
             ))}
       </div>
       <div className="sb-right">
+        {unhealthySources ? (
+          <span className="pill unhealthy" title={`${unhealthySources} source(s) failing or coming up empty — check :sources`}>
+            {unhealthySources} source(s) failing
+          </span>
+        ) : null}
         <button className="pill auto" title="Auto-refresh every 15 min" onClick={onToggleAuto}>
           {autoRefresh ? "auto 15m ✓" : "auto off"}
         </button>

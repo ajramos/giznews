@@ -9,7 +9,7 @@ const FAKE = `
   window.go.main = { App: {
     ListSources: async () => [
       { id: 1, name: "HN RSS", type: "rss", url: "u", group: "community", enabled: true },
-      { id: 2, name: "DeepMind", type: "rss", url: "d", group: "labs", enabled: true },
+      { id: 2, name: "DeepMind", type: "rss", url: "d", group: "labs", enabled: true, last_error: "timeout after 15s", last_ok: "2026-08-10T09:00:00Z", consecutive_failures: 3 },
     ],
     ListArticles: async (opts) => {
       const items = [
@@ -20,7 +20,7 @@ const FAKE = `
     },
     GetArticleContent: async (id) => ({ id, source_id: 1, source_name: "HN RSS", url: "https://x.com/" + id, title: id === 1 ? "Wire-shape article one" : "Wire-shape article two", content_md: "# Loaded\\n\\nThis content arrived through the real snake_case contract.", summary: "s", importance: 3, status: "unread", category: "models", tags: ["ai"], fetched_at: new Date().toISOString() }),
     SetArticleStatus: async () => {},
-    Status: async () => ({ db_path: "/tmp/db", vault_path: "/tmp/vault", llm_provider: "ollama", llm_enabled: true, llm_reachable: true, embeddings_model: "nomic-embed-text", unread_articles: 1, total_articles: 2, total_notes: 3 }),
+    Status: async () => ({ db_path: "/tmp/db", vault_path: "/tmp/vault", llm_provider: "ollama", llm_enabled: true, llm_reachable: true, embeddings_model: "nomic-embed-text", unread_articles: 1, total_articles: 2, total_notes: 3, unhealthy_sources: 1 }),
     Fetch: async () => ({ new_articles: 0, updated: 0, sources_fetched: 0, sources_failed: 0, extracted: 0, elapsed_ms: 1 }),
     Classify: async () => ({ classified: 8, by_rules: 2, by_llm: 6, skipped_no_llm: 0, batches: 1, errors: [] }),
     ClassifyArticles: async () => ({ classified: 2, by_rules: 1, by_llm: 1, skipped_no_llm: 0, batches: 1, errors: [] }),
@@ -111,4 +111,26 @@ test("concepts wire shape: note_id reaches the note it opens", async ({ page }) 
   await page.keyboard.press("Enter");
   await expect(page.locator(".reader-head h1")).toHaveText("OpenAI", { timeout: 6000 });
   await expect(page.locator(".reader .note-type")).toHaveText("electron");
+});
+
+test("source health maps snake_case fields into the picker and status bar", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("giznews-welcomed", "1"));
+  await page.addInitScript(FAKE);
+  await page.goto("/");
+  await expect(page.locator(".article-row").first()).toBeVisible({ timeout: 8000 });
+
+  // unhealthy_sources → unhealthySources drives the status bar.
+  await expect(page.locator(".pill.unhealthy")).toContainText("1 source(s) failing", { timeout: 6000 });
+
+  await page.keyboard.press(":");
+  await page.locator(".palette input").fill("sources");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".source-picker")).toBeVisible();
+  // last_error / consecutive_failures reach the row through camel.
+  const bad = page.locator(".source-picker-item", { hasText: "DeepMind" });
+  await expect(bad.locator(".sp-dot")).toHaveAttribute("data-unhealthy", "true");
+  await expect(bad.locator(".sp-meta")).toContainText("timeout after 15s");
+  await expect(bad).toHaveAttribute("title", /Last OK: 2026-08-10T09:00:00Z/);
+  // The healthy one is untouched.
+  await expect(page.locator(".source-picker-item", { hasText: "HN RSS" }).locator(".sp-dot")).toHaveAttribute("data-unhealthy", "false");
 });

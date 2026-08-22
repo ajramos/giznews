@@ -46,7 +46,21 @@ func runSources(args []string, logger *log.Logger) {
 			if !s.Enabled {
 				state = "disabled"
 			}
-			fmt.Printf("%3d  %-4s  %-10s  %s  [%s]\n", s.ID, s.Type, state, s.Name, s.Group)
+			health := "ok"
+			switch {
+			case s.ConsecutiveFailures > 0:
+				health = fmt.Sprintf("%d failure(s)", s.ConsecutiveFailures)
+			case s.EmptyCycles > 0:
+				health = fmt.Sprintf("%d empty cycle(s)", s.EmptyCycles)
+			}
+			if s.LastError != "" {
+				health = "!! " + truncate(s.LastError, 40)
+			}
+			lastOK := s.LastOK
+			if lastOK == "" {
+				lastOK = "never"
+			}
+			fmt.Printf("%3d  %-4s  %-8s  %-24s  %-30s  %s\n", s.ID, s.Type, state, truncate(s.Name, 24), health, truncate(lastOK, 22))
 		}
 
 	case "add":

@@ -28,6 +28,7 @@ func runFetch(args []string, logger *log.Logger) {
 	if cfg.Extract.OnFetch {
 		svc.SetExtraction(cfg.Extract.Limit, cfg.Extract.Concurrency)
 	}
+	svc.SetSourceWarnAfter(cfg.Fetch.SourceWarnAfter)
 
 	var res *fetch.Result
 	if err := pipeline.WithLock(ctx, d, logger, func(ctx context.Context) error {

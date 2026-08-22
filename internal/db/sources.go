@@ -38,27 +38,29 @@ func (r *SourceRepo) Create(ctx context.Context, ns NewSource) (*Source, error) 
 	return r.Get(ctx, id)
 }
 
+// sourceColumns is the columns a source row is read back with.
+const sourceColumns = `
+	id, name, type, url, params, group_name, enabled, last_fetch,
+	last_error, last_ok, consecutive_failures, empty_cycles, created_at, updated_at`
+
 // Get returns a source by id.
 func (r *SourceRepo) Get(ctx context.Context, id int64) (*Source, error) {
-	row := r.db.sql.QueryRowContext(ctx, `
-		SELECT id, name, type, url, params, group_name, enabled, last_fetch, created_at, updated_at
-		FROM sources WHERE id = ?`, id)
+	row := r.db.sql.QueryRowContext(ctx,
+		"SELECT "+sourceColumns+" FROM sources WHERE id = ?", id)
 	return scanSource(row)
 }
 
 // GetByName returns a source by its unique name.
 func (r *SourceRepo) GetByName(ctx context.Context, name string) (*Source, error) {
-	row := r.db.sql.QueryRowContext(ctx, `
-		SELECT id, name, type, url, params, group_name, enabled, last_fetch, created_at, updated_at
-		FROM sources WHERE name = ?`, name)
+	row := r.db.sql.QueryRowContext(ctx,
+		"SELECT "+sourceColumns+" FROM sources WHERE name = ?", name)
 	return scanSource(row)
 }
 
 // List returns all non-hidden sources, ordered by group then name.
 func (r *SourceRepo) List(ctx context.Context) ([]*Source, error) {
-	rows, err := r.db.sql.QueryContext(ctx, `
-		SELECT id, name, type, url, params, group_name, enabled, last_fetch, created_at, updated_at
-		FROM sources WHERE hidden = 0 ORDER BY group_name, name`)
+	rows, err := r.db.sql.QueryContext(ctx,
+		"SELECT "+sourceColumns+" FROM sources WHERE hidden = 0 ORDER BY group_name, name")
 	if err != nil {
 		return nil, fmt.Errorf("list sources: %w", err)
 	}
@@ -114,14 +116,70 @@ func (r *SourceRepo) Update(ctx context.Context, s *Source) error {
 	return checkAffected(res, "update source")
 }
 
-// TouchFetch records a completed fetch time for a source.
-func (r *SourceRepo) TouchFetch(ctx context.Context, id int64, when string) error {
-	_, err := r.db.sql.ExecContext(ctx,
-		"UPDATE sources SET last_fetch = ?, updated_at = ? WHERE id = ?", when, when, id)
+// MarkSourceOK records a fetch that brought something in: the streak is over.
+func (r *SourceRepo) MarkSourceOK(ctx context.Context, id int64) error {
+	now := Now()
+	_, err := r.db.sql.ExecContext(ctx, `
+		UPDATE sources SET
+			last_fetch = ?, last_ok = ?, last_error = '',
+			consecutive_failures = 0, empty_cycles = 0, updated_at = ?
+		WHERE id = ?`, now, now, now, id)
 	if err != nil {
-		return fmt.Errorf("touch fetch: %w", err)
+		return fmt.Errorf("mark source ok: %w", err)
 	}
 	return nil
+}
+
+// MarkSourceFailure records a failed fetch and returns how many have happened
+// in a row, so the caller can say something the first time it crosses a
+// threshold.
+func (r *SourceRepo) MarkSourceFailure(ctx context.Context, id int64, message string) (int, error) {
+	now := Now()
+	_, err := r.db.sql.ExecContext(ctx, `
+		UPDATE sources SET
+			last_fetch = ?, last_error = ?,
+			consecutive_failures = consecutive_failures + 1, empty_cycles = 0, updated_at = ?
+		WHERE id = ?`, now, message, now, id)
+	if err != nil {
+		return 0, fmt.Errorf("mark source failure: %w", err)
+	}
+	return r.failures(ctx, id)
+}
+
+// MarkSourceEmpty records a fetch that succeeded but returned no items, and
+// flags the source as suspect once it has been empty for suspectAfter cycles
+// (suspectAfter <= 0 never flags it). It returns the running empty-cycle count
+// so the caller can warn on the crossing.
+func (r *SourceRepo) MarkSourceEmpty(ctx context.Context, id int64, suspectAfter int) (int, error) {
+	now := Now()
+	_, err := r.db.sql.ExecContext(ctx, `
+		UPDATE sources SET
+			last_fetch = ?, empty_cycles = empty_cycles + 1, consecutive_failures = 0,
+			last_error = CASE WHEN ? > 0 AND empty_cycles + 1 >= ? THEN ? ELSE '' END,
+			updated_at = ?
+		WHERE id = ?`, now, suspectAfter, suspectAfter, "returned no items for several fetch cycles", now, id)
+	if err != nil {
+		return 0, fmt.Errorf("mark source empty: %w", err)
+	}
+	return r.emptyCycles(ctx, id)
+}
+
+func (r *SourceRepo) failures(ctx context.Context, id int64) (int, error) {
+	var n int
+	if err := r.db.sql.QueryRowContext(ctx,
+		"SELECT consecutive_failures FROM sources WHERE id = ?", id).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+func (r *SourceRepo) emptyCycles(ctx context.Context, id int64) (int, error) {
+	var n int
+	if err := r.db.sql.QueryRowContext(ctx,
+		"SELECT empty_cycles FROM sources WHERE id = ?", id).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // SetEnabled toggles a source on/off.
@@ -149,11 +207,16 @@ type scanner interface {
 
 func scanSource(row scanner) (*Source, error) {
 	var (
-		s         Source
-		enabled   int
-		lastFetch sql.NullString
+		s          Source
+		enabled    int
+		lastFetch  sql.NullString
+		lastError  string
+		lastOK     sql.NullString
+		failures   int
+		emptyCyles int
 	)
-	if err := row.Scan(&s.ID, &s.Name, &s.Type, &s.URL, &s.Params, &s.Group, &enabled, &lastFetch, &s.CreatedAt, &s.UpdatedAt); err != nil {
+	if err := row.Scan(&s.ID, &s.Name, &s.Type, &s.URL, &s.Params, &s.Group, &enabled, &lastFetch,
+		&lastError, &lastOK, &failures, &emptyCyles, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -163,6 +226,12 @@ func scanSource(row scanner) (*Source, error) {
 	if lastFetch.Valid {
 		s.LastFetch = lastFetch.String
 	}
+	s.LastError = lastError
+	if lastOK.Valid {
+		s.LastOK = lastOK.String
+	}
+	s.ConsecutiveFailures = failures
+	s.EmptyCycles = emptyCyles
 	return &s, nil
 }
 

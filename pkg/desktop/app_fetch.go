@@ -24,6 +24,7 @@ func (a *App) fetchService() (*fetch.Service, error) {
 	if a.cfg.Extract.OnFetch {
 		svc.SetExtraction(a.cfg.Extract.Limit, a.cfg.Extract.Concurrency)
 	}
+	svc.SetSourceWarnAfter(a.cfg.Fetch.SourceWarnAfter)
 	return svc, nil
 }
 

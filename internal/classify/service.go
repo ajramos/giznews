@@ -65,7 +65,18 @@ func NewService(database *db.DB, opts Options, prov llm.Provider, logger *log.Lo
 // ClassifyAll classifies pending articles and returns a summary of what ran.
 func (s *Service) ClassifyAll(ctx context.Context) (*Result, error) {
 	repo := db.NewArticleRepo(s.db)
-	articles, err := repo.ListUnclassified(ctx, s.opts.Limit, s.opts.AgeDays)
+	limit := s.opts.Limit
+	if s.opts.RulesOnly {
+		// Rules are a deterministic sweep, not an LLM batch: applying them to a
+		// thousand articles costs as much as to two hundred. Take the whole
+		// queue, whatever the caller passed as the per-run cap.
+		n, err := repo.CountUnclassified(ctx)
+		if err != nil {
+			return nil, err
+		}
+		limit = n
+	}
+	articles, err := repo.ListUnclassified(ctx, limit, s.opts.AgeDays)
 	if err != nil {
 		return nil, fmt.Errorf("list unclassified: %w", err)
 	}

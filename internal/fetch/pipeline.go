@@ -47,6 +47,10 @@ type Service struct {
 
 	maxAge time.Duration // 0 = unlimited
 
+	// sourceWarnAfter is how many consecutive failures (or empty cycles) before
+	// a source is flagged and warned about once. 0 falls back to the default.
+	sourceWarnAfter int
+
 	// The dedup caches map a fingerprint to the article that carries it, not
 	// merely to "seen": a copy has to know which story it belongs to.
 	mu         sync.RWMutex
@@ -140,6 +144,18 @@ func (s *Service) SetExtraction(limit, workers int) {
 	s.extractWorkers = workers
 }
 
+// SetSourceWarnAfter sets how many consecutive failed fetches — or cycles that
+// returned nothing — before a source is flagged and warned about once. 0 turns
+// the warning off (health is still recorded, just not surfaced).
+func (s *Service) SetSourceWarnAfter(n int) {
+	s.sourceWarnAfter = n
+}
+
+// warnAfter returns the configured threshold; 0 means the warning is off.
+func (s *Service) warnAfter() int {
+	return s.sourceWarnAfter
+}
+
 // FetchAll pulls every enabled source and persists new articles.
 func (s *Service) FetchAll(ctx context.Context) (*Result, error) {
 	start := time.Now()
@@ -161,21 +177,38 @@ func (s *Service) FetchAll(ctx context.Context) (*Result, error) {
 			s.logger.Printf("fetching %s (%s)", src.Name, src.Type)
 		}
 		items, err := s.man.Fetch(ctx, src)
+		repo := db.NewSourceRepo(s.db)
 		if err != nil {
 			res.SourcesFailed++
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", src.Name, err))
-			if s.logger != nil {
-				s.logger.Printf("source %s failed: %v", src.Name, err)
+			// Record the failure and say it the first time it crosses the
+			// threshold, not on every cycle afterwards.
+			n, merr := repo.MarkSourceFailure(ctx, src.ID, err.Error())
+			if merr != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: health: %v", src.Name, merr))
+			}
+			if threshold := s.warnAfter(); threshold > 0 && n == threshold && s.logger != nil {
+				s.logger.Printf("source %s looks broken: %v (%d consecutive failures)", src.Name, err, n)
 			}
 			continue
 		}
 		res.SourcesFetched++
 
-		now := db.Now()
-		if err := db.NewSourceRepo(s.db).TouchFetch(ctx, src.ID, now); err != nil {
-			res.Errors = append(res.Errors, fmt.Sprintf("%s: touch fetch: %v", src.Name, err))
+		if len(items) == 0 {
+			// A feed that keeps answering but brings nothing in is broken too;
+			// give it a few cycles before saying so.
+			n, merr := repo.MarkSourceEmpty(ctx, src.ID, s.warnAfter())
+			if merr != nil {
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: health: %v", src.Name, merr))
+			}
+			if threshold := s.warnAfter(); threshold > 0 && n == threshold && s.logger != nil {
+				s.logger.Printf("source %s has returned nothing for %d fetch cycles", src.Name, n)
+			}
+		} else if err := repo.MarkSourceOK(ctx, src.ID); err != nil {
+			res.Errors = append(res.Errors, fmt.Sprintf("%s: health: %v", src.Name, err))
 		}
 
+		now := db.Now()
 		inserted := 0
 		for _, it := range items {
 			n, err := s.ingest(ctx, src, it, now)

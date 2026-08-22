@@ -9,6 +9,10 @@ export interface SourceDTO {
   group: string;
   enabled: boolean;
   lastFetch?: string;
+  lastError?: string;
+  lastOk?: string;
+  consecutiveFailures?: number;
+  emptyCycles?: number;
 }
 
 export interface ArticleDTO {
@@ -139,6 +143,7 @@ export interface StatusDTO {
   totalArticles: number;
   totalNotes: number;
   pendingClassify: number;
+  unhealthySources: number;
 }
 
 export interface ListArticlesOptions {

@@ -236,6 +236,10 @@ type FetchConfig struct {
 	// dumps (e.g. a blog RSS exposing its whole history) don't flood the queue.
 	// 0 keeps everything.
 	MaxAgeDays int `json:"max_age_days"`
+	// SourceWarnAfter is how many consecutive failed fetches — or cycles that
+	// returned nothing — before a source is flagged and warned about once.
+	// 0 disables the warning (per-fetch health is still recorded).
+	SourceWarnAfter int `json:"source_warn_after"`
 }
 
 // ExtractConfig configures full-content extraction during fetch.
@@ -299,7 +303,8 @@ func DefaultConfig() *Config {
 			},
 		},
 		Fetch: FetchConfig{
-			MaxAgeDays: 30,
+			MaxAgeDays:      30,
+			SourceWarnAfter: 3,
 		},
 		Serve: ServeConfig{
 			FetchEvery:    "30m",
