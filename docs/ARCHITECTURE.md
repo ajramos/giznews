@@ -76,6 +76,29 @@ Tres decisiones:
 Además, la primera pregunta construye el índice si estaba vacío: "no hay nada
 sobre eso" tiene que significar eso y no "nadie ha indexado todavía".
 
+## El digest, fuera de la base de datos
+
+`internal/digest` renderiza a markdown y a HTML. Las dos son funciones puras del
+digest: **nada lee el reloj**, porque exportar dos veces tiene que dar los mismos
+bytes o no se distingue un re-export de un cambio.
+
+El HTML es autocontenido a propósito —estilos en línea, sin `<link>`, sin `src=`,
+sin script— porque tiene que renderizar igual en un móvil sin red que en la
+máquina que lo escribió, y un cliente de correo tampoco va a ir a buscar una
+hoja de estilos. Todo el texto pasa por `html.EscapeString`: un titular es
+texto, nunca marcado.
+
+`Save`/`Load` son ahora el camino compartido: antes solo la app de escritorio
+persistía digests, y lo hacía con las claves de su propio DTO (`theme` en vez de
+`name`). `Load` acepta las dos formas, así que un digest exportado hoy puede ser
+uno que escribió la app hace meses; y el CLI también guarda lo que genera, que
+es lo que hace que `--date` signifique algo.
+
+El envío por SMTP vive en `mail.go` y es lo único del repo que sale de la
+máquina: sin `host` y `to` configurados se niega, y nunca ocurre sin que alguien
+lo pida explícitamente. El digest se guarda antes de intentar enviarlo, así que
+un fallo de entrega no cuesta nada más.
+
 ## Retención
 
 No había un solo `DELETE FROM articles` en el repo. Archivar es lógico, que es

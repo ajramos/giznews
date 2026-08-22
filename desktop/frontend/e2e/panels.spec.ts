@@ -292,6 +292,17 @@ test.describe("workflows", () => {
   });
 });
 
+test.describe("digest export", () => {
+  test(":digest export writes a file and says where", async ({ page }) => {
+    await gotoApp(page);
+    await page.keyboard.press(":");
+    await page.locator(".palette input").fill("digest export");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".toast")).toContainText("Digest written to", { timeout: 6000 });
+    await expect(page.locator(".toast")).toContainText(".html");
+  });
+});
+
 test.describe("ask", () => {
   test(":ask answers from the notes, and every citation opens one", async ({ page }) => {
     await gotoApp(page);

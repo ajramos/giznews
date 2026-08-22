@@ -821,6 +821,12 @@ export default function App() {
       });
     } },
     { name: "kb synth <category>", hint: "Synthesize a category into a molecule", run: () => setSynthPrompt(true) },
+    { name: "digest export", hint: "Write the digest to a file you can read anywhere", run: () => void runCmd(async () => {
+      const date = digestDate ?? new Date().toISOString().slice(0, 10);
+      const path = await api.exportDigest(date, "html");
+      notify(`Digest written to ${path}`);
+      void api.openURL(path);
+    }) },
     { name: "ask", hint: "Ask your notes a question, answered with citations", run: () => { setPanel("ask"); setAnswer(null); } },
     { name: "search index", hint: "Rebuild search index + embeddings", run: () => {
       setJobsOpen(true);

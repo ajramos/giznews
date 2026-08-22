@@ -114,6 +114,9 @@ func (a *App) KThemes() (*gizdesktop.KBResult, error) {
 func (a *App) KSynthesize(category string) (*gizdesktop.KBResult, error) {
 	return a.api.KSynthesize(bg(), category)
 }
+func (a *App) ExportDigest(date, format string) (string, error) {
+	return a.api.ExportDigest(bg(), date, format)
+}
 func (a *App) Ask(question string) (*gizdesktop.AnswerDTO, error) {
 	return a.api.Ask(bg(), question)
 }

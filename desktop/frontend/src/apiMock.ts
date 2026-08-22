@@ -413,6 +413,11 @@ export const mockBackend: APIShape = {
     finishJob(id);
     return { atomsCreated: 0, electronsCreated: 0, electronsUpdated: 0, moleculesCreated: 1, moleculesUpdated: 0, articlesSkipped: 0, conceptsTracked: 0, atomsRefreshed: 0, editedNotesKept: 0, notesImported: 0 };
   },
+  exportDigest: async (date: string, format: string): Promise<string> => {
+    await delay();
+    if (date === "1999-01-01") throw new Error(`no digest stored for ${date}`);
+    return `/Users/you/.local/share/giznews/digests/${date || "2026-08-14"}.${format === "html" ? "html" : "md"}`;
+  },
   ask: async (question: string): Promise<AnswerDTO> => {
     await delay(120);
     if (/nothing|zzz/i.test(question)) {

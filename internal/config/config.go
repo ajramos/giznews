@@ -147,6 +147,23 @@ type DigestConfig struct {
 	Schedule string `json:"schedule"`
 	// MaxArticlesPerTheme caps how many articles are shown per theme group.
 	MaxArticlesPerTheme int `json:"max_articles_per_theme"`
+	// SMTP is where `giznews digest --send` mails the digest. Empty host or
+	// recipient means not configured, which is the default: sending is the one
+	// thing here that leaves the machine, and it never happens by itself.
+	SMTP SMTPConfig `json:"smtp"`
+}
+
+// SMTPConfig is where a digest is mailed. Declared here rather than reused
+// from internal/digest so config stays a description of the file and nothing
+// else.
+type SMTPConfig struct {
+	Host     string   `json:"host"`
+	Port     int      `json:"port"`
+	From     string   `json:"from"`
+	To       []string `json:"to"`
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	StartTLS bool     `json:"starttls"`
 }
 
 // ClassifyConfig configures classification.

@@ -65,6 +65,8 @@ go run ./cmd/giznews kb sync            # importa al grafo tus notas del vault
 go run ./cmd/giznews kb concepts        # conceptos por menciones (electron | pending)
 go run ./cmd/giznews kb merge gpt4 gpt-5  # funde dos conceptos y reescribe los enlaces
 go run ./cmd/giznews digest     # digest diario
+go run ./cmd/giznews digest --out ~/digest.html          # y sácalo a un fichero
+go run ./cmd/giznews digest --date 2026-08-20 --out d.md # o exporta uno guardado
 
 # 4. Mantenimiento
 go run ./cmd/giznews prune --dry-run   # qué se liberaría, sin borrar nada
@@ -84,6 +86,21 @@ cd desktop && wails build && open build/bin/giznews.app
 
 El vault se abre con Obsidian en `~/Documents/obsidian/chronicles-ai`
 (configurable en `~/.config/giznews/config.json`).
+
+## Sacar el digest de la app
+
+Un digest se lee en el móvil, con el café, lejos de la máquina que lo generó.
+`giznews digest --out fichero` lo escribe en markdown o en **HTML
+autocontenido** —estilos en línea, cero peticiones a la red, legible a ancho de
+móvil—, y `--date` exporta uno ya guardado en vez de generar otro. En la app,
+`:digest export` lo escribe y lo abre.
+
+Exportar dos veces el mismo digest da **los mismos bytes**: así un re-export se
+distingue de un cambio. Y exportar un día para el que no hay digest falla en
+alto, no escribe un fichero vacío.
+
+Enviarlo por correo (`--send`) existe pero está **apagado** salvo que configures
+`digest.smtp`: es lo único aquí que sale de tu máquina, y nunca ocurre solo.
 
 ## Recuperar espacio
 

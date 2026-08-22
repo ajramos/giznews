@@ -38,6 +38,7 @@ type API interface {
 	Digest(ctx context.Context) (*DigestDTO, error)
 	ListDigests(ctx context.Context) ([]*DigestMeta, error)
 	GetDigest(ctx context.Context, date string) (*DigestDTO, error)
+	ExportDigest(ctx context.Context, date, format string) (string, error)
 	Flow(ctx context.Context) (*FlowStatus, error)
 
 	// Knowledge graph

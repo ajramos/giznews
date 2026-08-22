@@ -66,6 +66,19 @@ Questions retrieve differently from the search box: `questionQuery` strips
 question words and matches the rest as alternatives, because a phrase match on
 a natural question finds nothing. Both go through `retrieve`.
 
+## Digest export
+
+`digest.Markdown` / `digest.HTML` are pure functions of the digest — nothing
+reads the clock, because exporting twice must produce identical bytes. The HTML
+is self-contained (inline CSS, no `<link>`, no `src=`, no script) and every
+string goes through `html.EscapeString`.
+
+`digest.Save` / `digest.Load` are the shared persistence path; `Load` accepts
+both the `name` and the desktop app's older `theme` key. Exporting a date with
+no stored digest is an error, never an empty file. `digest.Send` (SMTP) is the
+only thing in the repo that leaves the machine: it refuses unless
+`digest.smtp.host` and `to` are configured, and only ever runs when asked.
+
 ## Retention
 
 `internal/prune` is the only thing in the repo that deletes articles, and it is

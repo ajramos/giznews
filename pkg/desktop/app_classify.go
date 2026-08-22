@@ -2,9 +2,12 @@ package desktop
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/ajramos/giznews/internal/classify"
 	"github.com/ajramos/giznews/internal/db"
@@ -234,10 +237,8 @@ func (a *App) Digest(ctx context.Context) (*DigestDTO, error) {
 			}
 			out.Themes = append(out.Themes, dt)
 		}
-		if themesJSON, err := json.Marshal(out.Themes); err == nil {
-			if err := db.NewDigestRepo(a.db).Save(jctx, out.Date, out.Overview, string(themesJSON)); err != nil {
-				a.logger().Printf("save digest: %v", err)
-			}
+		if err := digest.Save(jctx, a.db, d); err != nil {
+			a.logger().Printf("save digest: %v", err)
 		}
 		p.Message(fmt.Sprintf("%d themes", len(out.Themes)))
 		return nil
@@ -246,4 +247,33 @@ func (a *App) Digest(ctx context.Context) (*DigestDTO, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// ExportDigest writes a stored digest to a file next to the database and
+// returns its path, so the app can hand it to the reader (or to whatever opens
+// .html) without inventing a file dialog.
+//
+// date is empty for today's. format is "md" or "html".
+func (a *App) ExportDigest(ctx context.Context, date, format string) (string, error) {
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02")
+	}
+	d, err := digest.Load(ctx, a.db, date)
+	if err != nil {
+		return "", fmt.Errorf("no digest stored for %s", date)
+	}
+
+	body, ext := digest.Markdown(d), "md"
+	if strings.EqualFold(format, "html") {
+		body, ext = digest.HTML(d), "html"
+	}
+	dir := filepath.Join(filepath.Dir(a.cfg.ResolveDBPath()), "digests")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, date+"."+ext)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
 }

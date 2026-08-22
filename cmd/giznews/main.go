@@ -77,7 +77,7 @@ Commands:
   init      Create default config, database and knowledge vault skeleton
   fetch     Fetch new articles from all enabled sources
   classify  Classify unread articles (rules ⚡ + LLM; --dry-run to plan it)
-  digest    Generate the daily digest (grouped by theme)
+  digest    Daily digest (--out FILE, --format md|html, --date D, --send)
   kb        Knowledge-graph operations (build, list, sync)
   search    Semantic + keyword search over notes and articles
   ask       Answer a question from your own notes, with citations
